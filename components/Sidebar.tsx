@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { CSSProperties } from 'react'
 
-const navItems = [
+type NavItem = { href: string; label: string; icon: string; badge?: string }
+type NavSection = { label: string; items: NavItem[] }
+
+const navItems: NavSection[] = [
   {
     label: 'GESTIÓN',
     items: [
