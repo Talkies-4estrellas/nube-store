@@ -4,8 +4,8 @@ import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
 
 export const metadata: Metadata = {
-  title: 'Nube Store | Panel Administrativo',
-  description: 'Dashboard de gestión de Nube Store',
+  title: 'Order Express | Panel Administrativo',
+  description: 'Dashboard de gestión de Order Express',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

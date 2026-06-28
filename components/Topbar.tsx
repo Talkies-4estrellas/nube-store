@@ -1,5 +1,7 @@
 'use client'
 
+import Image from 'next/image'
+
 export default function Topbar() {
   return (
     <header style={{
@@ -29,13 +31,20 @@ export default function Topbar() {
         cursor: 'pointer',
       }}>✨ Lumi</button>
       <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 4 }}>❓</button>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 30, height: 30, background: '#0049ff', color: '#fff',
           borderRadius: '50%', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontWeight: 700, fontSize: 13,
-        }}>T</div>
-        <span style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>Nube Store</span>
+          justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0,
+        }}>OE</div>
+        <Image
+          src="/imagenes/logo-oe_1-png-300x49.avif"
+          alt="Order Express"
+          width={110}
+          height={18}
+          style={{ objectFit: 'contain' }}
+          priority
+        />
       </div>
     </header>
   )

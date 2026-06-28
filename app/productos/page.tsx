@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import ProductoModal from '@/components/ProductoModal'
 
-const allProducts = [
+const initialProducts = [
   { id: 1, nombre: 'Bolso Morelia Negro', categoria: 'Bolsos', precio: '$890', stock: 12, estado: 'Activo', sku: 'BOL-001' },
   { id: 2, nombre: 'Bolso Ejecutivo Café', categoria: 'Bolsos', precio: '$1,200', stock: 2, estado: 'Stock bajo', sku: 'BOL-002' },
   { id: 3, nombre: 'Cinturón Premium 32"', categoria: 'Cinturones', precio: '$450', stock: 24, estado: 'Activo', sku: 'CIN-001' },
@@ -26,12 +27,38 @@ const categoryColors: Record<string, string> = {
   Bolsos: '#818cf8', Cinturones: '#34d399', Billeteras: '#f59e0b', Estuches: '#60a5fa', Relojes: '#f472b6',
 }
 
+type Product = { id: number; nombre: string; categoria: string; precio: string; stock: number; estado: string; sku: string; imagenPreview?: string | null }
+
+function getEstado(stock: number) {
+  if (stock === 0) return 'Sin stock'
+  if (stock <= 3) return 'Stock bajo'
+  return 'Activo'
+}
+
 export default function ProductosPage() {
+  const [products, setProducts] = useState<Product[]>(initialProducts)
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('Todas')
   const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [showModal, setShowModal] = useState(false)
 
-  const filtered = allProducts.filter(p => {
+  function handleSave(form: { nombre: string; sku: string; categoria: string; precio: string; stock: string; descripcion: string; imagen: File | null; imagenPreview: string | null }) {
+    const stock = parseInt(form.stock)
+    const newProduct: Product = {
+      id: Date.now(),
+      nombre: form.nombre,
+      sku: form.sku,
+      categoria: form.categoria,
+      precio: `$${parseFloat(form.precio).toLocaleString()}`,
+      stock,
+      estado: getEstado(stock),
+      imagenPreview: form.imagenPreview,
+    }
+    setProducts(prev => [newProduct, ...prev])
+    setShowModal(false)
+  }
+
+  const filtered = products.filter(p => {
     const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())
     const matchCat = categoria === 'Todas' || p.categoria === categoria
     return matchSearch && matchCat
@@ -41,7 +68,7 @@ export default function ProductosPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Productos</h1>
-        <button style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+        <button onClick={() => setShowModal(true)} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
           + Agregar producto
         </button>
       </div>
@@ -49,10 +76,10 @@ export default function ProductosPage() {
       {/* Resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
         {[
-          { label: 'Total productos', value: allProducts.length, color: '#111' },
-          { label: 'Activos', value: allProducts.filter(p => p.estado === 'Activo').length, color: '#059669' },
-          { label: 'Stock bajo', value: allProducts.filter(p => p.estado === 'Stock bajo').length, color: '#d97706' },
-          { label: 'Sin stock', value: allProducts.filter(p => p.estado === 'Sin stock').length, color: '#dc2626' },
+          { label: 'Total productos', value: initialProducts.length, color: '#111' },
+          { label: 'Activos', value: initialProducts.filter(p => p.estado === 'Activo').length, color: '#059669' },
+          { label: 'Stock bajo', value: initialProducts.filter(p => p.estado === 'Stock bajo').length, color: '#d97706' },
+          { label: 'Sin stock', value: initialProducts.filter(p => p.estado === 'Sin stock').length, color: '#dc2626' },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', borderRadius: 10, padding: '14px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.07)' }}>
             <p style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</p>
@@ -97,10 +124,11 @@ export default function ProductosPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {filtered.map(p => (
               <div key={p.id} style={{ border: '1px solid #f3f4f6', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ height: 120, background: categoryColors[p.categoria] ?? '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 40 }}>
-                    {p.categoria === 'Bolsos' ? '👜' : p.categoria === 'Cinturones' ? '👔' : p.categoria === 'Billeteras' ? '👛' : p.categoria === 'Relojes' ? '⌚' : '🗂️'}
-                  </span>
+                <div style={{ height: 140, background: categoryColors[p.categoria] ?? '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {p.imagenPreview
+                    ? <img src={p.imagenPreview} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 40 }}>{p.categoria === 'Bolsos' ? '👜' : p.categoria === 'Cinturones' ? '👔' : p.categoria === 'Billeteras' ? '👛' : p.categoria === 'Relojes' ? '⌚' : '🗂️'}</span>
+                  }
                 </div>
                 <div style={{ padding: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
@@ -166,6 +194,8 @@ export default function ProductosPage() {
           </div>
         )}
       </div>
+
+      {showModal && <ProductoModal onClose={() => setShowModal(false)} onSave={handleSave} />}
     </div>
   )
 }

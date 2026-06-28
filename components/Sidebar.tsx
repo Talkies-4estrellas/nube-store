@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { CSSProperties } from 'react'
 
@@ -115,15 +116,15 @@ export default function Sidebar() {
 
   return (
     <aside style={s.sidebar}>
-      <div style={s.logo}>
-        <div style={{
-          width: 28, height: 28, background: '#0049ff', borderRadius: 6,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>T</span>
-        </div>
-        <span style={s.logoText}>Nube Store</span>
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', fontSize: 16 }}>☰</button>
+      <div style={{ ...s.logo, justifyContent: 'center', padding: '18px 20px' }}>
+        <Image
+          src="/imagenes/logo-oe_1-png-300x49.avif"
+          alt="Order Express"
+          width={160}
+          height={26}
+          style={{ objectFit: 'contain' }}
+          priority
+        />
       </div>
 
       <nav style={s.nav}>
