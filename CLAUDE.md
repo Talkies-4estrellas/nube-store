@@ -122,13 +122,23 @@ Las tablas y el storage usan RLS con políticas permisivas para el rol `anon` (s
 - [x] Schema SQL completo guardado en `database/schema.sql`
 - [x] RLS desbloqueado para rol anon en tablas y storage (políticas permisivas temporales)
 - [x] Upload de imagen WebP a Supabase Storage funcionando correctamente
+- [x] Buscador global en Topbar (productos, clientes, ventas) con debounce 280ms
+- [x] Editar producto funciona con UPDATE en Supabase (antes solo insertaba)
+- [x] Botón Editar en vista lista de productos corregido
+- [x] Cambio de estado de venta directo desde tabla (select inline con estados válidos)
+- [x] Vista detalle de venta en panel lateral con items, cliente, notas y total
+- [x] Categorías dinámicas desde Supabase con autocompletado y creación de nuevas
+- [x] Filtro de categorías en productos como `<select>` (escalable)
+- [x] Iconos SVG 2D en todo el proyecto — componente `components/Icon.tsx`
+- [x] Confirmación antes de eliminar — componente `components/ConfirmDialog.tsx`
+- [x] Paginación en Productos (12/pág), Ventas (15/pág) y Clientes (15/pág)
+- [x] Botón Eliminar añadido a Clientes
 
 ## Pendiente
-- [ ] Autenticación con Supabase Auth para proteger el panel
-- [ ] Modo oscuro
-- [ ] Cambiar estado de pedido desde la tabla de ventas
-- [ ] Vista de detalle de venta con sus items
-- [ ] Historial de pedidos por cliente
+- [ ] Autenticación con Supabase Auth (reemplazar políticas anon por `auth.role() = 'authenticated'`)
+- [ ] Página de configuración (nombre del negocio, moneda, datos de contacto)
+- [ ] Historial de pedidos por cliente en panel lateral de Clientes
 - [ ] Notificaciones de stock bajo en tiempo real (Supabase Realtime)
-- [ ] Página de configuración
-- [ ] Descuentos y marketing
+- [ ] Exportar ventas/clientes a CSV
+- [ ] Modo oscuro
+- [ ] Subir cambios a Vercel (producción desactualizada)
