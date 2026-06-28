@@ -14,27 +14,37 @@ type Producto = {
   imagenPreview: string | null
 }
 
-const categorias = ['Bolsos', 'Cinturones', 'Billeteras', 'Estuches', 'Relojes']
 const empty: Producto = { nombre: '', sku: '', categoria: '', precio: '', stock: '', descripcion: '', imagen: null, imagenPreview: null }
 
-type Props = { onClose: () => void; onSave: (p: Producto) => void; inicial?: Partial<Producto> & { id?: string } }
+type Props = {
+  onClose: () => void
+  onSave: (p: Producto) => void
+  inicial?: Partial<Producto> & { id?: string }
+  categoriasDisponibles: string[]
+}
 
-export default function ProductoModal({ onClose, onSave, inicial }: Props) {
+export default function ProductoModal({ onClose, onSave, inicial, categoriasDisponibles }: Props) {
   const [form, setForm] = useState<Producto>({ ...empty, ...inicial })
   const [errors, setErrors] = useState<Partial<Record<keyof Producto, string>>>({})
   const [dragging, setDragging] = useState(false)
   const [camaraActiva, setCamaraActiva] = useState(false)
   const [camaraError, setCamaraError] = useState('')
   const [convirtiendo, setConvirtiendo] = useState(false)
+  const [catQuery, setCatQuery] = useState('')
+  const [nuevaCatMode, setNuevaCatMode] = useState(false)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
-  // Detener cámara al desmontar
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
   }, [])
+
+  function seleccionarCategoria(cat: string) {
+    setForm(f => ({ ...f, categoria: cat }))
+    setErrors(e => ({ ...e, categoria: '' }))
+  }
 
   function set(key: keyof Producto, value: string) {
     setForm(f => ({ ...f, [key]: value }))
@@ -72,7 +82,6 @@ export default function ProductoModal({ onClose, onSave, inicial }: Props) {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
       streamRef.current = stream
       setCamaraActiva(true)
-      // Asignar stream al video después de que el elemento esté en el DOM
       setTimeout(() => {
         if (videoRef.current) videoRef.current.srcObject = stream
       }, 50)
@@ -106,7 +115,7 @@ export default function ProductoModal({ onClose, onSave, inicial }: Props) {
     const errs: typeof errors = {}
     if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido'
     if (!form.sku.trim()) errs.sku = 'El SKU es requerido'
-    if (!form.categoria) errs.categoria = 'Selecciona una categoría'
+    if (!form.categoria?.trim()) errs.categoria = 'Escribe o selecciona una categoría'
     if (!form.precio || isNaN(Number(form.precio))) errs.precio = 'Precio inválido'
     if (!form.stock || isNaN(Number(form.stock))) errs.stock = 'Stock inválido'
     if (!form.imagen && !inicial?.imagenPreview) errs.imagen = 'Sube una imagen del producto'
@@ -136,17 +145,13 @@ export default function ProductoModal({ onClose, onSave, inicial }: Props) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <label style={labelStyle}>Imagen del producto</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <span style={{ fontSize: 11, color: '#9ca3af', alignSelf: 'center' }}>Se convierte a WebP automáticamente</span>
-                {!camaraActiva && !form.imagenPreview && (
-                  <button onClick={abrirCamara} style={{ background: '#f3f4f6', border: 'none', padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    📷 Usar cámara
-                  </button>
-                )}
-              </div>
+              {!camaraActiva && !form.imagenPreview && (
+                <button onClick={abrirCamara} style={{ background: '#f3f4f6', border: 'none', padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  📷 Usar cámara
+                </button>
+              )}
             </div>
 
-            {/* Vista de cámara */}
             {camaraActiva && (
               <div style={{ borderRadius: 10, overflow: 'hidden', border: '2px solid #0049ff', position: 'relative', background: '#000' }}>
                 <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }} />
@@ -154,7 +159,7 @@ export default function ProductoModal({ onClose, onSave, inicial }: Props) {
                   <button onClick={cerrarCamara} style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                     Cancelar
                   </button>
-                  <button onClick={tomarFoto} disabled={convirtiendo} style={{ background: '#fff', color: '#111', border: 'none', padding: '8px 24px', borderRadius: 20, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button onClick={tomarFoto} disabled={convirtiendo} style={{ background: '#fff', color: '#111', border: 'none', padding: '8px 24px', borderRadius: 20, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                     {convirtiendo ? '⏳ Procesando...' : '📸 Tomar foto'}
                   </button>
                 </div>
@@ -167,7 +172,6 @@ export default function ProductoModal({ onClose, onSave, inicial }: Props) {
               </div>
             )}
 
-            {/* Preview de imagen */}
             {!camaraActiva && form.imagenPreview && (
               <div style={{ position: 'relative' }}>
                 <img src={form.imagenPreview} alt="preview" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 10, border: '1px solid #e5e7eb', display: 'block' }} />
@@ -190,7 +194,6 @@ export default function ProductoModal({ onClose, onSave, inicial }: Props) {
               </div>
             )}
 
-            {/* Drop zone */}
             {!camaraActiva && !form.imagenPreview && (
               <div
                 onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -235,10 +238,40 @@ export default function ProductoModal({ onClose, onSave, inicial }: Props) {
 
           {/* Categoría */}
           <Field label="Categoría" error={errors.categoria}>
-            <select value={form.categoria} onChange={e => set('categoria', e.target.value)} style={inputStyle(!!errors.categoria)}>
-              <option value="">Selecciona una categoría</option>
-              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            {!nuevaCatMode ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select
+                  value={form.categoria}
+                  onChange={e => { seleccionarCategoria(e.target.value) }}
+                  style={{ ...inputStyle(!!errors.categoria), flex: 1, cursor: 'pointer' }}>
+                  <option value="">Selecciona una categoría</option>
+                  {categoriasDisponibles.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+                <button onClick={() => setNuevaCatMode(true)}
+                  style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f3f4f6', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', color: '#374151' }}>
+                  + Nueva
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  autoFocus
+                  value={catQuery}
+                  onChange={e => { setCatQuery(e.target.value); setForm(f => ({ ...f, categoria: e.target.value })) }}
+                  onKeyDown={e => { if (e.key === 'Enter' && catQuery.trim()) { seleccionarCategoria(catQuery.trim()); setNuevaCatMode(false) } if (e.key === 'Escape') setNuevaCatMode(false) }}
+                  placeholder="Nombre de la nueva categoría..."
+                  style={{ ...inputStyle(!!errors.categoria), flex: 1 }}
+                />
+                <button onClick={() => { if (catQuery.trim()) { seleccionarCategoria(catQuery.trim()) } setNuevaCatMode(false) }}
+                  style={{ padding: '9px 14px', border: 'none', borderRadius: 8, background: '#0049ff', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  Guardar
+                </button>
+                <button onClick={() => { setNuevaCatMode(false); setCatQuery('') }}
+                  style={{ padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f3f4f6', fontSize: 13, cursor: 'pointer', color: '#374151' }}>
+                  ×
+                </button>
+              </div>
+            )}
           </Field>
 
           {/* Precio y Stock */}

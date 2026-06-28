@@ -16,30 +16,22 @@ type Product = {
   imagen_url?: string | null
 }
 
-const categorias = ['Todas', 'Bolsos', 'Cinturones', 'Billeteras', 'Estuches', 'Relojes']
-
 const estadoStyle: Record<string, { bg: string; text: string }> = {
   'Activo':     { bg: '#d1fae5', text: '#065f46' },
   'Stock bajo': { bg: '#fef3c7', text: '#92400e' },
   'Sin stock':  { bg: '#fee2e2', text: '#991b1b' },
 }
 
-const categoryColors: Record<string, string> = {
-  Bolsos: '#818cf8', Cinturones: '#34d399', Billeteras: '#f59e0b', Estuches: '#60a5fa', Relojes: '#f472b6',
-}
+const paletaColores = ['#818cf8', '#34d399', '#f59e0b', '#60a5fa', '#f472b6', '#a78bfa', '#fb923c', '#2dd4bf']
 
-const categoryIcon: Record<string, string> = {
-  Bolsos: '👜', Cinturones: '👔', Billeteras: '👛', Relojes: '⌚', Estuches: '🗂️',
-}
-
-function getEstado(stock: number) {
-  if (stock === 0) return 'Sin stock'
-  if (stock <= 3) return 'Stock bajo'
-  return 'Activo'
+function colorCategoria(nombre: string, lista: string[]) {
+  const idx = lista.indexOf(nombre)
+  return paletaColores[idx % paletaColores.length] ?? '#e5e7eb'
 }
 
 export default function ProductosPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categorias, setCategorias] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('Todas')
@@ -48,18 +40,25 @@ export default function ProductosPage() {
   const [editando, setEditando] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
+  async function fetchCategorias() {
+    const { data } = await supabase.from('categorias').select('nombre').order('nombre')
+    if (data) setCategorias(data.map(c => c.nombre))
+  }
+
   async function fetchProducts() {
     setLoading(true)
     const { data, error } = await supabase
       .from('productos_con_estado')
       .select('*')
       .order('created_at', { ascending: false })
-
     if (!error && data) setProducts(data)
     setLoading(false)
   }
 
-  useEffect(() => { fetchProducts() }, [])
+  useEffect(() => {
+    fetchCategorias()
+    fetchProducts()
+  }, [])
 
   async function handleSave(form: {
     nombre: string; sku: string; categoria: string; precio: string
@@ -67,7 +66,6 @@ export default function ProductosPage() {
   }) {
     let imagen_url: string | null = null
 
-    // 1. Subir imagen WebP a Storage
     if (form.imagen) {
       const path = `${Date.now()}-${form.sku}.webp`
       try {
@@ -77,27 +75,46 @@ export default function ProductosPage() {
       }
     }
 
-    // 2. Obtener categoria_id
-    const { data: catData } = await supabase
+    // Obtener o crear categoría
+    let categoria_id: string | null = null
+    const { data: catExistente } = await supabase
       .from('categorias')
       .select('id')
       .eq('nombre', form.categoria)
       .single()
 
-    // 3. Insertar producto
-    const { error } = await supabase.from('productos').insert({
+    if (catExistente) {
+      categoria_id = catExistente.id
+    } else {
+      const { data: catNueva } = await supabase
+        .from('categorias')
+        .insert({ nombre: form.categoria })
+        .select('id')
+        .single()
+      if (catNueva) {
+        categoria_id = catNueva.id
+        await fetchCategorias()
+      }
+    }
+
+    const payload = {
       nombre: form.nombre,
       sku: form.sku,
       descripcion: form.descripcion,
       precio: parseFloat(form.precio),
       stock: parseInt(form.stock),
-      categoria_id: catData?.id ?? null,
-      imagen_url,
-    })
+      categoria_id,
+      ...(imagen_url ? { imagen_url } : {}),
+    }
+
+    const { error } = editando
+      ? await supabase.from('productos').update(payload).eq('id', editando.id)
+      : await supabase.from('productos').insert(payload)
 
     if (!error) {
       await fetchProducts()
       setShowModal(false)
+      setEditando(null)
     } else {
       alert('Error al guardar: ' + error.message)
     }
@@ -113,6 +130,8 @@ export default function ProductosPage() {
     await fetchProducts()
     setDeleting(null)
   }
+
+  const categoriasConTodas = ['Todas', ...categorias]
 
   const filtered = products.filter(p => {
     const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase()) ||
@@ -154,15 +173,12 @@ export default function ProductosPage() {
             placeholder="Buscar por nombre o SKU..."
             style={{ flex: 1, minWidth: 200, padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none' }}
           />
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {categorias.map(c => (
-              <button key={c} onClick={() => setCategoria(c)} style={{
-                padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: categoria === c ? '#0049ff' : '#f3f4f6',
-                color: categoria === c ? '#fff' : '#374151', border: 'none',
-              }}>{c}</button>
-            ))}
-          </div>
+          <select
+            value={categoria}
+            onChange={e => setCategoria(e.target.value)}
+            style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 160 }}>
+            {categoriasConTodas.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <div style={{ display: 'flex', gap: 4 }}>
             {(['grid', 'list'] as const).map(v => (
               <button key={v} onClick={() => setView(v)} style={{
@@ -186,10 +202,10 @@ export default function ProductosPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {filtered.map(p => (
               <div key={p.id} style={{ border: '1px solid #f3f4f6', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ height: 140, background: categoryColors[p.categoria] ?? '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <div style={{ height: 140, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {p.imagen_url
                     ? <img src={p.imagen_url} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 40 }}>{categoryIcon[p.categoria] ?? '📦'}</span>
+                    : <span style={{ fontSize: 40 }}>📦</span>
                   }
                 </div>
                 <div style={{ padding: 14 }}>
@@ -199,7 +215,10 @@ export default function ProductosPage() {
                       {p.estado}
                     </span>
                   </div>
-                  <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>SKU: {p.sku}</p>
+                  <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>SKU: {p.sku}</p>
+                  <span style={{ display: 'inline-block', background: colorCategoria(p.categoria, categorias) + '22', color: colorCategoria(p.categoria, categorias), fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, marginBottom: 8 }}>
+                    {p.categoria}
+                  </span>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#0049ff' }}>${Number(p.precio).toLocaleString()}</span>
                     <span style={{ fontSize: 12, color: '#6b7280' }}>Stock: {p.stock}</span>
@@ -237,12 +256,16 @@ export default function ProductosPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {p.imagen_url
                         ? <img src={p.imagen_url} alt={p.nombre} style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover' }} />
-                        : <div style={{ width: 36, height: 36, borderRadius: 6, background: categoryColors[p.categoria] ?? '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{categoryIcon[p.categoria] ?? '📦'}</div>
+                        : <div style={{ width: 36, height: 36, borderRadius: 6, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📦</div>
                       }
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.nombre}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '12px 0', fontSize: 13, color: '#6b7280' }}>{p.categoria}</td>
+                  <td style={{ padding: '12px 0' }}>
+                    <span style={{ background: colorCategoria(p.categoria, categorias) + '22', color: colorCategoria(p.categoria, categorias), fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
+                      {p.categoria}
+                    </span>
+                  </td>
                   <td style={{ padding: '12px 0', fontSize: 14, fontWeight: 700, color: '#0049ff' }}>${Number(p.precio).toLocaleString()}</td>
                   <td style={{ padding: '12px 0', fontSize: 13, color: p.stock <= 3 ? '#dc2626' : '#374151', fontWeight: p.stock <= 3 ? 700 : 400 }}>{p.stock}</td>
                   <td style={{ padding: '12px 0' }}>
@@ -252,7 +275,7 @@ export default function ProductosPage() {
                   </td>
                   <td style={{ padding: '12px 0' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
+                      <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
                       <button
                         onClick={() => handleDelete(p.id, p.imagen_url)}
                         disabled={deleting === p.id}
@@ -277,6 +300,7 @@ export default function ProductosPage() {
 
       {showModal && (
         <ProductoModal
+          categoriasDisponibles={categorias}
           onClose={() => { setShowModal(false); setEditando(null) }}
           onSave={handleSave}
           inicial={editando ? {
