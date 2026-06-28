@@ -1,56 +1,64 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
-const metrics = [
-  { label: 'Ventas hoy', value: '$12,480', change: '+18%', up: true, icon: '💰', href: '/ventas' },
-  { label: 'Pedidos pendientes', value: '24', change: '6 urgentes', up: false, icon: '📋', href: '/ventas' },
-  { label: 'Productos activos', value: '148', change: '3 sin stock', up: false, icon: '📦', href: '/productos' },
-  { label: 'Clientes nuevos', value: '31', change: '+12% este mes', up: true, icon: '👥', href: '/clientes' },
-]
+type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
+type ProductoBajo = { nombre: string; stock: number }
 
-const recentOrders = [
-  { id: '#1042', cliente: 'Ana García', producto: 'Bolso Morelia', monto: '$890', estado: 'Pagado' },
-  { id: '#1041', cliente: 'Luis Torres', producto: 'Cinturón Premium', monto: '$450', estado: 'Enviado' },
-  { id: '#1040', cliente: 'María López', producto: 'Billetera Slim', monto: '$320', estado: 'Pendiente' },
-  { id: '#1039', cliente: 'Carlos Ruiz', producto: 'Estuche Ejecutivo', monto: '$1,200', estado: 'Pagado' },
-  { id: '#1038', cliente: 'Sofia Méndez', producto: 'Reloj Clásico', monto: '$2,800', estado: 'Enviado' },
-]
-
-const lowStock = [
-  { nombre: 'Bolso Morelia Negro', stock: 2 },
-  { nombre: 'Cinturón Trenzado 34"', stock: 1 },
-  { nombre: 'Billetera Slim Café', stock: 3 },
-]
-
-const statusColor: Record<string, string> = {
-  Pagado: '#d1fae5',
-  Enviado: '#dbeafe',
-  Pendiente: '#fef3c7',
-}
-const statusText: Record<string, string> = {
-  Pagado: '#065f46',
-  Enviado: '#1e40af',
-  Pendiente: '#92400e',
-}
+const statusColor: Record<string, string> = { Pagado: '#d1fae5', Enviado: '#dbeafe', Pendiente: '#fef3c7', Cancelado: '#fee2e2' }
+const statusText:  Record<string, string> = { Pagado: '#065f46', Enviado: '#1e40af', Pendiente: '#92400e', Cancelado: '#991b1b' }
 
 export default function DashboardPage() {
+  const [ventas, setVentas] = useState<Venta[]>([])
+  const [stockBajo, setStockBajo] = useState<ProductoBajo[]>([])
+  const [totalClientes, setTotalClientes] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const [{ data: v }, { data: p }, { count }] = await Promise.all([
+        supabase.from('ventas').select('*, clientes(nombre)').order('created_at', { ascending: false }).limit(5),
+        supabase.from('productos').select('nombre, stock').lte('stock', 3).order('stock'),
+        supabase.from('clientes').select('id', { count: 'exact', head: true }),
+      ])
+      if (v) setVentas(v)
+      if (p) setStockBajo(p)
+      setTotalClientes(count ?? 0)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const ventasHoy = ventas.filter(v => {
+    const hoy = new Date().toDateString()
+    return new Date(v.created_at).toDateString() === hoy
+  })
+
+  const totalHoy = ventasHoy.filter(v => v.estado === 'Pagado').reduce((s, v) => s + Number(v.total), 0)
+  const pendientes = ventas.filter(v => v.estado === 'Pendiente').length
+
+  const metrics = [
+    { label: 'Ventas hoy', value: `$${totalHoy.toLocaleString()}`, icon: '💰', href: '/ventas', color: '#059669' },
+    { label: 'Pedidos pendientes', value: pendientes, icon: '📋', href: '/ventas', color: '#d97706' },
+    { label: 'Clientes registrados', value: totalClientes, icon: '👥', href: '/clientes', color: '#0049ff' },
+    { label: 'Productos sin stock', value: stockBajo.filter(p => p.stock === 0).length, icon: '⚠️', href: '/productos', color: '#dc2626' },
+  ]
+
   return (
     <div>
       <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111', marginBottom: 24 }}>Dashboard</h1>
 
       {/* Métricas */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
-        {metrics.map((m) => (
+        {metrics.map(m => (
           <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.2s' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <span style={{ fontSize: 28 }}>{m.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: m.up ? '#059669' : '#dc2626', background: m.up ? '#d1fae5' : '#fee2e2', padding: '2px 8px', borderRadius: 20 }}>
-                  {m.change}
-                </span>
-              </div>
-              <p style={{ fontSize: 28, fontWeight: 700, color: '#111', marginBottom: 4 }}>{m.value}</p>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer' }}>
+              <span style={{ fontSize: 28, display: 'block', marginBottom: 12 }}>{m.icon}</span>
+              <p style={{ fontSize: 28, fontWeight: 700, color: '#111', marginBottom: 4 }}>
+                {loading ? '—' : m.value}
+              </p>
               <p style={{ fontSize: 13, color: '#6b7280' }}>{m.label}</p>
             </div>
           </Link>
@@ -64,30 +72,39 @@ export default function DashboardPage() {
             <h2 style={{ fontSize: 16, fontWeight: 700 }}>Pedidos recientes</h2>
             <Link href="/ventas" style={{ fontSize: 13, color: '#0049ff', textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                {['ID', 'Cliente', 'Producto', 'Monto', 'Estado'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#9ca3af', padding: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentOrders.map((o) => (
-                <tr key={o.id} style={{ borderBottom: '1px solid #f9fafb' }}>
-                  <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 600, color: '#0049ff' }}>{o.id}</td>
-                  <td style={{ padding: '12px 0', fontSize: 13, color: '#374151' }}>{o.cliente}</td>
-                  <td style={{ padding: '12px 0', fontSize: 13, color: '#6b7280' }}>{o.producto}</td>
-                  <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 600, color: '#111' }}>{o.monto}</td>
-                  <td style={{ padding: '12px 0' }}>
-                    <span style={{ background: statusColor[o.estado], color: statusText[o.estado], fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
-                      {o.estado}
-                    </span>
-                  </td>
+
+          {loading ? (
+            <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
+          ) : ventas.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: '#9ca3af' }}>
+              <p style={{ fontSize: 32, marginBottom: 8 }}>📋</p>
+              <p style={{ fontSize: 14 }}>Aún no hay pedidos</p>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  {['#', 'Cliente', 'Monto', 'Estado'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#9ca3af', padding: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ventas.map(v => (
+                  <tr key={v.id} style={{ borderBottom: '1px solid #f9fafb' }}>
+                    <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 700, color: '#0049ff' }}>#{v.numero}</td>
+                    <td style={{ padding: '12px 0', fontSize: 13, color: '#374151' }}>{v.clientes?.nombre ?? '—'}</td>
+                    <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 600, color: '#111' }}>${Number(v.total).toLocaleString()}</td>
+                    <td style={{ padding: '12px 0' }}>
+                      <span style={{ background: statusColor[v.estado], color: statusText[v.estado], fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
+                        {v.estado}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         {/* Stock bajo */}
@@ -96,17 +113,33 @@ export default function DashboardPage() {
             <h2 style={{ fontSize: 16, fontWeight: 700 }}>⚠️ Stock bajo</h2>
             <Link href="/productos" style={{ fontSize: 13, color: '#0049ff', textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
           </div>
-          {lowStock.map((p) => (
-            <div key={p.nombre} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
-              <span style={{ fontSize: 13, color: '#374151', flex: 1 }}>{p.nombre}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '2px 10px', borderRadius: 20 }}>
-                {p.stock} left
-              </span>
+
+          {loading ? (
+            <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
+          ) : stockBajo.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: '#9ca3af' }}>
+              <p style={{ fontSize: 32, marginBottom: 8 }}>✅</p>
+              <p style={{ fontSize: 14 }}>Todo el stock está bien</p>
             </div>
-          ))}
-          <div style={{ marginTop: 20, padding: 16, background: '#fffbeb', borderRadius: 10, border: '1px solid #fde68a' }}>
-            <p style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>3 productos necesitan reabastecimiento pronto.</p>
-          </div>
+          ) : (
+            <>
+              {stockBajo.map(p => (
+                <div key={p.nombre} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
+                  <span style={{ fontSize: 13, color: '#374151', flex: 1 }}>{p.nombre}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: p.stock === 0 ? '#dc2626' : '#d97706', background: p.stock === 0 ? '#fee2e2' : '#fef3c7', padding: '2px 10px', borderRadius: 20 }}>
+                    {p.stock === 0 ? 'Sin stock' : `${p.stock} left`}
+                  </span>
+                </div>
+              ))}
+              {stockBajo.length > 0 && (
+                <div style={{ marginTop: 16, padding: 14, background: '#fffbeb', borderRadius: 10, border: '1px solid #fde68a' }}>
+                  <p style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>
+                    {stockBajo.length} producto{stockBajo.length > 1 ? 's' : ''} necesitan atención.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
