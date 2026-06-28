@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import ProductoModal from '@/components/ProductoModal'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
 import Icon from '@/components/Icon'
+
+const PAGE_SIZE = 12
 
 type Product = {
   id: string
@@ -40,6 +43,8 @@ export default function ProductosPage() {
   const [showModal, setShowModal] = useState(false)
   const [editando, setEditando] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null)
+  const [page, setPage] = useState(1)
 
   async function fetchCategorias() {
     const { data } = await supabase.from('categorias').select('nombre').order('nombre')
@@ -121,15 +126,16 @@ export default function ProductosPage() {
     }
   }
 
-  async function handleDelete(id: string, imagen_url?: string | null) {
-    setDeleting(id)
-    if (imagen_url) {
-      const path = imagen_url.split('/productos/')[1]
+  async function handleDelete(product: Product) {
+    setDeleting(product.id)
+    if (product.imagen_url) {
+      const path = product.imagen_url.split('/productos/')[1]
       if (path) await supabase.storage.from('productos').remove([path])
     }
-    await supabase.from('productos').delete().eq('id', id)
+    await supabase.from('productos').delete().eq('id', product.id)
     await fetchProducts()
     setDeleting(null)
+    setConfirmDelete(null)
   }
 
   const categoriasConTodas = ['Todas', ...categorias]
@@ -140,6 +146,9 @@ export default function ProductosPage() {
     const matchCat = categoria === 'Todas' || p.categoria === categoria
     return matchSearch && matchCat
   })
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div>
@@ -201,7 +210,7 @@ export default function ProductosPage() {
         {/* Vista Grid */}
         {!loading && view === 'grid' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-            {filtered.map(p => (
+            {paginated.map(p => (
               <div key={p.id} style={{ border: '1px solid #f3f4f6', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ height: 140, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {p.imagen_url
@@ -227,7 +236,7 @@ export default function ProductosPage() {
                   <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
                     <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ flex: 1, background: '#f3f4f6', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
                     <button
-                      onClick={() => handleDelete(p.id, p.imagen_url)}
+                      onClick={() => setConfirmDelete(p)}
                       disabled={deleting === p.id}
                       style={{ flex: 1, background: '#fee2e2', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#dc2626' }}>
                       {deleting === p.id ? '...' : 'Eliminar'}
@@ -250,7 +259,7 @@ export default function ProductosPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
+              {paginated.map(p => (
                 <tr key={p.id} style={{ borderBottom: '1px solid #f9fafb' }}>
                   <td style={{ padding: '12px 0', fontSize: 12, color: '#9ca3af', fontFamily: 'monospace' }}>{p.sku}</td>
                   <td style={{ padding: '12px 0' }}>
@@ -278,7 +287,7 @@ export default function ProductosPage() {
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
                       <button
-                        onClick={() => handleDelete(p.id, p.imagen_url)}
+                        onClick={() => setConfirmDelete(p)}
                         disabled={deleting === p.id}
                         style={{ background: '#fee2e2', border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#dc2626' }}>
                         {deleting === p.id ? '...' : 'Eliminar'}
@@ -297,7 +306,42 @@ export default function ProductosPage() {
             <p style={{ fontSize: 14 }}>No se encontraron productos</p>
           </div>
         )}
+
+        {/* Paginación */}
+        {!loading && totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingTop: 16, borderTop: '1px solid #f3f4f6' }}>
+            <p style={{ fontSize: 13, color: '#6b7280' }}>
+              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} de {filtered.length} productos
+            </p>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === 1 ? '#f9fafb' : '#fff', color: page === 1 ? '#d1d5db' : '#374151', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13 }}>
+                ← Anterior
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                <button key={n} onClick={() => setPage(n)}
+                  style={{ padding: '6px 11px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === n ? '#0049ff' : '#fff', color: page === n ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: page === n ? 700 : 400 }}>
+                  {n}
+                </button>
+              ))}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === totalPages ? '#f9fafb' : '#fff', color: page === totalPages ? '#d1d5db' : '#374151', cursor: page === totalPages ? 'default' : 'pointer', fontSize: 13 }}>
+                Siguiente →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="¿Eliminar producto?"
+          message={`"${confirmDelete.nombre}" se eliminará permanentemente junto con su imagen. Esta acción no se puede deshacer.`}
+          confirmLabel={deleting ? 'Eliminando...' : 'Sí, eliminar'}
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
 
       {showModal && (
         <ProductoModal

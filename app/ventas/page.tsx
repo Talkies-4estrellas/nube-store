@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import VentaModal from '@/components/VentaModal'
 import Icon from '@/components/Icon'
 
+const PAGE_SIZE = 15
+
 type VentaItem = {
   id: string
   nombre: string
@@ -53,6 +55,7 @@ export default function VentasPage() {
   const [items, setItems] = useState<VentaItem[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
   const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
 
   async function fetchVentas() {
     setLoading(true)
@@ -95,6 +98,8 @@ export default function VentasPage() {
   })
 
   const total = filtered.reduce((sum, v) => sum + Number(v.total), 0)
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
@@ -157,7 +162,7 @@ export default function VentasPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(v => (
+                {paginated.map(v => (
                   <tr key={v.id} style={{ borderBottom: '1px solid #f9fafb', background: detalle?.id === v.id ? '#f0f5ff' : 'transparent' }}>
                     <td style={{ padding: '13px 0', fontSize: 13, fontWeight: 700, color: '#0049ff' }}>#{v.numero}</td>
                     <td style={{ padding: '13px 0' }}>
@@ -210,6 +215,25 @@ export default function VentasPage() {
             <p style={{ fontSize: 13, color: '#6b7280' }}>{filtered.length} pedidos encontrados</p>
             <p style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>Total: ${total.toLocaleString()}</p>
           </div>
+
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 12 }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === 1 ? '#f9fafb' : '#fff', color: page === 1 ? '#d1d5db' : '#374151', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13 }}>
+                ← Anterior
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                <button key={n} onClick={() => setPage(n)}
+                  style={{ padding: '6px 11px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === n ? '#0049ff' : '#fff', color: page === n ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: page === n ? 700 : 400 }}>
+                  {n}
+                </button>
+              ))}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === totalPages ? '#f9fafb' : '#fff', color: page === totalPages ? '#d1d5db' : '#374151', cursor: page === totalPages ? 'default' : 'pointer', fontSize: 13 }}>
+                Siguiente →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

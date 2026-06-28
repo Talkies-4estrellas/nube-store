@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ClienteModal from '@/components/ClienteModal'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import Icon from '@/components/Icon'
+
+const PAGE_SIZE = 15
 
 type Cliente = {
   id: string
@@ -33,6 +36,9 @@ export default function ClientesPage() {
   const [selected, setSelected] = useState<Cliente | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [editando, setEditando] = useState<(Cliente & { id: string }) | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Cliente | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [page, setPage] = useState(1)
 
   async function fetchClientes() {
       setLoading(true)
@@ -60,6 +66,15 @@ export default function ClientesPage() {
 
   useEffect(() => { fetchClientes() }, [])
 
+  async function handleDelete(c: Cliente) {
+    setDeleting(true)
+    await supabase.from('clientes').delete().eq('id', c.id)
+    if (selected?.id === c.id) setSelected(null)
+    await fetchClientes()
+    setDeleting(false)
+    setConfirmDelete(null)
+  }
+
   const filtered = clientes.filter(c => {
     const matchSearch = c.nombre.toLowerCase().includes(search.toLowerCase()) ||
       c.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -67,6 +82,9 @@ export default function ClientesPage() {
     const matchTag = tagFilter === 'Todos' || c.tag === tagFilter
     return matchSearch && matchTag
   })
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div>
@@ -127,7 +145,7 @@ export default function ClientesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(c => (
+                {paginated.map(c => (
                   <tr key={c.id} onClick={() => setSelected(c === selected ? null : c)}
                     style={{ borderBottom: '1px solid #f9fafb', cursor: 'pointer', background: selected?.id === c.id ? '#eff6ff' : 'transparent' }}>
                     <td style={{ padding: '13px 0' }}>
@@ -150,7 +168,10 @@ export default function ClientesPage() {
                       </span>
                     </td>
                     <td style={{ padding: '13px 0' }}>
-                      <button onClick={() => { setEditando(c); setShowModal(true) }} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={e => { e.stopPropagation(); setEditando(c); setShowModal(true) }} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
+                        <button onClick={e => { e.stopPropagation(); setConfirmDelete(c) }} style={{ background: '#fee2e2', border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#dc2626' }}>Eliminar</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -162,6 +183,22 @@ export default function ClientesPage() {
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
               <Icon name="users" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
               <p style={{ fontSize: 14 }}>No se encontraron clientes</p>
+            </div>
+          )}
+
+          {!loading && totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTop: '1px solid #f3f4f6' }}>
+              <p style={{ fontSize: 13, color: '#6b7280' }}>{(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE, filtered.length)} de {filtered.length}</p>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page===1}
+                  style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page===1?'#f9fafb':'#fff', color: page===1?'#d1d5db':'#374151', cursor: page===1?'default':'pointer', fontSize: 13 }}>← Anterior</button>
+                {Array.from({ length: totalPages }, (_, i) => i+1).map(n => (
+                  <button key={n} onClick={() => setPage(n)}
+                    style={{ padding: '6px 11px', borderRadius: 6, border: '1px solid #e5e7eb', background: page===n?'#0049ff':'#fff', color: page===n?'#fff':'#374151', cursor: 'pointer', fontSize: 13, fontWeight: page===n?700:400 }}>{n}</button>
+                ))}
+                <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page===totalPages}
+                  style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page===totalPages?'#f9fafb':'#fff', color: page===totalPages?'#d1d5db':'#374151', cursor: page===totalPages?'default':'pointer', fontSize: 13 }}>Siguiente →</button>
+              </div>
             </div>
           )}
         </div>
@@ -200,6 +237,16 @@ export default function ClientesPage() {
           </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="¿Eliminar cliente?"
+          message={`"${confirmDelete.nombre}" y todos sus datos se eliminarán permanentemente. Esta acción no se puede deshacer.`}
+          confirmLabel={deleting ? 'Eliminando...' : 'Sí, eliminar'}
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
 
       {showModal && (
         <ClienteModal
