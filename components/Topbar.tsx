@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import Icon from '@/components/Icon'
 
 type SearchResult = {
   tipo: 'producto' | 'cliente' | 'venta'
@@ -49,7 +50,7 @@ export default function Topbar() {
     setSearching(false)
   }
 
-  const iconMap = { producto: '📦', cliente: '👤', venta: '🛒' }
+  const iconMap: Record<string, string> = { producto: 'box', cliente: 'users', venta: 'cart' }
 
   return (
     <header style={{
@@ -88,7 +89,7 @@ export default function Topbar() {
                   style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
                   onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  <span style={{ fontSize: 18 }}>{iconMap[r.tipo]}</span>
+                  <Icon name={iconMap[r.tipo]} size={18} color="#6b7280" />
                   <div>
                     <p style={{ fontSize: 13, fontWeight: 600, color: '#111', margin: 0 }}>{r.label}</p>
                     <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>{r.sub}</p>
@@ -103,7 +104,9 @@ export default function Topbar() {
           )}
         </div>
       ) : (
-        <button onClick={() => setSearchOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 4, borderRadius: 6 }}>🔍</button>
+        <button onClick={() => setSearchOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center' }}>
+          <Icon name="search" size={20} color="#6b7280" />
+        </button>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{

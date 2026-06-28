@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { CSSProperties } from 'react'
+import Icon from '@/components/Icon'
 
 type NavItem = { href: string; label: string; icon: string; badge?: string }
 type NavSection = { label: string; items: NavItem[] }
@@ -12,23 +13,23 @@ const navItems: NavSection[] = [
   {
     label: 'INICIO',
     items: [
-      { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+      { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
     ],
   },
   {
     label: 'GESTIÓN',
     items: [
-      { href: '/ventas', label: 'Ventas', icon: '🛒' },
-      { href: '/productos', label: 'Productos', icon: '📦' },
-      { href: '/clientes', label: 'Clientes', icon: '👥' },
-      { href: '/envio-nube', label: 'Envío', icon: '🚚' },
+      { href: '/ventas', label: 'Ventas', icon: 'cart' },
+      { href: '/productos', label: 'Productos', icon: 'box' },
+      { href: '/clientes', label: 'Clientes', icon: 'users' },
+      { href: '/envio-nube', label: 'Envío', icon: 'truck' },
     ],
   },
   {
     label: 'CANALES DE VENTA',
     items: [
-      { href: '/tienda-en-linea', label: 'Tienda en línea', icon: '🏪' },
-      { href: '/punto-de-venta', label: 'Punto de Venta', icon: '💳' },
+      { href: '/tienda-en-linea', label: 'Tienda en línea', icon: 'store' },
+      { href: '/punto-de-venta', label: 'Punto de Venta', icon: 'creditcard' },
     ],
   },
 ]
@@ -95,7 +96,7 @@ function NavItem({ href, label, icon, badge, active }: {
       background: active ? '#eff6ff' : 'transparent',
       borderRight: active ? '3px solid #0049ff' : '3px solid transparent',
     }}>
-      <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>{icon}</span>
+      <Icon name={icon} size={17} color={active ? '#0049ff' : '#6b7280'} />
       <span style={{ flex: 1 }}>{label}</span>
       {badge && (
         <span style={{
@@ -146,7 +147,7 @@ export default function Sidebar() {
       </nav>
 
       <div style={s.footer}>
-        <NavItem href="/configuracion" label="Configuración" icon="⚙️" active={pathname === '/configuracion'} />
+        <NavItem href="/configuracion" label="Configuración" icon="settings" active={pathname === '/configuracion'} />
       </div>
     </aside>
   )

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ClienteModal from '@/components/ClienteModal'
+import Icon from '@/components/Icon'
 
 type Cliente = {
   id: string
@@ -113,7 +114,7 @@ export default function ClientesPage() {
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p>
+              <Icon name="users" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
               <p>Cargando clientes...</p>
             </div>
           ) : (
@@ -159,7 +160,7 @@ export default function ClientesPage() {
 
           {!loading && filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>👥</p>
+              <Icon name="users" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
               <p style={{ fontSize: 14 }}>No se encontraron clientes</p>
             </div>
           )}

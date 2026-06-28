@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import Icon from '@/components/Icon'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
 type ProductoBajo = { nombre: string; stock: number }
@@ -40,10 +41,10 @@ export default function DashboardPage() {
   const pendientes = ventas.filter(v => v.estado === 'Pendiente').length
 
   const metrics = [
-    { label: 'Ventas hoy', value: `$${totalHoy.toLocaleString()}`, icon: '💰', href: '/ventas', color: '#059669' },
-    { label: 'Pedidos pendientes', value: pendientes, icon: '📋', href: '/ventas', color: '#d97706' },
-    { label: 'Clientes registrados', value: totalClientes, icon: '👥', href: '/clientes', color: '#0049ff' },
-    { label: 'Productos sin stock', value: stockBajo.filter(p => p.stock === 0).length, icon: '⚠️', href: '/productos', color: '#dc2626' },
+    { label: 'Ventas hoy', value: `$${totalHoy.toLocaleString()}`, icon: 'dollar', href: '/ventas', color: '#059669' },
+    { label: 'Pedidos pendientes', value: pendientes, icon: 'clipboard', href: '/ventas', color: '#d97706' },
+    { label: 'Clientes registrados', value: totalClientes, icon: 'users', href: '/clientes', color: '#0049ff' },
+    { label: 'Productos sin stock', value: stockBajo.filter(p => p.stock === 0).length, icon: 'warning', href: '/productos', color: '#dc2626' },
   ]
 
   return (
@@ -55,7 +56,9 @@ export default function DashboardPage() {
         {metrics.map(m => (
           <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>
             <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer' }}>
-              <span style={{ fontSize: 28, display: 'block', marginBottom: 12 }}>{m.icon}</span>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: m.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <Icon name={m.icon} size={22} color={m.color} />
+              </div>
               <p style={{ fontSize: 28, fontWeight: 700, color: '#111', marginBottom: 4 }}>
                 {loading ? '—' : m.value}
               </p>
@@ -77,7 +80,7 @@ export default function DashboardPage() {
             <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
           ) : ventas.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 0', color: '#9ca3af' }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>📋</p>
+              <Icon name="clipboard" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
               <p style={{ fontSize: 14 }}>Aún no hay pedidos</p>
             </div>
           ) : (
@@ -110,7 +113,9 @@ export default function DashboardPage() {
         {/* Stock bajo */}
         <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700 }}>⚠️ Stock bajo</h2>
+            <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="warning" size={16} color="#d97706" /> Stock bajo
+            </h2>
             <Link href="/productos" style={{ fontSize: 13, color: '#0049ff', textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
           </div>
 
@@ -118,7 +123,7 @@ export default function DashboardPage() {
             <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
           ) : stockBajo.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 0', color: '#9ca3af' }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>✅</p>
+              <Icon name="check" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
               <p style={{ fontSize: 14 }}>Todo el stock está bien</p>
             </div>
           ) : (

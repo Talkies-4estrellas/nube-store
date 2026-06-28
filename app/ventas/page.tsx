@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import VentaModal from '@/components/VentaModal'
+import Icon from '@/components/Icon'
 
 type VentaItem = {
   id: string
@@ -143,7 +144,7 @@ export default function VentasPage() {
 
           {loading ? (
             <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p>
+              <Icon name="cart" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
               <p>Cargando ventas...</p>
             </div>
           ) : (
@@ -200,7 +201,7 @@ export default function VentasPage() {
 
           {!loading && filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>🔍</p>
+              <Icon name="search" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
               <p style={{ fontSize: 14 }}>No se encontraron pedidos</p>
             </div>
           )}

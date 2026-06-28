@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import ProductoModal from '@/components/ProductoModal'
 import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
+import Icon from '@/components/Icon'
 
 type Product = {
   id: string
@@ -192,7 +193,7 @@ export default function ProductosPage() {
 
         {loading && (
           <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
-            <p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p>
+            <Icon name="box" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
             <p style={{ fontSize: 14 }}>Cargando productos...</p>
           </div>
         )}
@@ -205,7 +206,7 @@ export default function ProductosPage() {
                 <div style={{ height: 140, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {p.imagen_url
                     ? <img src={p.imagen_url} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontSize: 40 }}>📦</span>
+                    : <Icon name="box" size={40} color="#fff" />
                   }
                 </div>
                 <div style={{ padding: 14 }}>
@@ -256,7 +257,7 @@ export default function ProductosPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {p.imagen_url
                         ? <img src={p.imagen_url} alt={p.nombre} style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover' }} />
-                        : <div style={{ width: 36, height: 36, borderRadius: 6, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>📦</div>
+                        : <div style={{ width: 36, height: 36, borderRadius: 6, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="box" size={18} color="#fff" /></div>
                       }
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.nombre}</span>
                     </div>
@@ -292,7 +293,7 @@ export default function ProductosPage() {
 
         {!loading && filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
-            <p style={{ fontSize: 32, marginBottom: 8 }}>📦</p>
+            <Icon name="box" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
             <p style={{ fontSize: 14 }}>No se encontraron productos</p>
           </div>
         )}
