@@ -44,6 +44,7 @@ export default function ProductosPage() {
   const [categoria, setCategoria] = useState('Todas')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [showModal, setShowModal] = useState(false)
+  const [editando, setEditando] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   async function fetchProducts() {
@@ -127,7 +128,7 @@ export default function ProductosPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Productos</h1>
-        <button onClick={() => setShowModal(true)} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+        <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
           + Agregar producto
         </button>
       </div>
@@ -207,7 +208,7 @@ export default function ProductosPage() {
                     <span style={{ fontSize: 12, color: '#6b7280' }}>Stock: {p.stock}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                    <button style={{ flex: 1, background: '#f3f4f6', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
+                    <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ flex: 1, background: '#f3f4f6', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
                     <button
                       onClick={() => handleDelete(p.id, p.imagen_url)}
                       disabled={deleting === p.id}
@@ -277,7 +278,23 @@ export default function ProductosPage() {
         )}
       </div>
 
-      {showModal && <ProductoModal onClose={() => setShowModal(false)} onSave={handleSave} />}
+      {showModal && (
+        <ProductoModal
+          onClose={() => { setShowModal(false); setEditando(null) }}
+          onSave={handleSave}
+          inicial={editando ? {
+            id: editando.id,
+            nombre: editando.nombre,
+            sku: editando.sku,
+            categoria: editando.categoria,
+            precio: String(editando.precio),
+            stock: String(editando.stock),
+            descripcion: '',
+            imagen: null,
+            imagenPreview: editando.imagen_url ?? null,
+          } : undefined}
+        />
+      )}
     </div>
   )
 }

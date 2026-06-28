@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import ClienteModal from '@/components/ClienteModal'
 
 type Cliente = {
   id: string
@@ -29,9 +30,10 @@ export default function ClientesPage() {
   const [search, setSearch] = useState('')
   const [tagFilter, setTagFilter] = useState('Todos')
   const [selected, setSelected] = useState<Cliente | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [editando, setEditando] = useState<(Cliente & { id: string }) | null>(null)
 
-  useEffect(() => {
-    async function fetch() {
+  async function fetchClientes() {
       setLoading(true)
       const { data } = await supabase
         .from('clientes')
@@ -53,9 +55,9 @@ export default function ClientesPage() {
         setClientes(enriched)
       }
       setLoading(false)
-    }
-    fetch()
-  }, [])
+  }
+
+  useEffect(() => { fetchClientes() }, [])
 
   const filtered = clientes.filter(c => {
     const matchSearch = c.nombre.toLowerCase().includes(search.toLowerCase()) ||
@@ -69,7 +71,7 @@ export default function ClientesPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Clientes</h1>
-        <button style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+        <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
           + Agregar cliente
         </button>
       </div>
@@ -147,7 +149,7 @@ export default function ClientesPage() {
                       </span>
                     </td>
                     <td style={{ padding: '13px 0' }}>
-                      <button style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Ver</button>
+                      <button onClick={() => { setEditando(c); setShowModal(true) }} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
                     </td>
                   </tr>
                 ))}
@@ -197,6 +199,14 @@ export default function ClientesPage() {
           </div>
         )}
       </div>
+
+      {showModal && (
+        <ClienteModal
+          inicial={editando ? { id: editando.id, nombre: editando.nombre, email: editando.email, telefono: editando.telefono ?? '', ciudad: editando.ciudad ?? '', tag: editando.tag as 'Nuevo' | 'Regular' | 'VIP' } : undefined}
+          onClose={() => { setShowModal(false); setEditando(null) }}
+          onSave={() => { setShowModal(false); setEditando(null); fetchClientes() }}
+        />
+      )}
     </div>
   )
 }

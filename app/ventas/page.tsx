@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import VentaModal from '@/components/VentaModal'
 
 type Venta = {
   id: string
@@ -30,19 +31,19 @@ export default function VentasPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('Todos')
+  const [showModal, setShowModal] = useState(false)
 
-  useEffect(() => {
-    async function fetch() {
-      setLoading(true)
-      const { data } = await supabase
-        .from('ventas')
-        .select('*, clientes(nombre, email)')
-        .order('created_at', { ascending: false })
-      if (data) setVentas(data)
-      setLoading(false)
-    }
-    fetch()
-  }, [])
+  async function fetchVentas() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('ventas')
+      .select('*, clientes(nombre, email)')
+      .order('created_at', { ascending: false })
+    if (data) setVentas(data)
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchVentas() }, [])
 
   const filtered = ventas.filter(v => {
     const nombre = v.clientes?.nombre ?? ''
@@ -58,7 +59,7 @@ export default function VentasPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Ventas</h1>
-        <button style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+        <button onClick={() => setShowModal(true)} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
           + Nueva venta
         </button>
       </div>
@@ -149,6 +150,8 @@ export default function VentasPage() {
           <p style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>Total: ${total.toLocaleString()}</p>
         </div>
       </div>
+
+      {showModal && <VentaModal onClose={() => setShowModal(false)} onSave={() => { setShowModal(false); fetchVentas() }} />}
     </div>
   )
 }

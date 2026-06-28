@@ -19,8 +19,10 @@ const empty: Producto = {
   nombre: '', sku: '', categoria: '', precio: '', stock: '', descripcion: '', imagen: null, imagenPreview: null,
 }
 
-export default function ProductoModal({ onClose, onSave }: { onClose: () => void; onSave: (p: Producto) => void }) {
-  const [form, setForm] = useState<Producto>(empty)
+type Props = { onClose: () => void; onSave: (p: Producto) => void; inicial?: Partial<Producto> & { id?: string } }
+
+export default function ProductoModal({ onClose, onSave, inicial }: Props) {
+  const [form, setForm] = useState<Producto>({ ...empty, ...inicial })
   const [errors, setErrors] = useState<Partial<Record<keyof Producto, string>>>({})
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -78,7 +80,7 @@ export default function ProductoModal({ onClose, onSave }: { onClose: () => void
       }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid #f3f4f6' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>Agregar producto</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>{inicial?.id ? 'Editar producto' : 'Agregar producto'}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
         </div>
 
@@ -181,7 +183,7 @@ export default function ProductoModal({ onClose, onSave }: { onClose: () => void
               Cancelar
             </button>
             <button onClick={handleSubmit} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-              Guardar producto
+              {inicial?.id ? 'Actualizar producto' : 'Guardar producto'}
             </button>
           </div>
         </div>
