@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import ProductoModal from '@/components/ProductoModal'
 import { supabase } from '@/lib/supabase'
+import { uploadToSupabase } from '@/lib/uploadWebp'
 
 type Product = {
   id: string
@@ -66,17 +67,13 @@ export default function ProductosPage() {
   }) {
     let imagen_url: string | null = null
 
-    // 1. Subir imagen a Storage
+    // 1. Subir imagen WebP a Storage
     if (form.imagen) {
-      const ext = form.imagen.name.split('.').pop()
-      const path = `${Date.now()}-${form.sku}.${ext}`
-      const { error: uploadError } = await supabase.storage
-        .from('productos')
-        .upload(path, form.imagen, { upsert: true })
-
-      if (!uploadError) {
-        const { data: urlData } = supabase.storage.from('productos').getPublicUrl(path)
-        imagen_url = urlData.publicUrl
+      const path = `${Date.now()}-${form.sku}.webp`
+      try {
+        imagen_url = await uploadToSupabase(form.imagen, supabase, 'productos', path)
+      } catch (e) {
+        console.error('Error subiendo imagen:', e)
       }
     }
 

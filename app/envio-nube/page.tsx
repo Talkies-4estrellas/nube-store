@@ -43,14 +43,14 @@ export default function EnvioNubePage() {
             LOGÍSTICA
           </p>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111', lineHeight: 1.3, marginBottom: 12 }}>
-            Envío Nube: la solución logística más fácil y económica para tu tienda
+            Envío: la solución logística más fácil y económica para tu tienda
           </h1>
           <p style={{ color: '#6b7280', fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
             Envía con tarifas exclusivas y ten acceso a paqueterías integradas como DHL, FedEx. Todo en un sólo lugar y al mejor precio.
           </p>
           <div style={{ display: 'flex', gap: 12 }}>
             <button style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-              Activar Envío Nube
+              Activar Envío 
             </button>
             <button style={{ background: '#fff', color: '#374151', border: '1px solid #d1d5db', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
               Ver más

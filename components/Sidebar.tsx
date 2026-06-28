@@ -21,7 +21,7 @@ const navItems: NavSection[] = [
       { href: '/ventas', label: 'Ventas', icon: '🛒' },
       { href: '/productos', label: 'Productos', icon: '📦' },
       { href: '/clientes', label: 'Clientes', icon: '👥' },
-      { href: '/envio-nube', label: 'Envío Nube', icon: '🚚', badge: 'Nuevo' },
+      { href: '/envio-nube', label: 'Envío', icon: '🚚', badge: 'Nuevo' },
     ],
   },
   {
