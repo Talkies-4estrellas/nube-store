@@ -35,7 +35,7 @@ export default function Topbar() {
           borderRadius: '50%', display: 'flex', alignItems: 'center',
           justifyContent: 'center', fontWeight: 700, fontSize: 13,
         }}>T</div>
-        <span style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>Tienda de Talkies</span>
+        <span style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>Nube Store</span>
       </div>
     </header>
   )

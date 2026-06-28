@@ -9,8 +9,17 @@ type NavSection = { label: string; items: NavItem[] }
 
 const navItems: NavSection[] = [
   {
+    label: 'INICIO',
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+    ],
+  },
+  {
     label: 'GESTIÓN',
     items: [
+      { href: '/ventas', label: 'Ventas', icon: '🛒' },
+      { href: '/productos', label: 'Productos', icon: '📦' },
+      { href: '/clientes', label: 'Clientes', icon: '👥' },
       { href: '/envio-nube', label: 'Envío Nube', icon: '🚚', badge: 'Nuevo' },
     ],
   },
@@ -113,7 +122,7 @@ export default function Sidebar() {
         }}>
           <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>T</span>
         </div>
-        <span style={s.logoText}>Tienda Nube</span>
+        <span style={s.logoText}>Nube Store</span>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#666', fontSize: 16 }}>☰</button>
       </div>
 
