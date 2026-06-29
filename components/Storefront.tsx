@@ -157,9 +157,12 @@ export default function Storefront() {
 
   // Login modal (storefront — sin roles, solo sesión de cliente)
   const [showLogin, setShowLogin] = useState(false)
+  const [loginTab, setLoginTab] = useState<'login' | 'register'>('login')
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [registerForm, setRegisterForm] = useState({ nombre: '', email: '', password: '', confirm: '' })
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
+  const [loginSuccess, setLoginSuccess] = useState('')
   const [storefrontUser, setStorefrontUser] = useState<{ email: string; nombre: string } | null>(null)
 
   const gridRef = useRef<HTMLElement>(null)
@@ -318,15 +321,19 @@ export default function Storefront() {
     setNavCollapsed((c) => !c)
   }
 
-  const openLoginModal = () => {
+  const openLoginModal = (tab: 'login' | 'register' = 'login') => {
+    setLoginTab(tab)
     setLoginForm({ email: '', password: '' })
+    setRegisterForm({ nombre: '', email: '', password: '', confirm: '' })
     setLoginError('')
+    setLoginSuccess('')
     setShowLogin(true)
   }
 
   const closeLoginModal = () => {
     setShowLogin(false)
     setLoginError('')
+    setLoginSuccess('')
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -342,8 +349,41 @@ export default function Storefront() {
       setLoginLoading(false)
       return
     }
-    setStorefrontUser({ email: data.session.user.email ?? '', nombre: data.session.user.email?.split('@')[0] ?? 'Cliente' })
+    const email = data.session.user.email ?? ''
+    const nombre = data.session.user.user_metadata?.nombre ?? email.split('@')[0]
+    setStorefrontUser({ email, nombre })
     setShowLogin(false)
+    setLoginLoading(false)
+  }
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault()
+    setLoginError('')
+    setLoginSuccess('')
+    const { nombre, email, password, confirm } = registerForm
+    if (!nombre.trim()) { setLoginError('El nombre es obligatorio'); return }
+    if (password.length < 6) { setLoginError('La contraseña debe tener al menos 6 caracteres'); return }
+    if (password !== confirm) { setLoginError('Las contraseñas no coinciden'); return }
+    setLoginLoading(true)
+    const { data, error: authError } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: { data: { nombre: nombre.trim() } },
+    })
+    if (authError) {
+      setLoginError(authError.message === 'User already registered' ? 'Este email ya está registrado' : 'Error al crear la cuenta')
+      setLoginLoading(false)
+      return
+    }
+    if (data.user && !data.session) {
+      // Supabase envía email de confirmación
+      setLoginSuccess('¡Cuenta creada! Revisa tu correo para confirmar tu cuenta y luego inicia sesión.')
+    } else if (data.session) {
+      // Confirmación desactivada — sesión inmediata
+      const u = data.session.user
+      setStorefrontUser({ email: u.email ?? '', nombre: u.user_metadata?.nombre ?? nombre.trim() })
+      setShowLogin(false)
+    }
     setLoginLoading(false)
   }
 
@@ -916,7 +956,7 @@ export default function Storefront() {
                   <button type="button" onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, cursor: 'pointer' }}>Salir</button>
                 </div>
               ) : (
-                <button className="login-button" type="button" aria-label="Iniciar sesion" onClick={openLoginModal}><Ic n="log-in" /><span>Iniciar sesion</span></button>
+                <button className="login-button" type="button" aria-label="Iniciar sesion" onClick={() => openLoginModal('login')}><Ic n="log-in" /><span>Iniciar sesion</span></button>
               )}
             </div>
           </header>
@@ -1056,78 +1096,134 @@ export default function Storefront() {
         </div>
       )}
 
-      {/* ---- Modal de inicio de sesión (storefront) ---- */}
+      {/* ---- Modal de inicio de sesión / registro (storefront) ---- */}
       {showLogin && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
           onClick={e => { if (e.target === e.currentTarget) closeLoginModal() }}>
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(17,24,39,0.55)', backdropFilter: 'blur(4px)' }} />
-          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, padding: '36px 32px 32px', boxShadow: '0 24px 64px rgba(0,0,0,0.22)', zIndex: 1 }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: 420, background: '#fff', borderRadius: 20, padding: '32px 32px 28px', boxShadow: '0 24px 64px rgba(0,0,0,0.22)', zIndex: 1 }}>
 
             {/* Cerrar */}
-            <button onClick={closeLoginModal} style={{ position: 'absolute', top: 16, right: 16, background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#6b7280', lineHeight: 1 }}>×</button>
+            <button onClick={closeLoginModal} style={{ position: 'absolute', top: 14, right: 14, background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#6b7280', lineHeight: 1 }}>×</button>
 
-            {/* Encabezado */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <div style={{ width: 36, height: 36, background: '#252855', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ color: '#fff', fontWeight: 900, fontSize: 13 }}>OE</span>
-                </div>
-                <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                  <span style={{ color: '#252855' }}>Order</span><span style={{ color: '#e7226d' }}>Express</span>
-                </span>
+            {/* Logo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 34, height: 34, background: '#252855', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ color: '#fff', fontWeight: 900, fontSize: 12 }}>OE</span>
               </div>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111', margin: '12px 0 4px' }}>Iniciar sesión</h2>
-              <p style={{ fontSize: 13, color: '#6b7280' }}>Accede a tu cuenta para ver tus pedidos</p>
+              <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: '-0.02em' }}>
+                <span style={{ color: '#252855' }}>Order</span><span style={{ color: '#e7226d' }}>Express</span>
+              </span>
             </div>
 
-            {/* Formulario */}
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Email</label>
-                <input
-                  type="email"
-                  value={loginForm.email}
-                  onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))}
-                  placeholder="tu@email.com"
-                  required
-                  autoComplete="email"
-                  disabled={loginLoading}
-                  style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
-                  onFocus={e => (e.target.style.borderColor = '#252855')}
-                  onBlur={e  => (e.target.style.borderColor = '#e5e7eb')}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Contraseña</label>
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
-                  placeholder="••••••••"
-                  required
-                  autoComplete="current-password"
-                  disabled={loginLoading}
-                  style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
-                  onFocus={e => (e.target.style.borderColor = '#252855')}
-                  onBlur={e  => (e.target.style.borderColor = '#e5e7eb')}
-                />
-              </div>
+            {/* Pestañas */}
+            <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 12, padding: 4, marginBottom: 24, gap: 4 }}>
+              {(['login', 'register'] as const).map(tab => (
+                <button key={tab} type="button" onClick={() => { setLoginTab(tab); setLoginError(''); setLoginSuccess('') }}
+                  style={{ flex: 1, padding: '9px 0', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 13, cursor: 'pointer', transition: 'all 0.15s',
+                    background: loginTab === tab ? '#fff' : 'transparent',
+                    color: loginTab === tab ? '#252855' : '#6b7280',
+                    boxShadow: loginTab === tab ? '0 2px 8px rgba(37,40,85,0.12)' : 'none',
+                  }}>
+                  {tab === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+                </button>
+              ))}
+            </div>
 
-              {loginError && (
-                <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '9px 13px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
-                  {loginError}
+            {/* Mensajes globales */}
+            {loginError && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '9px 13px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 16 }}>
+                {loginError}
+              </div>
+            )}
+            {loginSuccess && (
+              <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, padding: '9px 13px', fontSize: 13, color: '#166534', fontWeight: 600, marginBottom: 16 }}>
+                {loginSuccess}
+              </div>
+            )}
+
+            {/* ---- TAB: Login ---- */}
+            {loginTab === 'login' && (
+              <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Email</label>
+                  <input type="email" value={loginForm.email} onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="tu@email.com" required autoComplete="email" disabled={loginLoading}
+                    style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                    onFocus={e => (e.target.style.borderColor = '#252855')} onBlur={e => (e.target.style.borderColor = '#e5e7eb')} />
                 </div>
-              )}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Contraseña</label>
+                  <input type="password" value={loginForm.password} onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="••••••••" required autoComplete="current-password" disabled={loginLoading}
+                    style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                    onFocus={e => (e.target.style.borderColor = '#252855')} onBlur={e => (e.target.style.borderColor = '#e5e7eb')} />
+                </div>
+                <button type="submit" disabled={loginLoading}
+                  style={{ background: loginLoading ? '#9ca3af' : '#252855', color: '#fff', border: 'none', padding: '12px 0', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: loginLoading ? 'default' : 'pointer', marginTop: 2, letterSpacing: '0.01em' }}>
+                  {loginLoading ? 'Verificando...' : 'Entrar'}
+                </button>
+                <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af', margin: 0 }}>
+                  ¿Sin cuenta?{' '}
+                  <button type="button" onClick={() => { setLoginTab('register'); setLoginError('') }}
+                    style={{ background: 'none', border: 'none', color: '#e7226d', fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: 0 }}>
+                    Crear una gratis
+                  </button>
+                </p>
+              </form>
+            )}
 
-              <button type="submit" disabled={loginLoading}
-                style={{ background: loginLoading ? '#9ca3af' : '#252855', color: '#fff', border: 'none', padding: '12px 0', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: loginLoading ? 'default' : 'pointer', marginTop: 4, letterSpacing: '0.01em' }}>
-                {loginLoading ? 'Verificando...' : 'Entrar'}
-              </button>
-            </form>
+            {/* ---- TAB: Registro ---- */}
+            {loginTab === 'register' && !loginSuccess && (
+              <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Nombre completo</label>
+                  <input type="text" value={registerForm.nombre} onChange={e => setRegisterForm(f => ({ ...f, nombre: e.target.value }))}
+                    placeholder="Tu nombre" required disabled={loginLoading}
+                    style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                    onFocus={e => (e.target.style.borderColor = '#252855')} onBlur={e => (e.target.style.borderColor = '#e5e7eb')} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Email</label>
+                  <input type="email" value={registerForm.email} onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="tu@email.com" required autoComplete="email" disabled={loginLoading}
+                    style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                    onFocus={e => (e.target.style.borderColor = '#252855')} onBlur={e => (e.target.style.borderColor = '#e5e7eb')} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Contraseña</label>
+                  <input type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="Mínimo 6 caracteres" required disabled={loginLoading}
+                    style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                    onFocus={e => (e.target.style.borderColor = '#252855')} onBlur={e => (e.target.style.borderColor = '#e5e7eb')} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Confirmar contraseña</label>
+                  <input type="password" value={registerForm.confirm} onChange={e => setRegisterForm(f => ({ ...f, confirm: e.target.value }))}
+                    placeholder="Repite la contraseña" required disabled={loginLoading}
+                    style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                    onFocus={e => (e.target.style.borderColor = '#252855')} onBlur={e => (e.target.style.borderColor = '#e5e7eb')} />
+                </div>
+                <button type="submit" disabled={loginLoading}
+                  style={{ background: loginLoading ? '#9ca3af' : '#e7226d', color: '#fff', border: 'none', padding: '12px 0', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: loginLoading ? 'default' : 'pointer', marginTop: 2, letterSpacing: '0.01em' }}>
+                  {loginLoading ? 'Creando cuenta...' : 'Crear mi cuenta'}
+                </button>
+                <p style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', margin: 0, lineHeight: 1.5 }}>
+                  Tu cuenta quedará pendiente hasta que un administrador la active.
+                </p>
+              </form>
+            )}
 
-            <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 18 }}>
-              ¿Sin cuenta? Compra como invitado usando el carrito.
-            </p>
+            {/* Estado post-registro exitoso */}
+            {loginTab === 'register' && loginSuccess && (
+              <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
+                <div style={{ width: 52, height: 52, background: '#dcfce7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 24 }}>✓</div>
+                <button type="button" onClick={() => { setLoginTab('login'); setLoginSuccess('') }}
+                  style={{ background: '#252855', color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>
+                  Ir a iniciar sesión
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
