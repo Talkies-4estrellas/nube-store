@@ -371,18 +371,35 @@ export default function Storefront() {
       options: { data: { nombre: nombre.trim() } },
     })
     if (authError) {
-      setLoginError(authError.message === 'User already registered' ? 'Este email ya está registrado' : 'Error al crear la cuenta')
+      const msg = authError.message.toLowerCase()
+      if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('user already')) {
+        setLoginError('Este email ya está registrado. Inicia sesión en lugar de crear cuenta.')
+      } else if (msg.includes('invalid email')) {
+        setLoginError('El formato del email no es válido.')
+      } else if (msg.includes('password')) {
+        setLoginError('La contraseña no cumple los requisitos mínimos.')
+      } else if (msg.includes('signup') || msg.includes('sign up') || msg.includes('disabled')) {
+        setLoginError('El registro está deshabilitado temporalmente.')
+      } else {
+        setLoginError(`Error: ${authError.message}`)
+      }
       setLoginLoading(false)
       return
     }
-    if (data.user && !data.session) {
-      // Supabase envía email de confirmación
-      setLoginSuccess('¡Cuenta creada! Revisa tu correo para confirmar tu cuenta y luego inicia sesión.')
-    } else if (data.session) {
-      // Confirmación desactivada — sesión inmediata
+    // Supabase a veces devuelve user sin session cuando el email ya existe (anti-enum)
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      setLoginError('Este email ya está registrado. Inicia sesión en lugar de crear cuenta.')
+      setLoginLoading(false)
+      return
+    }
+    if (data.session) {
+      // Confirmación de email desactivada — sesión inmediata
       const u = data.session.user
       setStorefrontUser({ email: u.email ?? '', nombre: u.user_metadata?.nombre ?? nombre.trim() })
       setShowLogin(false)
+    } else {
+      // Confirmación de email activada
+      setLoginSuccess('¡Cuenta creada! Revisa tu correo para confirmar tu cuenta y luego inicia sesión.')
     }
     setLoginLoading(false)
   }
