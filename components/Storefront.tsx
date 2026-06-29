@@ -340,18 +340,25 @@ export default function Storefront() {
     e.preventDefault()
     setLoginError('')
     setLoginLoading(true)
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email: loginForm.email.trim(),
-      password: loginForm.password,
-    })
-    if (authError || !data.session) {
+
+    const { data, error } = await supabase
+      .from('registros')
+      .select('nombre, email, activo')
+      .eq('email', loginForm.email.trim().toLowerCase())
+      .eq('password', loginForm.password)
+      .maybeSingle()
+
+    if (error || !data) {
       setLoginError('Email o contraseña incorrectos')
       setLoginLoading(false)
       return
     }
-    const email = data.session.user.email ?? ''
-    const nombre = data.session.user.user_metadata?.nombre ?? email.split('@')[0]
-    setStorefrontUser({ email, nombre })
+    if (!data.activo) {
+      setLoginError('Tu cuenta aún no ha sido activada. Espera la confirmación del administrador.')
+      setLoginLoading(false)
+      return
+    }
+    setStorefrontUser({ email: data.email, nombre: data.nombre })
     setShowLogin(false)
     setLoginLoading(false)
   }
@@ -365,42 +372,25 @@ export default function Storefront() {
     if (password.length < 6) { setLoginError('La contraseña debe tener al menos 6 caracteres'); return }
     if (password !== confirm) { setLoginError('Las contraseñas no coinciden'); return }
     setLoginLoading(true)
-    const { data, error: authError } = await supabase.auth.signUp({
+
+    const { error } = await supabase.from('registros').insert({
+      nombre: nombre.trim(),
       email: email.trim().toLowerCase(),
       password,
-      options: { data: { nombre: nombre.trim() } },
+      activo: false,
     })
-    if (authError) {
-      const msg = authError.message.toLowerCase()
-      if (msg.includes('already registered') || msg.includes('already been registered') || msg.includes('user already')) {
-        setLoginError('Este email ya está registrado. Inicia sesión en lugar de crear cuenta.')
-      } else if (msg.includes('invalid email')) {
-        setLoginError('El formato del email no es válido.')
-      } else if (msg.includes('password')) {
-        setLoginError('La contraseña no cumple los requisitos mínimos.')
-      } else if (msg.includes('signup') || msg.includes('sign up') || msg.includes('disabled')) {
-        setLoginError('El registro está deshabilitado temporalmente.')
+
+    if (error) {
+      if (error.code === '23505') {
+        setLoginError('Este email ya está registrado. Inicia sesión.')
       } else {
-        setLoginError(`Error: ${authError.message}`)
+        setLoginError('Error al guardar los datos. Intenta de nuevo.')
       }
       setLoginLoading(false)
       return
     }
-    // Supabase a veces devuelve user sin session cuando el email ya existe (anti-enum)
-    if (data.user && data.user.identities && data.user.identities.length === 0) {
-      setLoginError('Este email ya está registrado. Inicia sesión en lugar de crear cuenta.')
-      setLoginLoading(false)
-      return
-    }
-    if (data.session) {
-      // Confirmación de email desactivada — sesión inmediata
-      const u = data.session.user
-      setStorefrontUser({ email: u.email ?? '', nombre: u.user_metadata?.nombre ?? nombre.trim() })
-      setShowLogin(false)
-    } else {
-      // Confirmación de email activada
-      setLoginSuccess('¡Cuenta creada! Revisa tu correo para confirmar tu cuenta y luego inicia sesión.')
-    }
+
+    setLoginSuccess('¡Registro exitoso! Tu cuenta está pendiente de activación por el administrador.')
     setLoginLoading(false)
   }
 
