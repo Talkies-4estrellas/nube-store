@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { ROLE_HOME } from '@/lib/auth-context'
 import type { Role } from '@/lib/auth-context'
@@ -10,7 +9,7 @@ import type { Role } from '@/lib/auth-context'
 const NAVY = '#252855'
 const PINK = '#e7226d'
 
-export default function LoginPage() {
+function LoginForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const redirect     = searchParams.get('redirect')
@@ -20,7 +19,6 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
 
-  // Si ya hay sesión activa, redirigir
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) router.replace(redirect ?? '/dashboard')
@@ -40,7 +38,6 @@ export default function LoginPage() {
       return
     }
 
-    // Cargar rol para redirigir a la página correcta
     const { data: roleData } = await supabase
       .from('user_roles')
       .select('role')
@@ -62,7 +59,6 @@ export default function LoginPage() {
     <div style={{ minHeight: '100vh', background: '#f0f2f8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
-        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{ width: 40, height: 40, background: NAVY, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -76,7 +72,6 @@ export default function LoginPage() {
           <p style={{ color: '#6b7280', fontSize: 14 }}>Panel administrativo</p>
         </div>
 
-        {/* Card */}
         <div style={{ background: '#fff', borderRadius: 16, padding: '36px 36px 32px', boxShadow: '0 4px 24px rgba(37,40,85,0.10)' }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 6 }}>Iniciar sesión</h1>
           <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 28 }}>Ingresa tus credenciales para continuar</p>
@@ -139,5 +134,18 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: '#f0f2f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 36, height: 36, border: `3px solid ${NAVY}20`, borderTop: `3px solid ${NAVY}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
