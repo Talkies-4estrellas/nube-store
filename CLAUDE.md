@@ -8,8 +8,9 @@ Nombre del proyecto: **Order Express** (nombre anterior provisional: Nube Store)
 
 ## Stack
 - **Framework:** Next.js 16.2.9 (App Router, Turbopack)
-- **Estilos:** Inline styles (se descartó styled-jsx por incompatibilidad con App Router)
+- **Estilos:** Inline styles — NO styled-jsx, NO Tailwind (incompatibles con App Router)
 - **Base de datos:** Supabase (PostgreSQL)
+- **Auth:** Supabase Auth + `@supabase/ssr` (cookies) + middleware + rol en tabla `user_roles`
 - **Storage:** Supabase Storage — bucket `productos` (público)
 - **Deploy:** Vercel — rama `master` → `main` en GitHub
 - **Repo GitHub:** `https://github.com/Talkies-4estrellas/nube-store.git`
@@ -19,32 +20,42 @@ Nombre del proyecto: **Order Express** (nombre anterior provisional: Nube Store)
 ## Estructura de carpetas
 ```
 app/
-  layout.tsx               ← Layout global con Sidebar + Topbar
-  page.tsx                 ← Redirige a /dashboard
-  dashboard/page.tsx       ← Métricas reales desde Supabase
-  ventas/page.tsx          ← Tabla de ventas con filtros y modal
-  productos/page.tsx       ← Catálogo grid/lista con CRUD completo
-  clientes/page.tsx        ← Lista de clientes con panel de detalle
-  envio-nube/page.tsx      ← Página informativa Envío Nube
-  tienda-en-linea/page.tsx ← Diseño de tienda con sub-nav
-  punto-de-venta/page.tsx  ← Página informativa Punto de Venta
+  layout.tsx                ← AuthProvider wrapping AppChrome
+  page.tsx                  ← Redirige a /dashboard
+  login/page.tsx            ← Login con email/password + manejo de roles
+  dashboard/page.tsx        ← Métricas reales + selector período + Realtime toasts
+  ventas/page.tsx           ← Tabla de ventas con filtros, modal, cambio de estado
+  productos/page.tsx        ← CRUD completo + upload imagen WebP a Supabase Storage
+  clientes/page.tsx         ← Lista clientes + panel detalle + historial de pedidos
+  envio-nube/page.tsx       ← Gestión real de envíos: crear, actualizar estado
+  tienda-en-linea/page.tsx  ← Vista storefront embebida
+  punto-de-venta/page.tsx   ← Punto de venta (informativo)
+  configuracion/page.tsx    ← Ajustes negocio + gestión de usuarios (admin only)
 
 components/
-  Sidebar.tsx         ← Sidebar fija, usa next/link + usePathname
-  Topbar.tsx          ← Barra superior con logo y avatar
+  Sidebar.tsx         ← Filtrada por ROLE_ROUTES[user.role]; badge de rol; logout
+  Topbar.tsx          ← Buscador global + avatar usuario con nombre y rol
+  AppChrome.tsx       ← Decide chrome/sin-chrome; spinner auth; AccessDenied por rol
   ProductoModal.tsx   ← Modal agregar/editar producto + drag&drop imagen
   ClienteModal.tsx    ← Modal agregar/editar cliente
-  VentaModal.tsx      ← Modal nueva venta: elige cliente + productos
+  VentaModal.tsx      ← Modal nueva venta (fix: serverError en lugar de alert())
+  Icon.tsx            ← SVG inline propio (sin dependencia externa para admin)
+  ConfirmDialog.tsx   ← Confirmación antes de eliminar
+  Storefront.tsx      ← Tienda pública completa (productos reales + carrito localStorage)
 
 lib/
-  supabase.ts         ← Cliente Supabase (createClient)
+  supabase.ts         ← createBrowserClient de @supabase/ssr (cookies+localStorage)
+  auth-context.tsx    ← AuthProvider, useAuth, ROLE_ROUTES, ROLE_HOME, canAccess
+
+middleware.ts         ← Protege rutas admin, redirige /login si no hay sesión
 
 database/
-  schema.sql          ← Schema completo PostgreSQL (tablas, triggers, RLS)
+  schema.sql          ← Schema completo: tablas + triggers + RLS actualizado + categorías
+  auth.sql            ← Sistema auth: user_roles, get_my_role(), políticas por rol
 
 public/
   imagenes/
-    logo-oe_1-png-300x49.avif  ← Logotipo oficial de Order Express
+    logo-oe_1-png-300x49.avif  ← Logo oficial Order Express
 ```
 
 ---
@@ -57,18 +68,56 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ---
 
+## Sistema de Autenticación
+
+### Paquete
+`@supabase/ssr` — usa `createBrowserClient` (guarda sesión en cookies Y localStorage, accesible desde middleware server-side).
+
+### Flujo
+1. `middleware.ts` intercepta todas las rutas (excepto assets y storefront `/`)
+2. Lee sesión del cookie vía `createServerClient`
+3. Redirige a `/login?redirect=...` si ruta protegida sin sesión
+4. `AuthProvider` en `layout.tsx` carga usuario + rol desde `user_roles`
+5. `AppChrome` muestra spinner mientras verifica, luego decide chrome/sin-chrome
+6. Si usuario no tiene rol en `user_roles` → auto-signOut
+
+### Roles
+| Rol | Acceso |
+|-----|--------|
+| `admin` | Dashboard, Ventas, Productos, Clientes, Envíos, Tienda en línea, Punto de venta, Configuración |
+| `vendedor` | Dashboard, Ventas, Clientes |
+| `bodega` | Productos, Envíos |
+
+### Archivos clave
+- `lib/auth-context.tsx` — `AuthUser`, `Role`, `ROLE_ROUTES`, `ROLE_HOME`, `canAccess()`, `AuthProvider`, `useAuth()`
+- `lib/supabase.ts` — `createBrowserClient` con mock completo (getUser, getSession, signInWithPassword, signOut, onAuthStateChange)
+- `middleware.ts` — matcher excluye `_next`, imágenes y ruta raíz `/`
+- `app/login/page.tsx` — branding Navy #252855 + Pink #e7226d; redirige según `ROLE_HOME`
+
+---
+
 ## Base de datos Supabase
 
 ### Tablas
 | Tabla | Descripción |
 |-------|-------------|
-| `categorias` | Catálogo fijo: Bolsos, Cinturones, Billeteras, Estuches, Relojes |
+| `categorias` | Bolsos, Cinturones, Billeteras, Estuches, Relojes, Keyboards, Gaming, Audio, Smart, Accesorios |
 | `productos` | nombre, sku, precio, stock, categoria_id, imagen_url, activo |
 | `productos_con_estado` | **VIEW** con estado calculado (Activo / Stock bajo / Sin stock) |
 | `clientes` | nombre, email, telefono, ciudad, tag (Nuevo/Regular/VIP) |
 | `ventas` | numero serial, cliente_id, estado, total, notas |
 | `venta_items` | venta_id, producto_id, nombre, precio, cantidad, subtotal (generado) |
 | `envios` | venta_id, paqueteria, numero_guia, estado_envio, costo_envio |
+| `user_roles` | user_id (FK auth.users), role, nombre — tabla de roles del panel |
+
+### Función helper de rol
+```sql
+create or replace function get_my_role()
+returns text language sql security definer stable as $$
+  select role from user_roles where user_id = auth.uid()
+$$;
+```
+Usada en todas las políticas RLS para verificar el rol sin romper el contexto de seguridad.
 
 ### Triggers automáticos
 - `updated_at` se actualiza solo en cada cambio
@@ -77,88 +126,80 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - Tag del cliente sube (Nuevo → Regular → VIP) según pedidos pagados
 
 ### Storage
-- Bucket: `productos` (público)
-- Path de imágenes: `{timestamp}-{SKU}.{ext}`
+- Bucket: `productos` (público, SELECT sin restricción)
+- Path de imágenes: `{timestamp}-{SKU}.{ext}` (WebP via Canvas API)
+- INSERT/DELETE requieren `auth.role() = 'authenticated'`
 
 ---
 
-## Políticas RLS aplicadas en Supabase
+## RLS actualizado (aplicado vía database/auth.sql)
 
-Las tablas y el storage usan RLS con políticas permisivas para el rol `anon` (sin autenticación). Se aplicaron las siguientes políticas vía SQL Editor:
+Las políticas antiguas permisivas (`anon total`) fueron reemplazadas por políticas por rol:
 
-### Tablas (todas con `for all using (true) with check (true)`)
-- `productos` → "Acceso total productos"
-- `clientes` → "Acceso total clientes"
-- `ventas` → "Acceso total ventas"
-- `venta_items` → "Acceso total venta_items"
-- `envios` → "Acceso total envios"
-
-### Storage bucket `productos`
-- Bucket marcado como **público** (`public = true`)
-- "Anon puede subir imágenes" → INSERT con `bucket_id = 'productos'`
-- "Imágenes públicas" → SELECT con `bucket_id = 'productos'`
-- "Anon puede eliminar imágenes" → DELETE con `bucket_id = 'productos'`
-
-> Estas políticas se reemplazarán cuando se implemente Supabase Auth (las políticas pasarán a requerir `auth.role() = 'authenticated'`).
-
----
-
-## Componentes nuevos (del repositorio copiado)
-
-- **`components/Storefront.tsx`** — Tienda pública completa (ecommerce demo) con carrusel, catálogo, carrito, detalle de producto, soporte, búsqueda. Usa `lucide-react` para iconos. Se renderiza en la ruta `/` sin el chrome administrativo (Sidebar/Topbar).
-- **`components/AppChrome.tsx`** — Wrapper que decide si renderizar el Sidebar+Topbar o no: en `/` muestra el Storefront a pantalla completa; en el resto del panel admin, el layout normal.
-- **`components/storefront.css`** — Estilos del Storefront (CSS propio, no inline styles).
-
-## Dependencias añadidas
-
-- `lucide-react ^1.22.0` — Iconos para el Storefront. El panel admin usa `components/Icon.tsx` propio (SVG inline, sin dependencia).
-
-## Errores corregidos al copiar el repositorio
-
-1. **`lucide-react` no instalado** — estaba en `package.json` pero faltaba en `node_modules`. Fix: `npm install lucide-react`.
-2. **Encoding corrupto en `tienda-en-linea/page.tsx`** — caracteres como `Ã³`, `ðŸ"`, `â€¦` por guardado en Latin-1 en vez de UTF-8. Reescrito con encoding correcto.
+| Tabla | SELECT | INSERT | UPDATE/DELETE |
+|-------|--------|--------|---------------|
+| `productos` | público (anon) | admin, bodega | admin, bodega |
+| `clientes` | autenticado | anon (checkout storefront) | admin, vendedor |
+| `ventas` | autenticado | anon (checkout storefront) | admin, vendedor |
+| `venta_items` | autenticado | anon (checkout storefront) | admin, vendedor |
+| `envios` | autenticado | admin, bodega | admin, bodega |
+| `user_roles` | propio user_id | — | admin gestiona todos |
 
 ---
 
 ## Decisiones técnicas importantes
-- **Sin styled-jsx:** Se usa inline styles en todos los componentes — incompatible con App Router de Next.js 16
-- **suppressHydrationWarning en `<html>`:** La extensión Katalon del navegador inyecta atributos que causan hydration mismatch
-- **Rama master → main:** El repo local usa `master`, el remoto GitHub usa `main`. Push con `git push origin master:main --force`
-- **`productos_con_estado` es una VIEW:** No una tabla, se consulta con `.from('productos_con_estado')`
-- **Imágenes en AVIF:** El logo está en formato `.avif`, compatible con Next.js Image sin configuración extra
+- **Sin styled-jsx / sin Tailwind:** inline styles en TODOS los componentes
+- **`suppressHydrationWarning` en `<html>`:** extensión Katalon inyecta atributos
+- **Rama master → main:** push con `git push origin master:main --force`
+- **`productos_con_estado` es una VIEW:** se consulta con `.from('productos_con_estado')`
+- **Imágenes en AVIF:** logo en `.avif`, compatible con Next.js Image sin config extra
+- **Canvas API para WebP:** conversión de imágenes sin librerías externas
+- **`lucide-react`** solo en Storefront; `Icon.tsx` SVG propio para panel admin
+- **Cart en localStorage con guard SSR:** `typeof window === 'undefined'` en `loadCartFromStorage`
+- **Realtime Supabase:** canal en `productos` UPDATE para toasts de stock en dashboard
+
+---
+
+## Dependencias añadidas
+- `lucide-react ^1.22.0` — iconos para el Storefront
+- `@supabase/ssr` — cliente con soporte de cookies para middleware + AuthProvider
 
 ---
 
 ## Funcionalidades completadas
-- [x] Dashboard con métricas reales (ventas hoy, pendientes, clientes, stock bajo)
-- [x] Productos: CRUD completo, upload de imagen a Supabase Storage, vista grid/lista
-- [x] Ventas: tabla con filtros por estado y búsqueda, modal nueva venta con items
-- [x] Clientes: tabla con panel de detalle lateral, modal agregar/editar, tag automático
-- [x] Envío Nube, Tienda en línea, Punto de Venta: páginas informativas
-- [x] Logo Order Express en Sidebar y Topbar
-- [x] Schema SQL completo guardado en `database/schema.sql`
-- [x] RLS desbloqueado para rol anon en tablas y storage (políticas permisivas temporales)
-- [x] Upload de imagen WebP a Supabase Storage funcionando correctamente
-- [x] Buscador global en Topbar (productos, clientes, ventas) con debounce 280ms
-- [x] Editar producto funciona con UPDATE en Supabase (antes solo insertaba)
-- [x] Botón Editar en vista lista de productos corregido
-- [x] Cambio de estado de venta directo desde tabla (select inline con estados válidos)
-- [x] Vista detalle de venta en panel lateral con items, cliente, notas y total
-- [x] Categorías dinámicas desde Supabase con autocompletado y creación de nuevas
-- [x] Filtro de categorías en productos como `<select>` (escalable)
-- [x] Iconos SVG 2D en todo el proyecto — componente `components/Icon.tsx`
-- [x] Confirmación antes de eliminar — componente `components/ConfirmDialog.tsx`
-- [x] Paginación en Productos (12/pág), Ventas (15/pág) y Clientes (15/pág)
-- [x] Botón Eliminar añadido a Clientes
+- [x] Dashboard con métricas reales + selector de período (Hoy/Esta semana/Este mes)
+- [x] Dashboard con toasts Realtime al cambiar stock de productos
+- [x] Productos: CRUD completo, upload WebP a Storage, filtro categoría, paginación (12/pág)
+- [x] Ventas: tabla con filtros/búsqueda, modal nueva venta, cambio de estado inline
+- [x] Ventas: panel detalle lateral con items, cliente y total
+- [x] Clientes: tabla + panel detalle + modal + paginación (15/pág) + eliminar
+- [x] Clientes: historial de pedidos (ventas por cliente_id)
+- [x] Envíos: gestión real — crear envío (paquetería, guía, costo), actualizar estado
+- [x] Configuración: ajustes de negocio + gestión de usuarios con roles (admin only)
+- [x] Storefront: productos reales desde Supabase, categorías dinámicas, carrito localStorage
+- [x] Storefront: checkout → crea cliente + venta + venta_items en Supabase
+- [x] Autenticación completa: login, logout, roles, rutas protegidas, AccessDenied
+- [x] Sidebar filtrada por rol; Topbar muestra usuario/rol; spinner de carga
+- [x] Buscador global en Topbar con debounce 280ms
+- [x] Iconos SVG propios en `Icon.tsx`; `ConfirmDialog.tsx` antes de eliminar
+- [x] VentaModal: errors inline (sin alert())
+- [x] Schema SQL completo en `database/schema.sql` + `database/auth.sql`
 
 ## Pendiente
-- [ ] Autenticación con Supabase Auth (reemplazar políticas anon por `auth.role() = 'authenticated'`)
-- [ ] Página de configuración (nombre del negocio, moneda, datos de contacto)
-- [ ] Historial de pedidos por cliente en panel lateral de Clientes
-- [ ] Notificaciones de stock bajo en tiempo real (Supabase Realtime)
+- [ ] Ejecutar `database/auth.sql` en Supabase SQL Editor (Step 1 del setup auth)
+- [ ] Crear usuario admin en Supabase Authentication y hacer INSERT en user_roles (Steps 2-3)
+- [ ] Deploy a Vercel (producción desactualizada)
+- [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
-- [ ] Subir cambios a Vercel (producción desactualizada)
-- [ ] Conectar Storefront (`/`) a productos reales de Supabase (actualmente usa datos hardcodeados demo)
-- [ ] Carrito persistente en localStorage para el Storefront
-- [ ] Categorías dinámicas en filtro del Storefront (actualmente hardcodeadas)
+
+---
+
+## Pasos para configurar auth en Supabase (primera vez)
+1. Ejecutar `database/auth.sql` en Supabase SQL Editor
+2. En Supabase → Authentication → Users → crear usuario con email + contraseña
+3. Copiar UUID del usuario y ejecutar:
+   ```sql
+   insert into user_roles (user_id, role, nombre) values
+     ('UUID-DEL-USUARIO', 'admin', 'Nombre Completo');
+   ```

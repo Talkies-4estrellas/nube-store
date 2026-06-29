@@ -1,7 +1,9 @@
 -- ============================================================
---  ORDER EXPRESS — Esquema de base de datos
---  Compatible con: Supabase (PostgreSQL), Neon, Railway, PlanetScale
---  Fecha: 2026-06-28
+--  ORDER EXPRESS — Esquema completo de base de datos
+--  Compatible con: Supabase (PostgreSQL)
+--  Última actualización: 2026-06-29
+--  NOTA: Ejecutar auth.sql DESPUÉS de este archivo para
+--        aplicar el sistema de roles y RLS actualizado.
 -- ============================================================
 
 -- ============================================================
@@ -49,7 +51,7 @@ create table if not exists productos (
   updated_at    timestamptz not null default now()
 );
 
--- Estado calculado como columna generada
+-- Vista con estado calculado
 create or replace view productos_con_estado as
   select
     p.*,
@@ -83,7 +85,7 @@ create table if not exists clientes (
 -- ============================================================
 create table if not exists ventas (
   id          uuid primary key default uuid_generate_v4(),
-  numero      serial unique,                          -- #1001, #1002 …
+  numero      serial unique,
   cliente_id  uuid references clientes(id) on delete set null,
   estado      text not null default 'Pendiente'
                 check (estado in ('Pendiente', 'Pagado', 'Enviado', 'Cancelado')),
@@ -101,7 +103,7 @@ create table if not exists venta_items (
   id          uuid primary key default uuid_generate_v4(),
   venta_id    uuid not null references ventas(id) on delete cascade,
   producto_id uuid references productos(id) on delete set null,
-  nombre      text    not null,   -- snapshot del nombre al momento de la venta
+  nombre      text    not null,
   precio      numeric(10, 2) not null,
   cantidad    integer not null default 1 check (cantidad > 0),
   subtotal    numeric(10, 2) generated always as (precio * cantidad) stored
@@ -114,7 +116,7 @@ create table if not exists venta_items (
 create table if not exists envios (
   id              uuid primary key default uuid_generate_v4(),
   venta_id        uuid not null references ventas(id) on delete cascade,
-  paqueteria      text,           -- DHL, FedEx, Estafeta…
+  paqueteria      text,
   numero_guia     text,
   estado_envio    text not null default 'Pendiente'
                     check (estado_envio in ('Pendiente', 'En camino', 'Entregado', 'Devuelto')),
@@ -125,6 +127,29 @@ create table if not exists envios (
   fecha_entrega   date,
   created_at      timestamptz not null default now()
 );
+
+
+-- ============================================================
+--  TABLA: user_roles  (sistema de autenticación)
+--  user_id referencia auth.users de Supabase
+-- ============================================================
+create table if not exists user_roles (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid references auth.users(id) on delete cascade not null unique,
+  role       text not null check (role in ('admin', 'vendedor', 'bodega')),
+  nombre     text not null,
+  created_at timestamptz default now()
+);
+
+
+-- ============================================================
+--  FUNCIÓN: get_my_role() — devuelve rol del usuario actual
+--  security definer: consulta user_roles saltando RLS
+-- ============================================================
+create or replace function get_my_role()
+returns text language sql security definer stable as $$
+  select role from user_roles where user_id = auth.uid()
+$$;
 
 
 -- ============================================================
@@ -196,7 +221,7 @@ create trigger trg_descontar_stock
 
 
 -- ============================================================
---  FUNCIÓN: actualizar tag del cliente según pedidos
+--  FUNCIÓN: actualizar tag del cliente según pedidos pagados
 -- ============================================================
 create or replace function actualizar_tag_cliente()
 returns trigger language plpgsql as $$
@@ -239,72 +264,158 @@ create index if not exists idx_clientes_email       on clientes(email);
 
 
 -- ============================================================
---  ROW LEVEL SECURITY (Supabase)
---  Habilitar para proteger datos por usuario autenticado
+--  ROW LEVEL SECURITY — habilitar en todas las tablas
 -- ============================================================
-alter table productos  enable row level security;
-alter table clientes   enable row level security;
-alter table ventas     enable row level security;
-alter table venta_items enable row level security;
-alter table envios     enable row level security;
-
--- Política: solo usuarios autenticados pueden leer y escribir
-create policy "Autenticados pueden leer productos"
-  on productos for select using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden insertar productos"
-  on productos for insert with check (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden actualizar productos"
-  on productos for update using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden eliminar productos"
-  on productos for delete using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden leer clientes"
-  on clientes for select using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden insertar clientes"
-  on clientes for insert with check (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden actualizar clientes"
-  on clientes for update using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden leer ventas"
-  on ventas for select using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden insertar ventas"
-  on ventas for insert with check (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden actualizar ventas"
-  on ventas for update using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden leer venta_items"
-  on venta_items for select using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden insertar venta_items"
-  on venta_items for insert with check (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden leer envios"
-  on envios for select using (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden insertar envios"
-  on envios for insert with check (auth.role() = 'authenticated');
-
-create policy "Autenticados pueden actualizar envios"
-  on envios for update using (auth.role() = 'authenticated');
+alter table productos    enable row level security;
+alter table clientes     enable row level security;
+alter table ventas       enable row level security;
+alter table venta_items  enable row level security;
+alter table envios       enable row level security;
+alter table user_roles   enable row level security;
 
 
 -- ============================================================
---  STORAGE (Supabase) — bucket para imágenes de productos
---  Ejecutar desde el dashboard de Supabase o con la API
+--  RLS: user_roles
 -- ============================================================
--- insert into storage.buckets (id, name, public)
--- values ('productos', 'productos', true);
---
--- create policy "Imágenes públicas"
---   on storage.objects for select using (bucket_id = 'productos');
---
--- create policy "Solo autenticados suben imágenes"
---   on storage.objects for insert
---   with check (bucket_id = 'productos' and auth.role() = 'authenticated');
+create policy "leer rol propio" on user_roles for select
+  using (auth.uid() = user_id);
+
+create policy "admin gestiona roles" on user_roles for all
+  using (
+    exists (select 1 from user_roles where user_id = auth.uid() and role = 'admin')
+  )
+  with check (
+    exists (select 1 from user_roles where user_id = auth.uid() and role = 'admin')
+  );
+
+
+-- ============================================================
+--  RLS: productos
+--  • Público (anon): SELECT (storefront)
+--  • Admin + Bodega: INSERT / UPDATE / DELETE
+-- ============================================================
+create policy "productos select publico" on productos
+  for select using (true);
+
+create policy "productos insert admin bodega" on productos
+  for insert with check (get_my_role() in ('admin', 'bodega'));
+
+create policy "productos update admin bodega" on productos
+  for update using (get_my_role() in ('admin', 'bodega'));
+
+create policy "productos delete admin bodega" on productos
+  for delete using (get_my_role() in ('admin', 'bodega'));
+
+
+-- ============================================================
+--  RLS: clientes
+--  • Anon: INSERT (checkout público del storefront)
+--  • Autenticado: SELECT
+--  • Admin + Vendedor: UPDATE / DELETE
+-- ============================================================
+create policy "clientes insert anon storefront" on clientes
+  for insert with check (true);
+
+create policy "clientes select autenticado" on clientes
+  for select using (auth.role() = 'authenticated');
+
+create policy "clientes update admin vendedor" on clientes
+  for update using (get_my_role() in ('admin', 'vendedor'));
+
+create policy "clientes delete admin vendedor" on clientes
+  for delete using (get_my_role() in ('admin', 'vendedor'));
+
+
+-- ============================================================
+--  RLS: ventas
+--  • Anon: INSERT (checkout público)
+--  • Autenticado: SELECT
+--  • Admin + Vendedor: UPDATE / DELETE
+-- ============================================================
+create policy "ventas insert anon storefront" on ventas
+  for insert with check (true);
+
+create policy "ventas select autenticado" on ventas
+  for select using (auth.role() = 'authenticated');
+
+create policy "ventas update admin vendedor" on ventas
+  for update using (get_my_role() in ('admin', 'vendedor'));
+
+create policy "ventas delete admin vendedor" on ventas
+  for delete using (get_my_role() in ('admin', 'vendedor'));
+
+
+-- ============================================================
+--  RLS: venta_items
+--  • Anon: INSERT (checkout público)
+--  • Autenticado: SELECT
+--  • Admin + Vendedor: UPDATE
+-- ============================================================
+create policy "venta_items insert anon storefront" on venta_items
+  for insert with check (true);
+
+create policy "venta_items select autenticado" on venta_items
+  for select using (auth.role() = 'authenticated');
+
+create policy "venta_items update admin vendedor" on venta_items
+  for update using (get_my_role() in ('admin', 'vendedor'));
+
+
+-- ============================================================
+--  RLS: envios
+--  • Autenticado: SELECT
+--  • Admin + Bodega: INSERT / UPDATE / DELETE
+-- ============================================================
+create policy "envios select autenticado" on envios
+  for select using (auth.role() = 'authenticated');
+
+create policy "envios write admin bodega" on envios
+  for all
+  using     (get_my_role() in ('admin', 'bodega'))
+  with check (get_my_role() in ('admin', 'bodega'));
+
+
+-- ============================================================
+--  STORAGE — bucket para imágenes de productos
+--  Crear el bucket manualmente en Supabase Dashboard o via API:
+--    insert into storage.buckets (id, name, public)
+--    values ('productos', 'productos', true);
+-- ============================================================
+
+-- Lectura pública
+create policy "imagenes publicas" on storage.objects
+  for select using (bucket_id = 'productos');
+
+-- Solo autenticados pueden subir/eliminar
+create policy "auth sube imagenes productos" on storage.objects
+  for insert with check (
+    bucket_id = 'productos' and auth.role() = 'authenticated'
+  );
+
+create policy "auth elimina imagenes productos" on storage.objects
+  for delete using (
+    bucket_id = 'productos' and auth.role() = 'authenticated'
+  );
+
+
+-- ============================================================
+--  CREAR PRIMER USUARIO ADMIN
+--  1. Ve a Supabase → Authentication → Users → Add user
+--  2. Crea el usuario con email + contraseña
+--  3. Copia el UUID y ejecuta:
+-- ============================================================
+
+/*
+insert into user_roles (user_id, role, nombre) values
+  ('REEMPLAZA-CON-UUID-DEL-USUARIO', 'admin', 'Tu Nombre Completo');
+*/
+
+
+-- ============================================================
+--  RESUMEN DE PERMISOS POR ROL
+-- ============================================================
+-- admin    → Dashboard, Ventas, Productos, Clientes, Envíos,
+--            Tienda en línea, Punto de venta, Configuración
+-- vendedor → Dashboard, Ventas, Clientes
+-- bodega   → Productos, Envíos
+-- ============================================================
