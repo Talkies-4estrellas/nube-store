@@ -954,17 +954,12 @@ export default function Storefront() {
                 <button type="submit" aria-label="Buscar"><Ic n="arrow-right" /></button>
               </form>
               <button className="icon-button dark" type="button" aria-label="Carrito" onClick={openCart}><Ic n="shopping-cart" /><span>{cartCount}</span></button>
-              {storefrontUser ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#e7226d', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-                    {storefrontUser.nombre.charAt(0).toUpperCase()}
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{storefrontUser.nombre}</span>
-                  <button type="button" onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, cursor: 'pointer' }}>Salir</button>
-                </div>
-              ) : (
-                <button className="login-button" type="button" aria-label="Iniciar sesion" onClick={() => openLoginModal('login')}><Ic n="log-in" /><span>Iniciar sesion</span></button>
-              )}
+              <a href="/proveedores" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                📦 Soy proveedor
+              </a>
+              <a href="/login" style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                Panel admin
+              </a>
             </div>
           </header>
 
