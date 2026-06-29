@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import Storefront from '@/components/Storefront'
 
 export default function Home() {
-  redirect('/dashboard')
+  return <Storefront />
 }

@@ -17,6 +17,7 @@ const paths: Record<string, string> = {
   check:        'M20 6 9 17l-5-5',
   image:        'M21 19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3l2-3h4l2 3h3a2 2 0 0 1 2 2zM12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   xmark:        'M18 6 6 18M6 6l12 12',
+  logout:       'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
 }
 
 export default function Icon({ name, size = 20, color = 'currentColor', style }: IconProps & { name: string }) {

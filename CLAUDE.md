@@ -103,6 +103,23 @@ Las tablas y el storage usan RLS con políticas permisivas para el rol `anon` (s
 
 ---
 
+## Componentes nuevos (del repositorio copiado)
+
+- **`components/Storefront.tsx`** — Tienda pública completa (ecommerce demo) con carrusel, catálogo, carrito, detalle de producto, soporte, búsqueda. Usa `lucide-react` para iconos. Se renderiza en la ruta `/` sin el chrome administrativo (Sidebar/Topbar).
+- **`components/AppChrome.tsx`** — Wrapper que decide si renderizar el Sidebar+Topbar o no: en `/` muestra el Storefront a pantalla completa; en el resto del panel admin, el layout normal.
+- **`components/storefront.css`** — Estilos del Storefront (CSS propio, no inline styles).
+
+## Dependencias añadidas
+
+- `lucide-react ^1.22.0` — Iconos para el Storefront. El panel admin usa `components/Icon.tsx` propio (SVG inline, sin dependencia).
+
+## Errores corregidos al copiar el repositorio
+
+1. **`lucide-react` no instalado** — estaba en `package.json` pero faltaba en `node_modules`. Fix: `npm install lucide-react`.
+2. **Encoding corrupto en `tienda-en-linea/page.tsx`** — caracteres como `Ã³`, `ðŸ"`, `â€¦` por guardado en Latin-1 en vez de UTF-8. Reescrito con encoding correcto.
+
+---
+
 ## Decisiones técnicas importantes
 - **Sin styled-jsx:** Se usa inline styles en todos los componentes — incompatible con App Router de Next.js 16
 - **suppressHydrationWarning en `<html>`:** La extensión Katalon del navegador inyecta atributos que causan hydration mismatch
@@ -142,3 +159,4 @@ Las tablas y el storage usan RLS con políticas permisivas para el rol `anon` (s
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
 - [ ] Subir cambios a Vercel (producción desactualizada)
+- [ ] Conectar Storefront (`/`) a productos reales de Supabase (actualmente usa datos hardcodeados demo)

@@ -16,3 +16,28 @@ body {
   background: #f5f5f5;
   color: #333;
 }
+
+/* Nav del panel admin (Sidebar) */
+.admin-nav-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #e7226d transparent;
+}
+.admin-nav-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-nav-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-nav-scroll::-webkit-scrollbar-thumb {
+  background: #e7226d;
+  border-radius: 999px;
+}
+.admin-nav-item:hover {
+  background: rgba(37, 40, 85, 0.06) !important;
+}
+.admin-nav-item.active:hover {
+  background: #fff !important;
+}
+.admin-logout:hover {
+  background: rgba(231, 34, 109, 0.16) !important;
+}

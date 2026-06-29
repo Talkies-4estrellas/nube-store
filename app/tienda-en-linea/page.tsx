@@ -27,12 +27,8 @@ export default function TiendaEnLineaPage() {
           const active = pathname === item.href
           return (
             <Link key={item.href} href={item.href} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '9px 16px',
-              fontSize: 13,
-              color: active ? '#0049ff' : '#374151',
+              display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px',
+              fontSize: 13, color: active ? '#0049ff' : '#374151',
               fontWeight: active ? 700 : 400,
               background: active ? '#eff6ff' : 'transparent',
               borderLeft: active ? '3px solid #0049ff' : '3px solid transparent',
@@ -119,7 +115,7 @@ export default function TiendaEnLineaPage() {
             <div style={{ width: 40, height: 40, background: '#4f46e5', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, flexShrink: 0 }}>N</div>
             <div>
               <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Nuby</p>
-              <p style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>Nuby es la herramienta todo-en-uno para aumentar conversiones, captar leads y…</p>
+              <p style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>Nuby es la herramienta todo-en-uno para aumentar conversiones, captar leads y más.</p>
             </div>
           </div>
           <div style={{ fontSize: 13 }}>

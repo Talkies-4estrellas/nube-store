@@ -1,8 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { CSSProperties } from 'react'
 import Icon from '@/components/Icon'
 
@@ -34,10 +33,13 @@ const navItems: NavSection[] = [
   },
 ]
 
+const NAVY = '#252855'
+const PINK = '#e7226d'
+
 const s: Record<string, CSSProperties> = {
   sidebar: {
     width: 240,
-    minHeight: '100vh',
+    height: '100vh',
     background: '#fff',
     borderRight: '1px solid #e5e7eb',
     display: 'flex',
@@ -47,36 +49,37 @@ const s: Record<string, CSSProperties> = {
     left: 0,
     bottom: 0,
     zIndex: 100,
-    overflowY: 'auto',
+    padding: '20px 14px 16px',
+    overflow: 'hidden',
   },
   logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '16px 20px',
-    borderBottom: '1px solid #e5e7eb',
-  },
-  logoText: {
-    fontWeight: 700,
-    fontSize: 15,
-    color: '#111',
-    flex: 1,
+    fontSize: 22,
+    fontWeight: 800,
+    letterSpacing: '-0.02em',
+    padding: '0 8px',
+    marginBottom: 16,
   },
   nav: {
     flex: 1,
-    padding: '12px 0',
+    minHeight: 0,
+    background: '#f1f2f6',
+    borderRadius: 22,
+    padding: '12px 10px',
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
   },
   sectionLabel: {
     fontSize: 11,
-    fontWeight: 700,
-    color: '#9ca3af',
-    letterSpacing: '0.06em',
-    padding: '8px 20px 4px',
+    fontWeight: 800,
+    color: '#9aa0b4',
+    letterSpacing: '0.08em',
+    padding: '12px 14px 6px',
     display: 'block',
   },
   footer: {
-    borderTop: '1px solid #e5e7eb',
-    padding: '8px 0',
+    paddingTop: 12,
   },
 }
 
@@ -84,19 +87,25 @@ function NavItem({ href, label, icon, badge, active }: {
   href: string; label: string; icon: string; badge?: string; active: boolean
 }) {
   return (
-    <Link href={href} style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      padding: '9px 20px',
-      color: active ? '#0049ff' : '#374151',
-      textDecoration: 'none',
-      fontSize: 14,
-      fontWeight: active ? 600 : 400,
-      background: active ? '#eff6ff' : 'transparent',
-      borderRight: active ? '3px solid #0049ff' : '3px solid transparent',
-    }}>
-      <Icon name={icon} size={17} color={active ? '#0049ff' : '#6b7280'} />
+    <Link
+      href={href}
+      className={`admin-nav-item${active ? ' active' : ''}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '11px 14px',
+        color: NAVY,
+        textDecoration: 'none',
+        fontSize: 14,
+        fontWeight: active ? 800 : 700,
+        borderRadius: 999,
+        background: active ? '#fff' : 'transparent',
+        border: active ? `2px solid ${NAVY}` : '2px solid transparent',
+        boxShadow: active ? '0 6px 16px rgba(37, 40, 85, 0.12)' : 'none',
+      }}
+    >
+      <Icon name={icon} size={18} color={NAVY} />
       <span style={{ flex: 1 }}>{label}</span>
       {badge && (
         <span style={{
@@ -114,23 +123,18 @@ function NavItem({ href, label, icon, badge, active }: {
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
 
   return (
     <aside style={s.sidebar}>
-      <div style={{ ...s.logo, justifyContent: 'center', padding: '18px 20px' }}>
-        <Image
-          src="/imagenes/logo-oe_1-png-300x49.avif"
-          alt="Order Express"
-          width={160}
-          height={26}
-          style={{ objectFit: 'contain' }}
-          priority
-        />
+      <div style={s.logo}>
+        <span style={{ color: '#1b1f4b' }}>Order</span>
+        <span style={{ color: PINK }}>Express</span>
       </div>
 
-      <nav style={s.nav}>
+      <nav className="admin-nav-scroll" style={s.nav}>
         {navItems.map((section) => (
-          <div key={section.label} style={{ marginBottom: 8 }}>
+          <div key={section.label}>
             <span style={s.sectionLabel}>{section.label}</span>
             {section.items.map((item) => (
               <NavItem
@@ -144,10 +148,36 @@ export default function Sidebar() {
             ))}
           </div>
         ))}
+
+        <div style={{ marginTop: 4 }}>
+          <NavItem href="/configuracion" label="Configuración" icon="settings" active={pathname === '/configuracion'} />
+        </div>
       </nav>
 
       <div style={s.footer}>
-        <NavItem href="/configuracion" label="Configuración" icon="settings" active={pathname === '/configuracion'} />
+        <button
+          type="button"
+          className="admin-logout"
+          onClick={() => router.push('/')}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            padding: '13px',
+            border: 'none',
+            borderRadius: 999,
+            background: 'rgba(231, 34, 109, 0.10)',
+            color: PINK,
+            fontSize: 14,
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="logout" size={18} color={PINK} />
+          Cerrar sesión
+        </button>
       </div>
     </aside>
   )
