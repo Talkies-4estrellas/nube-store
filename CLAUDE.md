@@ -160,3 +160,5 @@ Las tablas y el storage usan RLS con políticas permisivas para el rol `anon` (s
 - [ ] Modo oscuro
 - [ ] Subir cambios a Vercel (producción desactualizada)
 - [ ] Conectar Storefront (`/`) a productos reales de Supabase (actualmente usa datos hardcodeados demo)
+- [ ] Carrito persistente en localStorage para el Storefront
+- [ ] Categorías dinámicas en filtro del Storefront (actualmente hardcodeadas)

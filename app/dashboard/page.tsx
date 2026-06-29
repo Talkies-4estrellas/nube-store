@@ -11,11 +11,31 @@ type ProductoBajo = { nombre: string; stock: number }
 const statusColor: Record<string, string> = { Pagado: '#d1fae5', Enviado: '#dbeafe', Pendiente: '#fef3c7', Cancelado: '#fee2e2' }
 const statusText:  Record<string, string> = { Pagado: '#065f46', Enviado: '#1e40af', Pendiente: '#92400e', Cancelado: '#991b1b' }
 
+type Periodo = 'hoy' | 'semana' | 'mes'
+const periodoLabel: Record<Periodo, string> = { hoy: 'Hoy', semana: 'Esta semana', mes: 'Este mes' }
+
+function getPeriodoStart(periodo: Periodo): string {
+  const now = new Date()
+  if (periodo === 'hoy') {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+  } else if (periodo === 'semana') {
+    const d = new Date(now)
+    d.setDate(d.getDate() - d.getDay())
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString()
+  } else {
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  }
+}
+
 export default function DashboardPage() {
   const [ventas, setVentas] = useState<Venta[]>([])
+  const [ventasPeriodo, setVentasPeriodo] = useState<{ total: number; estado: string }[]>([])
   const [stockBajo, setStockBajo] = useState<ProductoBajo[]>([])
   const [totalClientes, setTotalClientes] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [periodo, setPeriodo] = useState<Periodo>('hoy')
+  const [loadingPeriodo, setLoadingPeriodo] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -32,16 +52,24 @@ export default function DashboardPage() {
     load()
   }, [])
 
-  const ventasHoy = ventas.filter(v => {
-    const hoy = new Date().toDateString()
-    return new Date(v.created_at).toDateString() === hoy
-  })
+  useEffect(() => {
+    async function loadPeriodo() {
+      setLoadingPeriodo(true)
+      const { data } = await supabase
+        .from('ventas')
+        .select('total, estado')
+        .gte('created_at', getPeriodoStart(periodo))
+      setVentasPeriodo(data ?? [])
+      setLoadingPeriodo(false)
+    }
+    loadPeriodo()
+  }, [periodo])
 
-  const totalHoy = ventasHoy.filter(v => v.estado === 'Pagado').reduce((s, v) => s + Number(v.total), 0)
+  const totalPeriodo = ventasPeriodo.filter(v => v.estado === 'Pagado').reduce((s, v) => s + Number(v.total), 0)
   const pendientes = ventas.filter(v => v.estado === 'Pendiente').length
 
   const metrics = [
-    { label: 'Ventas hoy', value: `$${totalHoy.toLocaleString()}`, icon: 'dollar', href: '/ventas', color: '#059669' },
+    { label: `Ventas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString()}`, icon: 'dollar', href: '/ventas', color: '#059669' },
     { label: 'Pedidos pendientes', value: pendientes, icon: 'clipboard', href: '/ventas', color: '#d97706' },
     { label: 'Clientes registrados', value: totalClientes, icon: 'users', href: '/clientes', color: '#0049ff' },
     { label: 'Productos sin stock', value: stockBajo.filter(p => p.stock === 0).length, icon: 'warning', href: '/productos', color: '#dc2626' },
@@ -49,7 +77,17 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111', marginBottom: 24 }}>Dashboard</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Dashboard</h1>
+        <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', padding: 4, borderRadius: 10 }}>
+          {(['hoy', 'semana', 'mes'] as Periodo[]).map(p => (
+            <button key={p} onClick={() => setPeriodo(p)}
+              style={{ padding: '6px 14px', borderRadius: 7, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: periodo === p ? '#fff' : 'transparent', color: periodo === p ? '#111' : '#6b7280', boxShadow: periodo === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s' }}>
+              {periodoLabel[p]}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Métricas */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>

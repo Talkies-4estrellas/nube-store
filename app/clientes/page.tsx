@@ -39,6 +39,21 @@ export default function ClientesPage() {
   const [confirmDelete, setConfirmDelete] = useState<Cliente | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [page, setPage] = useState(1)
+  const [historial, setHistorial] = useState<{ id: string; numero: number; total: number; estado: string; created_at: string }[]>([])
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
+  const [showHistorial, setShowHistorial] = useState(false)
+
+  async function fetchHistorial(clienteId: string) {
+    setLoadingHistorial(true)
+    setShowHistorial(true)
+    const { data } = await supabase
+      .from('ventas')
+      .select('id, numero, total, estado, created_at')
+      .eq('cliente_id', clienteId)
+      .order('created_at', { ascending: false })
+    setHistorial(data ?? [])
+    setLoadingHistorial(false)
+  }
 
   async function fetchClientes() {
       setLoading(true)
@@ -146,7 +161,7 @@ export default function ClientesPage() {
               </thead>
               <tbody>
                 {paginated.map(c => (
-                  <tr key={c.id} onClick={() => setSelected(c === selected ? null : c)}
+                  <tr key={c.id} onClick={() => { if (c === selected) { setSelected(null) } else { setSelected(c); setShowHistorial(false); setHistorial([]) } }}
                     style={{ borderBottom: '1px solid #f9fafb', cursor: 'pointer', background: selected?.id === c.id ? '#eff6ff' : 'transparent' }}>
                     <td style={{ padding: '13px 0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -231,9 +246,36 @@ export default function ClientesPage() {
                 <span style={{ fontSize: 13, color: '#111', fontWeight: 600 }}>{row.value}</span>
               </div>
             ))}
-            <button style={{ width: '100%', marginTop: 16, background: '#0049ff', color: '#fff', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-              Ver historial de pedidos
-            </button>
+            {!showHistorial ? (
+              <button onClick={() => fetchHistorial(selected.id)} style={{ width: '100%', marginTop: 16, background: '#0049ff', color: '#fff', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                Ver historial de pedidos
+              </button>
+            ) : (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <p style={{ fontWeight: 700, fontSize: 13 }}>Historial de pedidos</p>
+                  <button onClick={() => setShowHistorial(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6b7280' }}>Ocultar</button>
+                </div>
+                {loadingHistorial ? (
+                  <p style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>Cargando...</p>
+                ) : historial.length === 0 ? (
+                  <p style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>Sin pedidos registrados</p>
+                ) : (
+                  historial.map(v => (
+                    <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f3f4f6' }}>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: '#0049ff' }}>#{v.numero}</p>
+                        <p style={{ fontSize: 11, color: '#9ca3af' }}>{new Date(v.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>${Number(v.total).toLocaleString()}</p>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: v.estado === 'Pagado' ? '#d1fae5' : v.estado === 'Enviado' ? '#dbeafe' : v.estado === 'Cancelado' ? '#fee2e2' : '#fef3c7', color: v.estado === 'Pagado' ? '#065f46' : v.estado === 'Enviado' ? '#1e40af' : v.estado === 'Cancelado' ? '#991b1b' : '#92400e' }}>{v.estado}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
