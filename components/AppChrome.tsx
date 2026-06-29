@@ -9,7 +9,7 @@ const NAVY = '#252855'
 const PINK = '#e7226d'
 
 // Páginas sin chrome: storefront y login
-const PUBLIC_PATHS = ['/', '/login']
+const PUBLIC_PATHS = ['/', '/login', '/proveedores']
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
