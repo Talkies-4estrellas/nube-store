@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Icon from '@/components/Icon'
+import { useAuth } from '@/lib/auth-context'
 
 type SearchResult = {
   tipo: 'producto' | 'cliente' | 'venta'
@@ -21,6 +22,7 @@ export default function Topbar() {
   const [searching, setSearching] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const { user } = useAuth()
 
   useEffect(() => {
     if (searchOpen) setTimeout(() => inputRef.current?.focus(), 50)
@@ -108,20 +110,19 @@ export default function Topbar() {
           <Icon name="search" size={20} color="#6b7280" />
         </button>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 30, height: 30, background: '#0049ff', color: '#fff',
-          borderRadius: '50%', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0,
-        }}>OE</div>
-        <Image
-          src="/imagenes/logo-oe_1-png-300x49.avif"
-          alt="Order Express"
-          width={110}
-          height={18}
-          style={{ objectFit: 'contain' }}
-          priority
-        />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Image src="/imagenes/logo-oe_1-png-300x49.avif" alt="Order Express" width={110} height={18} style={{ objectFit: 'contain' }} priority />
+        {user && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, borderLeft: '1px solid #e5e7eb' }}>
+            <div title={user.nombre} style={{ width: 30, height: 30, background: '#252855', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
+              {user.nombre.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ lineHeight: 1.2 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#111', margin: 0 }}>{user.nombre}</p>
+              <p style={{ fontSize: 10, color: '#9ca3af', margin: 0, textTransform: 'capitalize' }}>{user.role}</p>
+            </div>
+          </div>
+        )}
       </div>
     </header>
   )
