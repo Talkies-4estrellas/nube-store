@@ -155,6 +155,13 @@ export default function Storefront() {
   const [checkoutError, setCheckoutError] = useState('')
   const [ventaNumero, setVentaNumero] = useState<number | null>(null)
 
+  // Login modal (storefront — sin roles, solo sesión de cliente)
+  const [showLogin, setShowLogin] = useState(false)
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [loginError, setLoginError] = useState('')
+  const [storefrontUser, setStorefrontUser] = useState<{ email: string; nombre: string } | null>(null)
+
   const gridRef = useRef<HTMLElement>(null)
   const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -309,6 +316,40 @@ export default function Storefront() {
   const toggleBrand = (e: React.MouseEvent) => {
     e.preventDefault()
     setNavCollapsed((c) => !c)
+  }
+
+  const openLoginModal = () => {
+    setLoginForm({ email: '', password: '' })
+    setLoginError('')
+    setShowLogin(true)
+  }
+
+  const closeLoginModal = () => {
+    setShowLogin(false)
+    setLoginError('')
+  }
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoginError('')
+    setLoginLoading(true)
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email: loginForm.email.trim(),
+      password: loginForm.password,
+    })
+    if (authError || !data.session) {
+      setLoginError('Email o contraseña incorrectos')
+      setLoginLoading(false)
+      return
+    }
+    setStorefrontUser({ email: data.session.user.email ?? '', nombre: data.session.user.email?.split('@')[0] ?? 'Cliente' })
+    setShowLogin(false)
+    setLoginLoading(false)
+  }
+
+  function handleLogout() {
+    supabase.auth.signOut()
+    setStorefrontUser(null)
   }
 
   const activateInGroup = (e: React.MouseEvent<HTMLButtonElement>, selector: string) => {
@@ -866,7 +907,17 @@ export default function Storefront() {
                 <button type="submit" aria-label="Buscar"><Ic n="arrow-right" /></button>
               </form>
               <button className="icon-button dark" type="button" aria-label="Carrito" onClick={openCart}><Ic n="shopping-cart" /><span>{cartCount}</span></button>
-              <button className="login-button" type="button" aria-label="Iniciar sesion" onClick={() => router.push('/dashboard')}><Ic n="log-in" /><span>Iniciar sesion</span></button>
+              {storefrontUser ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#e7226d', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                    {storefrontUser.nombre.charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{storefrontUser.nombre}</span>
+                  <button type="button" onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, cursor: 'pointer' }}>Salir</button>
+                </div>
+              ) : (
+                <button className="login-button" type="button" aria-label="Iniciar sesion" onClick={openLoginModal}><Ic n="log-in" /><span>Iniciar sesion</span></button>
+              )}
             </div>
           </header>
 
@@ -1001,6 +1052,82 @@ export default function Storefront() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- Modal de inicio de sesión (storefront) ---- */}
+      {showLogin && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget) closeLoginModal() }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(17,24,39,0.55)', backdropFilter: 'blur(4px)' }} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, padding: '36px 32px 32px', boxShadow: '0 24px 64px rgba(0,0,0,0.22)', zIndex: 1 }}>
+
+            {/* Cerrar */}
+            <button onClick={closeLoginModal} style={{ position: 'absolute', top: 16, right: 16, background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#6b7280', lineHeight: 1 }}>×</button>
+
+            {/* Encabezado */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <div style={{ width: 36, height: 36, background: '#252855', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ color: '#fff', fontWeight: 900, fontSize: 13 }}>OE</span>
+                </div>
+                <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.02em' }}>
+                  <span style={{ color: '#252855' }}>Order</span><span style={{ color: '#e7226d' }}>Express</span>
+                </span>
+              </div>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111', margin: '12px 0 4px' }}>Iniciar sesión</h2>
+              <p style={{ fontSize: 13, color: '#6b7280' }}>Accede a tu cuenta para ver tus pedidos</p>
+            </div>
+
+            {/* Formulario */}
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Email</label>
+                <input
+                  type="email"
+                  value={loginForm.email}
+                  onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="tu@email.com"
+                  required
+                  autoComplete="email"
+                  disabled={loginLoading}
+                  style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                  onFocus={e => (e.target.style.borderColor = '#252855')}
+                  onBlur={e  => (e.target.style.borderColor = '#e5e7eb')}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 5 }}>Contraseña</label>
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                  disabled={loginLoading}
+                  style={{ width: '100%', padding: '10px 13px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fafafa' }}
+                  onFocus={e => (e.target.style.borderColor = '#252855')}
+                  onBlur={e  => (e.target.style.borderColor = '#e5e7eb')}
+                />
+              </div>
+
+              {loginError && (
+                <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '9px 13px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+                  {loginError}
+                </div>
+              )}
+
+              <button type="submit" disabled={loginLoading}
+                style={{ background: loginLoading ? '#9ca3af' : '#252855', color: '#fff', border: 'none', padding: '12px 0', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: loginLoading ? 'default' : 'pointer', marginTop: 4, letterSpacing: '0.01em' }}>
+                {loginLoading ? 'Verificando...' : 'Entrar'}
+              </button>
+            </form>
+
+            <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 18 }}>
+              ¿Sin cuenta? Compra como invitado usando el carrito.
+            </p>
           </div>
         </div>
       )}
