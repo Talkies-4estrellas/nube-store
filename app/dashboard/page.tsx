@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import Icon from '@/components/Icon'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
 type ProductoBajo = { nombre: string; stock: number }
+type Toast = { id: number; message: string; icon: string; color: string }
 
 const statusColor: Record<string, string> = { Pagado: '#d1fae5', Enviado: '#dbeafe', Pendiente: '#fef3c7', Cancelado: '#fee2e2' }
 const statusText:  Record<string, string> = { Pagado: '#065f46', Enviado: '#1e40af', Pendiente: '#92400e', Cancelado: '#991b1b' }
@@ -36,6 +37,31 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [periodo, setPeriodo] = useState<Periodo>('hoy')
   const [loadingPeriodo, setLoadingPeriodo] = useState(false)
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const toastId = useRef(0)
+
+  function addToast(message: string, icon: string, color: string) {
+    const id = ++toastId.current
+    setToasts(prev => [...prev, { id, message, icon, color }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000)
+  }
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-stock-realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'productos' }, payload => {
+        const newStock = payload.new.stock as number
+        const oldStock = payload.old?.stock as number
+        const nombre = payload.new.nombre as string
+        if (newStock === 0 && oldStock > 0) {
+          addToast(`Sin stock: ${nombre}`, 'warning', '#dc2626')
+        } else if (newStock <= 3 && (oldStock === undefined || oldStock > 3)) {
+          addToast(`Stock bajo: ${nombre} (${newStock} restantes)`, 'warning', '#d97706')
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -185,6 +211,19 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Toasts de stock */}
+      {toasts.length > 0 && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 999 }}>
+          {toasts.map(t => (
+            <div key={t.id} style={{ background: '#fff', border: `1px solid ${t.color}30`, borderLeft: `4px solid ${t.color}`, borderRadius: 10, padding: '12px 16px', maxWidth: 320, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Icon name={t.icon} size={16} color={t.color} />
+              <span style={{ fontSize: 13, color: '#111', fontWeight: 600, flex: 1 }}>{t.message}</span>
+              <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16, lineHeight: 1 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

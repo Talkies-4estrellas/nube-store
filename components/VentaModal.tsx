@@ -20,6 +20,7 @@ export default function VentaModal({ onClose, onSave }: Props) {
   const [cantidad, setCantidad] = useState(1)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [serverError, setServerError] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -69,13 +70,14 @@ export default function VentaModal({ onClose, onSave }: Props) {
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setSaving(true)
 
+    setServerError('')
     const { data: venta, error: ventaErr } = await supabase
       .from('ventas')
       .insert({ cliente_id: clienteId, estado, notas: notas || null, total })
       .select('id')
       .single()
 
-    if (ventaErr || !venta) { alert('Error al crear venta: ' + ventaErr?.message); setSaving(false); return }
+    if (ventaErr || !venta) { setServerError('Error al crear venta: ' + ventaErr?.message); setSaving(false); return }
 
     const ventaItems = items.map(i => ({
       venta_id: venta.id,
@@ -86,7 +88,7 @@ export default function VentaModal({ onClose, onSave }: Props) {
     }))
 
     const { error: itemsErr } = await supabase.from('venta_items').insert(ventaItems)
-    if (itemsErr) { alert('Error al guardar items: ' + itemsErr.message); setSaving(false); return }
+    if (itemsErr) { setServerError('Error al guardar items: ' + itemsErr.message); setSaving(false); return }
 
     setSaving(false)
     onSave()
@@ -196,6 +198,12 @@ export default function VentaModal({ onClose, onSave }: Props) {
               placeholder="Instrucciones de entrega, referencias, etc."
               style={{ ...inp(false), resize: 'vertical' }} />
           </div>
+
+          {serverError && (
+            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+              {serverError}
+            </div>
+          )}
 
           {/* Acciones */}
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 8 }}>

@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
+type CheckoutState = 'form' | 'loading' | 'success' | 'error'
+
 const ICONS: Record<string, LucideIcon> = {
   home: Home, 'shopping-bag': ShoppingBag, sparkles: Sparkles, heart: Heart,
   'badge-percent': BadgePercent, 'shopping-cart': ShoppingCart, headphones: Headphones,
@@ -141,9 +143,17 @@ export default function Storefront() {
 
   // Productos y categorías desde Supabase
   const [dbProducts, setDbProducts] = useState<Product[]>([])
+  const [productIdMap, setProductIdMap] = useState<Record<string, string>>({})
   const [categorias, setCategorias] = useState<string[]>([])
   const [activeCat, setActiveCat] = useState('Todo')
   const [loadingProducts, setLoadingProducts] = useState(true)
+
+  // Checkout
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [checkoutState, setCheckoutState] = useState<CheckoutState>('form')
+  const [checkoutForm, setCheckoutForm] = useState({ nombre: '', email: '' })
+  const [checkoutError, setCheckoutError] = useState('')
+  const [ventaNumero, setVentaNumero] = useState<number | null>(null)
 
   const gridRef = useRef<HTMLElement>(null)
   const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -167,7 +177,13 @@ export default function Storefront() {
           .order('created_at', { ascending: false }),
         supabase.from('categorias').select('nombre').order('nombre'),
       ])
-      if (prods) setDbProducts((prods as unknown as SupabaseProduct[]).map(toProduct))
+      if (prods) {
+        const typed = prods as unknown as SupabaseProduct[]
+        setDbProducts(typed.map(toProduct))
+        const idMap: Record<string, string> = {}
+        typed.forEach(p => { idMap[p.nombre] = p.id })
+        setProductIdMap(idMap)
+      }
       if (cats) setCategorias(cats.map((c: { nombre: string }) => c.nombre))
       setLoadingProducts(false)
     }
@@ -236,6 +252,58 @@ export default function Storefront() {
   const openCart = () => {
     setView('carrito')
     requestAnimationFrame(scrollGrid)
+  }
+
+  async function handleCheckout() {
+    const nombre = checkoutForm.nombre.trim()
+    const email = checkoutForm.email.trim().toLowerCase()
+    if (!nombre || !email) { setCheckoutError('Nombre y email son obligatorios'); return }
+    if (cart.length === 0) { setCheckoutError('El carrito está vacío'); return }
+    setCheckoutState('loading')
+    setCheckoutError('')
+
+    // Buscar o crear cliente
+    let clienteId: string
+    const { data: existing } = await supabase.from('clientes').select('id').eq('email', email).maybeSingle()
+    if (existing) {
+      clienteId = existing.id
+    } else {
+      const { data: nuevo, error: clienteErr } = await supabase
+        .from('clientes').insert({ nombre, email, tag: 'Nuevo' }).select('id').single()
+      if (clienteErr || !nuevo) { setCheckoutError('Error al registrar cliente'); setCheckoutState('error'); return }
+      clienteId = nuevo.id
+    }
+
+    // Calcular total
+    const total = cart.reduce((t, i) => t + priceValue(i.product[2]) * i.quantity, 0)
+
+    // Crear venta
+    const { data: venta, error: ventaErr } = await supabase
+      .from('ventas')
+      .insert({ cliente_id: clienteId, estado: 'Pendiente', total, notas: 'Pedido desde tienda web' })
+      .select('id, numero').single()
+    if (ventaErr || !venta) { setCheckoutError('Error al crear el pedido'); setCheckoutState('error'); return }
+
+    // Crear items (solo los que tienen ID en Supabase)
+    const ventaItems = cart
+      .filter(i => productIdMap[i.product[0]])
+      .map(i => ({
+        venta_id: venta.id,
+        producto_id: productIdMap[i.product[0]],
+        nombre: i.product[0],
+        precio: priceValue(i.product[2]),
+        cantidad: i.quantity,
+      }))
+
+    if (ventaItems.length > 0) {
+      const { error: itemsErr } = await supabase.from('venta_items').insert(ventaItems)
+      if (itemsErr) { setCheckoutError('Error al guardar productos'); setCheckoutState('error'); return }
+    }
+
+    setVentaNumero(venta.numero)
+    setCart([])
+    try { localStorage.removeItem(CART_KEY) } catch {}
+    setCheckoutState('success')
   }
 
   const toggleBrand = (e: React.MouseEvent) => {
@@ -560,7 +628,7 @@ export default function Storefront() {
           <p><span>Envio</span><strong>Gratis</strong></p>
           <p><span>Descuento</span><strong>-{formatPrice(discount)}</strong></p>
           <div><span>Total</span><strong>{formatPrice(total)}</strong></div>
-          <button className="period-button active" type="button">Continuar pago</button>
+          <button className="period-button active" type="button" onClick={() => { setCheckoutForm({ nombre: '', email: '' }); setCheckoutState('form'); setCheckoutError(''); setShowCheckout(true) }}>Continuar pago</button>
           {cart.length > 0 && (
             <button
               className="period-button"
@@ -861,6 +929,81 @@ export default function Storefront() {
           {renderContent()}
         </section>
       </main>
+      {/* Modal de checkout */}
+      {showCheckout && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget && checkoutState !== 'loading') setShowCheckout(false) }}>
+          <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 440, boxShadow: '0 24px 64px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+
+            {checkoutState === 'success' ? (
+              <div style={{ padding: '40px 32px', textAlign: 'center' }}>
+                <div style={{ width: 60, height: 60, background: '#d1fae5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                </div>
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: '#111', marginBottom: 8 }}>¡Pedido recibido!</h3>
+                <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.5, marginBottom: 6 }}>
+                  Tu pedido <strong style={{ color: '#0049ff' }}>#{ventaNumero}</strong> fue registrado con éxito.
+                </p>
+                <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>Te contactaremos pronto para coordinar el pago y entrega.</p>
+                <button onClick={() => { setShowCheckout(false); goView('catalogo') }}
+                  style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                  Seguir comprando
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>Finalizar pedido</h3>
+                    <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{cart.reduce((t, i) => t + i.quantity, 0)} artículos · {formatPrice(cart.reduce((t, i) => t + priceValue(i.product[2]) * i.quantity, 0))}</p>
+                  </div>
+                  <button onClick={() => setShowCheckout(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af' }}>×</button>
+                </div>
+
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Nombre completo</label>
+                    <input value={checkoutForm.nombre} onChange={e => setCheckoutForm(f => ({ ...f, nombre: e.target.value }))}
+                      placeholder="Tu nombre" disabled={checkoutState === 'loading'}
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Email</label>
+                    <input type="email" value={checkoutForm.email} onChange={e => setCheckoutForm(f => ({ ...f, email: e.target.value }))}
+                      placeholder="tu@email.com" disabled={checkoutState === 'loading'}
+                      style={{ width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+
+                  {checkoutError && (
+                    <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+                      {checkoutError}
+                    </div>
+                  )}
+
+                  <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px' }}>
+                    {cart.map(({ product, quantity }) => (
+                      <div key={product[0]} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#374151', padding: '3px 0' }}>
+                        <span>{product[0]} ×{quantity}</span>
+                        <span style={{ fontWeight: 600 }}>{formatPrice(priceValue(product[2]) * quantity)}</span>
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, color: '#111', marginTop: 8, paddingTop: 8, borderTop: '1px solid #e5e7eb' }}>
+                      <span>Total</span>
+                      <span style={{ color: '#0049ff' }}>{formatPrice(cart.reduce((t, i) => t + priceValue(i.product[2]) * i.quantity, 0))}</span>
+                    </div>
+                  </div>
+
+                  <button onClick={handleCheckout} disabled={checkoutState === 'loading'}
+                    style={{ background: checkoutState === 'loading' ? '#93c5fd' : '#0049ff', color: '#fff', border: 'none', padding: '12px 0', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: checkoutState === 'loading' ? 'default' : 'pointer', width: '100%', marginTop: 4 }}>
+                    {checkoutState === 'loading' ? 'Procesando...' : 'Confirmar pedido'}
+                  </button>
+                  <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>Tu pedido quedará en estado "Pendiente" hasta confirmar el pago</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
