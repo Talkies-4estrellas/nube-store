@@ -23,7 +23,12 @@ insert into categorias (nombre) values
   ('Cinturones'),
   ('Billeteras'),
   ('Estuches'),
-  ('Relojes')
+  ('Relojes'),
+  ('Keyboards'),
+  ('Gaming'),
+  ('Audio'),
+  ('Smart'),
+  ('Accesorios')
 on conflict do nothing;
 
 

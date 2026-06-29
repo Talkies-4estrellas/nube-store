@@ -9,10 +9,8 @@ import {
   Keyboard, Gamepad2, Speaker, Watch, Check, PackageCheck, ShieldCheck, Truck, Send,
   Grid2x2, SearchX, MessageCircle, LogIn, type LucideIcon,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
-/* ----------------------------------------------------------------------------
-   Iconos lucide (reemplaza los <i data-lucide="..."> del diseño original)
----------------------------------------------------------------------------- */
 const ICONS: Record<string, LucideIcon> = {
   home: Home, 'shopping-bag': ShoppingBag, sparkles: Sparkles, heart: Heart,
   'badge-percent': BadgePercent, 'shopping-cart': ShoppingCart, headphones: Headphones,
@@ -28,9 +26,7 @@ function Ic({ n }: { n: string }) {
   return C ? <C /> : null
 }
 
-/* ----------------------------------------------------------------------------
-   Datos (portados tal cual desde Diseño/script.js)
----------------------------------------------------------------------------- */
+/* ---- Fallback images ---- */
 const productImage = {
   keyboard: 'https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?auto=format&fit=crop&w=700&q=80',
   console: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=700&q=80',
@@ -39,105 +35,34 @@ const productImage = {
   charger: 'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=700&q=80',
   gamepad: 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=700&q=80',
 }
+const FALLBACK_IMG = productImage.keyboard
 
+/* ---- Types ---- */
+// [nombre, descripcion, precio_str, imagen_url, categoria_nombre]
 type Product = [string, string, string, string, string]
 
-const products: Product[] = [
-  ['MECHANICAL GREEN KEYS.', 'Teclado compacto RGB con switches tactiles.', '$1,980', productImage.keyboard, 'Keyboards'],
-  ['CONTROL EVERY MOVE.', 'Consola portatil con pantalla amplia.', '$2,890', productImage.console, 'Gaming'],
-  ['SMART LIVING DISPLAY.', 'Mini display para calendario y musica.', '$1,650', productImage.display, 'Smart'],
-  ['SOUND WITHOUT LIMITS.', 'Audifonos premium con cancelacion.', '$1,240', productImage.audio, 'Audio'],
-  ['FAST POWER KIT.', 'Cargador rapido con cable reforzado.', '$540', productImage.charger, 'Accesorios'],
-  ['RETRO GAMEPAD.', 'Control inalambrico inspirado en clasicos.', '$890', productImage.gamepad, 'Gaming'],
-  ['DESK POWER MINI.', 'Hub compacto para escritorio y consola.', '$720', productImage.charger, 'Accesorios'],
-  ['LOW PROFILE KEYS.', 'Teclado silencioso para trabajo y juego.', '$1,430', productImage.keyboard, 'Keyboards'],
-]
-
-type Detail = { summary: string; longDescription: string; specs: string[]; gallery: string[] }
-
-const productDetails: Record<string, Detail> = {
-  'MECHANICAL GREEN KEYS.': {
-    summary: 'Un teclado mecanico compacto para setups limpios, con respuesta tactil, iluminacion RGB y cuerpo firme para sesiones largas.',
-    longDescription: 'Pensado para escritorios compactos, este teclado combina una escritura precisa con un formato que deja mas espacio para mouse, libreta o accesorios. La iluminacion por tecla ayuda a ubicar comandos rapidamente, mientras que el cuerpo rigido mantiene una sensacion estable tanto para trabajar como para jugar. Es una buena opcion si quieres mejorar tu setup sin ocupar toda la mesa.',
-    specs: ['Switches tactiles', 'Formato 75%', 'RGB por tecla', 'Cable USB-C'],
-    gallery: [
-      productImage.keyboard,
-      'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1595044426077-d36d9236d54a?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  'CONTROL EVERY MOVE.': {
-    summary: 'Consola portatil con controles responsivos, pantalla amplia y agarre comodo para jugar en escritorio, sofa o viaje.',
-    longDescription: 'Esta consola esta pensada para sesiones casuales y partidas largas sin depender de un monitor. Su pantalla amplia facilita leer menus y detalles del juego, mientras que los controles integrados reducen el tiempo de preparacion. Funciona bien como dispositivo principal para juegos ligeros o como companera de viaje para mantener tu biblioteca cerca.',
-    specs: ['Pantalla amplia', 'Controles responsivos', 'Bateria extendida', 'Modo portatil'],
-    gallery: [
-      productImage.console,
-      productImage.gamepad,
-      'https://images.unsplash.com/photo-1605901309584-818e25960a8f?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  'SMART LIVING DISPLAY.': {
-    summary: 'Mini display inteligente para calendario, musica, recordatorios y notificaciones rapidas sin llenar tu escritorio.',
-    longDescription: 'Un accesorio pequeno para ordenar tu dia desde el escritorio. Sirve como punto rapido para ver recordatorios, controlar musica y consultar informacion importante sin abrir otra pantalla grande. Su formato compacto lo hace facil de colocar junto al teclado, en una repisa o cerca de la zona de carga.',
-    specs: ['Pantalla compacta', 'Control tactil', 'Audio integrado', 'Modo escritorio'],
-    gallery: [
-      productImage.display,
-      'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1558089687-f282ffcbc126?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  'SOUND WITHOUT LIMITS.': {
-    summary: 'Audifonos premium con cancelacion, estuche magnetico y sonido definido para trabajo, musica y llamadas.',
-    longDescription: 'Disenados para moverte entre musica, llamadas y concentracion sin cambiar de equipo. La cancelacion ayuda en espacios con ruido, y el estuche magnetico mantiene todo protegido cuando no los usas. Son una opcion equilibrada para quien quiere audio claro, buen microfono y carga rapida en un paquete compacto.',
-    specs: ['Cancelacion activa', 'Estuche magnetico', 'Microfono integrado', 'Carga rapida'],
-    gallery: [
-      productImage.audio,
-      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  'FAST POWER KIT.': {
-    summary: 'Kit de carga rapida con cable reforzado para mantener tu consola, telefono y accesorios listos todo el dia.',
-    longDescription: 'Este kit cubre el punto mas practico del setup: energia confiable. El cable reforzado soporta uso diario y la carga rapida reduce tiempos muertos entre sesiones. Es ideal para tenerlo fijo en el escritorio o llevarlo en mochila como respaldo para telefono, consola y audifonos.',
-    specs: ['Carga rapida', 'Cable reforzado', 'USB-C', 'Proteccion termica'],
-    gallery: [
-      productImage.charger,
-      'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  'RETRO GAMEPAD.': {
-    summary: 'Control inalambrico inspirado en clasicos, con formato compacto y botones suaves para partidas casuales.',
-    longDescription: 'Un control para quienes quieren una sensacion retro sin renunciar a conexion moderna. Su formato compacto es comodo para juegos clasicos, plataformas y partidas casuales. La bateria recargable evita depender de pilas, y los botones suaves ayudan a mantener una respuesta agradable durante mas tiempo.',
-    specs: ['Conexion inalambrica', 'Bateria recargable', 'Botones suaves', 'Diseno retro'],
-    gallery: [
-      productImage.gamepad,
-      'https://images.unsplash.com/photo-1592840496694-26d035b52b48?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1605901309584-818e25960a8f?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  'DESK POWER MINI.': {
-    summary: 'Hub compacto para escritorio con puertos esenciales, ideal para conectar accesorios sin saturar tu espacio.',
-    longDescription: 'Una solucion discreta para ampliar conexiones sin llenar el escritorio de cables. El formato compacto facilita colocarlo cerca de la laptop o consola, y la base antideslizante ayuda a mantenerlo fijo. Es util para usuarios que conectan teclado, audio, almacenamiento o cargadores durante el dia.',
-    specs: ['Multipuerto', 'Formato compacto', 'USB-C', 'Base antideslizante'],
-    gallery: [
-      productImage.charger,
-      'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
-  'LOW PROFILE KEYS.': {
-    summary: 'Teclado de perfil bajo y escritura silenciosa para cambiar entre productividad y juego sin cansancio.',
-    longDescription: 'Una opcion ligera para quienes prefieren una escritura mas baja y silenciosa. El recorrido corto ayuda a escribir rapido durante trabajo, clases o chat, y su conexion estable mantiene una respuesta consistente. Combina bien con setups minimalistas donde importa tanto la comodidad como el espacio disponible.',
-    specs: ['Perfil bajo', 'Switches silenciosos', 'Conexion estable', 'Teclas suaves'],
-    gallery: [
-      productImage.keyboard,
-      'https://images.unsplash.com/photo-1595044426077-d36d9236d54a?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=900&q=80',
-    ],
-  },
+type SupabaseProduct = {
+  id: string
+  nombre: string
+  sku: string
+  precio: number
+  stock: number
+  imagen_url: string | null
+  activo: boolean
+  categorias: { nombre: string } | null
 }
 
+function toProduct(p: SupabaseProduct): Product {
+  return [
+    p.nombre,
+    `${p.categorias?.nombre ?? 'Producto'} — SKU ${p.sku}`,
+    `$${Number(p.precio).toLocaleString('es-MX')}`,
+    p.imagen_url ?? FALLBACK_IMG,
+    p.categorias?.nombre ?? 'General',
+  ]
+}
+
+/* ---- Datos estáticos de reseñas, preguntas, slides ---- */
 const reviewSamples: [string, string, string][] = [
   ['Mariana R.', 'Lo compre para mi escritorio y se siente mucho mas premium de lo que esperaba. La entrega fue rapida y el empaque llego impecable.', '5.0'],
   ['Carlos M.', 'Buen balance entre diseno y utilidad. Me gusto que no se siente fragil y que los controles son faciles de entender.', '4.8'],
@@ -147,16 +72,16 @@ const reviewSamples: [string, string, string][] = [
 const questionSamples: [string, string][] = [
   ['Incluye garantia?', 'Si, incluye garantia de 12 meses contra defectos de fabrica.'],
   ['Cuanto tarda el envio?', 'El envio estimado es de 2 a 5 dias habiles dependiendo de la ciudad.'],
-  ['Se puede pagar a meses?', 'En esta vista demo se muestra como compra directa, pero se puede agregar la opcion de meses sin problema.'],
+  ['Se puede pagar a meses?', 'En esta tienda se acepta pago en una sola exhibicion. Contacta soporte para mas opciones.'],
 ]
 
 const views: Record<string, { kicker: string; title: string; text: string; chips: string[] }> = {
   inicio: { kicker: 'Inicio', title: 'Seleccion curada para tu setup.', text: 'Explora productos destacados, categorias populares y accesorios listos para comprar.', chips: ['Entrega rapida', 'Stock limitado', 'Garantia incluida'] },
-  catalogo: { kicker: 'Catalogo', title: 'Tienda en linea con productos, precios y filtros.', text: 'Ahora se muestra como un catalogo real: barra de busqueda, categorias, cards repetibles y acciones de compra.', chips: ['8 productos', 'Filtros visibles', 'Grid ecommerce'] },
+  catalogo: { kicker: 'Catalogo', title: 'Tienda en linea con productos, precios y filtros.', text: 'Productos reales desde el panel admin con categorias y busqueda.', chips: ['Productos reales', 'Filtros', 'Grid ecommerce'] },
   novedades: { kicker: 'Novedades', title: 'Lanzamientos con formato editorial.', text: 'Una seccion mas aspiracional para mostrar drops recientes, preventas y productos limitados.', chips: ['Nuevo drop', 'Edicion limitada', 'Preventa'] },
-  favoritos: { kicker: 'Favoritos', title: 'Wishlist con comparacion rapida.', text: 'Los productos guardados aparecen como una lista compacta con estado, precio y boton de compra.', chips: ['3 guardados', 'Comparar', 'Disponible'] },
+  favoritos: { kicker: 'Favoritos', title: 'Wishlist con comparacion rapida.', text: 'Los productos guardados aparecen como una lista compacta con estado, precio y boton de compra.', chips: ['Guardados', 'Comparar', 'Disponible'] },
   ofertas: { kicker: 'Ofertas', title: 'Promos con impacto visual de campana.', text: 'Bloques de descuento, bundles y piezas limitadas para que se sienta como una pagina comercial.', chips: ['Hasta 35%', 'Envio gratis', 'Ultimas piezas'] },
-  carrito: { kicker: 'Carrito', title: 'Resumen de compra listo para pagar.', text: 'Una vista de checkout simulada con articulos, subtotal, envio y total.', chips: ['3 articulos', 'Total $5,370', 'Checkout'] },
+  carrito: { kicker: 'Carrito', title: 'Resumen de compra listo para pagar.', text: 'Una vista de checkout simulada con articulos, subtotal, envio y total.', chips: ['Articulos', 'Total', 'Checkout'] },
   soporte: { kicker: 'Soporte', title: 'Centro de ayuda visual y directo.', text: 'Tarjetas de asistencia para envio, cambios, garantia y asesoria de compra.', chips: ['Chat', 'Garantias', 'Rastreo'] },
 }
 
@@ -176,12 +101,9 @@ const slides = [
   { img: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=1400&q=80', alt: 'Audifonos premium sobre fondo oscuro', kicker: 'Audio premium', title: 'Sonido claro para concentrarte mas.' },
 ]
 
-/* ----------------------------------------------------------------------------
-   Helpers
----------------------------------------------------------------------------- */
+/* ---- Helpers ---- */
 const priceValue = (price: string) => Number(price.replace(/[$,]/g, '')) || 0
 const formatPrice = (value: number) => `$${value.toLocaleString('en-US')}`
-const findProduct = (title: string) => products.find((p) => p[0] === title)
 const bump = (el: Element) =>
   el.animate(
     [{ transform: 'scale(1)' }, { transform: 'scale(0.92)' }, { transform: 'scale(1)' }],
@@ -190,9 +112,17 @@ const bump = (el: Element) =>
 
 type CartEntry = { product: Product; quantity: number }
 
-/* ----------------------------------------------------------------------------
-   Componente principal
----------------------------------------------------------------------------- */
+const CART_KEY = 'oe_cart'
+
+function loadCartFromStorage(): CartEntry[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(CART_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+/* ---- Componente principal ---- */
 export default function Storefront() {
   const router = useRouter()
   const [view, setView] = useState('inicio')
@@ -205,18 +135,46 @@ export default function Storefront() {
   const [galleryIndex, setGalleryIndex] = useState(0)
   const [qaAnswers, setQaAnswers] = useState<Record<number, string[]>>({})
   const [qaInputs, setQaInputs] = useState<Record<number, string>>({})
-  const [cart, setCart] = useState<CartEntry[]>([
-    { product: products[1], quantity: 1 },
-    { product: products[3], quantity: 1 },
-    { product: products[4], quantity: 1 },
-  ])
+
+  // Carrito persistente en localStorage
+  const [cart, setCart] = useState<CartEntry[]>(loadCartFromStorage)
+
+  // Productos y categorías desde Supabase
+  const [dbProducts, setDbProducts] = useState<Product[]>([])
+  const [categorias, setCategorias] = useState<string[]>([])
+  const [activeCat, setActiveCat] = useState('Todo')
+  const [loadingProducts, setLoadingProducts] = useState(true)
 
   const gridRef = useRef<HTMLElement>(null)
   const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const cartCount = cart.reduce((t, i) => t + i.quantity, 0)
 
-  /* --- Carrusel con autoplay (5200ms) --- */
+  /* ---- Persistir carrito en localStorage ---- */
+  useEffect(() => {
+    try { localStorage.setItem(CART_KEY, JSON.stringify(cart)) } catch {}
+  }, [cart])
+
+  /* ---- Cargar productos y categorías desde Supabase ---- */
+  useEffect(() => {
+    async function fetchData() {
+      const [{ data: prods }, { data: cats }] = await Promise.all([
+        supabase
+          .from('productos')
+          .select('id, nombre, sku, precio, stock, imagen_url, activo, categorias(nombre)')
+          .eq('activo', true)
+          .gt('stock', 0)
+          .order('created_at', { ascending: false }),
+        supabase.from('categorias').select('nombre').order('nombre'),
+      ])
+      if (prods) setDbProducts((prods as unknown as SupabaseProduct[]).map(toProduct))
+      if (cats) setCategorias(cats.map((c: { nombre: string }) => c.nombre))
+      setLoadingProducts(false)
+    }
+    fetchData()
+  }, [])
+
+  /* ---- Carrusel con autoplay (5200ms) ---- */
   const startCarousel = () => {
     if (slideTimer.current) clearInterval(slideTimer.current)
     slideTimer.current = setInterval(() => {
@@ -225,9 +183,7 @@ export default function Storefront() {
   }
   useEffect(() => {
     startCarousel()
-    return () => {
-      if (slideTimer.current) clearInterval(slideTimer.current)
-    }
+    return () => { if (slideTimer.current) clearInterval(slideTimer.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const moveCarousel = (index: number) => {
@@ -235,7 +191,14 @@ export default function Storefront() {
     startCarousel()
   }
 
-  /* --- Navegacion / acciones --- */
+  /* ---- Productos filtrados por categoría ---- */
+  const filteredProducts = activeCat === 'Todo'
+    ? dbProducts
+    : dbProducts.filter(p => p[4] === activeCat)
+
+  const findProduct = (title: string) => dbProducts.find(p => p[0] === title)
+
+  /* ---- Navegación / acciones ---- */
   const scrollGrid = () => gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   const goView = (next: string) => {
@@ -280,7 +243,6 @@ export default function Storefront() {
     setNavCollapsed((c) => !c)
   }
 
-  // Replica activateGroup(".category") / swatches: toggle de clase entre hermanos
   const activateInGroup = (e: React.MouseEvent<HTMLButtonElement>, selector: string) => {
     const btn = e.currentTarget
     btn.parentElement?.querySelectorAll(selector).forEach((n) => n.classList.remove('active'))
@@ -293,7 +255,6 @@ export default function Storefront() {
     setView('busqueda')
   }
 
-  // Card clickeable que abre detalle, salvo que el click sea sobre un boton/link interno
   const onCardClick = (e: React.MouseEvent, title: string) => {
     if ((e.target as HTMLElement).closest('button, a')) return
     openDetail(title)
@@ -306,28 +267,25 @@ export default function Storefront() {
     setQaInputs((p) => ({ ...p, [idx]: '' }))
   }
 
-  /* --- Preview header dependiente de la vista --- */
+  /* ---- Preview header ---- */
   const preview = (() => {
     if (view === 'producto') {
       const product = findProduct(detailTitle)
-      const detail = product ? productDetails[detailTitle] : undefined
       return {
         kicker: product ? product[4] : 'Producto',
         title: detailTitle,
-        text: detail?.summary ?? (product ? product[1] : ''),
+        text: product ? product[1] : '',
         chips: ['Detalle', 'Galeria', 'Antes de comprar'],
       }
     }
     if (view === 'busqueda') {
       const q = searchQuery.trim()
       const nq = q.toLowerCase()
-      const results = products.filter(([t, x, , , c]) => [t, x, c].some((v) => v.toLowerCase().includes(nq)))
+      const results = dbProducts.filter(([t, x, , , c]) => [t, x, c].some((v) => v.toLowerCase().includes(nq)))
       return {
         kicker: 'Busqueda',
         title: nq ? `Resultados para "${q}".` : 'Busca productos por nombre o categoria.',
-        text: results.length
-          ? `Se encontraron ${results.length} productos en esta simulacion.`
-          : 'No hay coincidencias; prueba con keyboard, gaming, audio o accesorios.',
+        text: results.length ? `Se encontraron ${results.length} productos.` : 'No hay coincidencias.',
         chips: ['Productos', 'Precios', 'Agregar al carrito'],
       }
     }
@@ -346,7 +304,7 @@ export default function Storefront() {
     return views[view] || views.inicio
   })()
 
-  /* --- Boton "agregar" reutilizable --- */
+  /* ---- Botón agregar reutilizable ---- */
   const AddButton = ({ title, dark, icon = 'plus', label = 'Agregar producto' }: { title: string; dark?: boolean; icon?: string; label?: string }) => (
     <button
       className={`round-button${dark ? ' dark' : ''}`}
@@ -374,7 +332,6 @@ export default function Storefront() {
     </article>
   )
 
-  /* --- Contenido del #catalogGrid por vista --- */
   const gridClass: Record<string, string> = {
     inicio: 'content-grid',
     catalogo: 'shop-layout',
@@ -387,13 +344,17 @@ export default function Storefront() {
     busqueda: 'shop-layout',
   }
 
+  /* ---- Vistas ---- */
   const renderHome = () => {
-    const cards: [string, string, string, string][] = [
-      ['CONTROL EVERY MOVE.', 'Consola portatil con controles responsivos y pantalla amplia.', '$2,890', productImage.console],
-      ['SMART LIVING DISPLAY.', 'Mini pantalla para notificaciones, calendario y musica.', '$1,650', productImage.display],
-      ['SOUND WITHOUT LIMITS.', 'Audifonos compactos con cancelacion y estuche magnetico.', '$1,240', productImage.audio],
-    ]
-    return cards.map(([title, text, price, image], index) => (
+    const featured = dbProducts.slice(0, 3)
+    if (loadingProducts || featured.length === 0) {
+      return (
+        <article className="product-card tall" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+          <p style={{ color: '#9ca3af', fontSize: 14 }}>Cargando productos...</p>
+        </article>
+      )
+    }
+    return featured.map(([title, text, price, image, category], index) => (
       <article
         key={title}
         className={`product-card ${index === 1 ? 'wide' : index === 2 ? 'compact' : 'tall'}`}
@@ -403,7 +364,7 @@ export default function Storefront() {
         {index === 1 ? (
           <>
             <div>
-              <span className="pill">Preview</span>
+              <span className="pill">Destacado</span>
               <h3>{title}</h3>
               <p>{text}</p>
               <div className="price-row">
@@ -417,7 +378,7 @@ export default function Storefront() {
           <>
             <img src={image} alt={title} />
             <div>
-              <span className="pill">{index === 2 ? 'Recomendado' : 'Producto'}</span>
+              <span className="pill">{index === 2 ? 'Recomendado' : category}</span>
               <h3>{title}</h3>
               <p>{text}</p>
               <div className="price-row">
@@ -431,46 +392,87 @@ export default function Storefront() {
     ))
   }
 
-  const renderCatalog = () => (
-    <>
-      <aside className="filter-panel">
-        <h3>Filtros</h3>
-        <button className="category active" type="button" onClick={(e) => activateInGroup(e, '.category')}><Ic n="grid-2x2" /><span>Todo</span><b>8</b></button>
-        <button className="category" type="button" onClick={(e) => activateInGroup(e, '.category')}><Ic n="keyboard" /><span>Keyboards</span><b>2</b></button>
-        <button className="category" type="button" onClick={(e) => activateInGroup(e, '.category')}><Ic n="gamepad-2" /><span>Gaming</span><b>2</b></button>
-        <button className="category" type="button" onClick={(e) => activateInGroup(e, '.category')}><Ic n="speaker" /><span>Audio</span><b>1</b></button>
-        <div className="range-card">
-          <span>Rango de precio</span>
-          <strong>$390 - $2,890</strong>
-          <div></div>
-        </div>
-      </aside>
-      <div className="store-grid">{products.map(ProductCard)}</div>
-    </>
-  )
+  const renderCatalog = () => {
+    const catCounts: Record<string, number> = {}
+    dbProducts.forEach(p => { catCounts[p[4]] = (catCounts[p[4]] ?? 0) + 1 })
 
-  const renderDrops = () => (
-    <>
-      <article className="drop-feature" data-detail-title="RETRO GAMEPAD." onClick={(e) => onCardClick(e, 'RETRO GAMEPAD.')}>
-        <img src={productImage.gamepad} alt="Consola retro" />
-        <div>
-          <span className="pill live"><Ic n="sparkles" /> Nuevo lanzamiento</span>
-          <h3>POCKET-SIZE NOSTALGIA.</h3>
-          <p>Un drop inspirado en consolas retro, preparado para preventa con unidades limitadas.</p>
-          <div className="price-row">
-            <strong>$2,490</strong>
-            <AddButton title="RETRO GAMEPAD." dark label="Agregar lanzamiento" />
+    return (
+      <>
+        <aside className="filter-panel">
+          <h3>Filtros</h3>
+          <button
+            className={`category${activeCat === 'Todo' ? ' active' : ''}`}
+            type="button"
+            onClick={() => setActiveCat('Todo')}
+          >
+            <Ic n="grid-2x2" /><span>Todo</span><b>{dbProducts.length}</b>
+          </button>
+          {categorias.map(cat => (
+            <button
+              key={cat}
+              className={`category${activeCat === cat ? ' active' : ''}`}
+              type="button"
+              onClick={() => setActiveCat(cat)}
+            >
+              <Ic n="shopping-bag" /><span>{cat}</span><b>{catCounts[cat] ?? 0}</b>
+            </button>
+          ))}
+          <div className="range-card">
+            <span>Rango de precio</span>
+            <strong>
+              {dbProducts.length > 0
+                ? `${formatPrice(Math.min(...dbProducts.map(p => priceValue(p[2]))))} - ${formatPrice(Math.max(...dbProducts.map(p => priceValue(p[2]))))}`
+                : '—'}
+            </strong>
+            <div></div>
           </div>
+        </aside>
+        <div className="store-grid">
+          {loadingProducts ? (
+            <article className="empty-state">
+              <p>Cargando productos...</p>
+            </article>
+          ) : filteredProducts.length === 0 ? (
+            <article className="empty-state">
+              <Ic n="search-x" />
+              <h3>Sin productos</h3>
+              <p>No hay productos en esta categoría todavía.</p>
+            </article>
+          ) : (
+            filteredProducts.map(ProductCard)
+          )}
         </div>
-      </article>
-      <article className="release-card"><span>01</span><h3>TYPE SMARTER.</h3><p>Teclado verde de perfil bajo.</p></article>
-      <article className="release-card"><span>02</span><h3>HELLO FRIEND.</h3><p>Mini display naranja para escritorio.</p></article>
-      <article className="release-card"><span>03</span><h3>POWER MINI.</h3><p>Hub compacto para accesorios.</p></article>
-    </>
-  )
+      </>
+    )
+  }
+
+  const renderDrops = () => {
+    const featured = dbProducts[0]
+    return (
+      <>
+        {featured ? (
+          <article className="drop-feature" data-detail-title={featured[0]} onClick={(e) => onCardClick(e, featured[0])}>
+            <img src={featured[3]} alt={featured[0]} />
+            <div>
+              <span className="pill live"><Ic n="sparkles" /> Nuevo lanzamiento</span>
+              <h3>{featured[0].toUpperCase()}</h3>
+              <p>{featured[1]}</p>
+              <div className="price-row">
+                <strong>{featured[2]}</strong>
+                <AddButton title={featured[0]} dark label="Agregar lanzamiento" />
+              </div>
+            </div>
+          </article>
+        ) : null}
+        {dbProducts.slice(1, 4).map((p, i) => (
+          <article key={p[0]} className="release-card"><span>0{i + 1}</span><h3>{p[0].toUpperCase()}</h3><p>{p[4]}</p></article>
+        ))}
+      </>
+    )
+  }
 
   const renderFavorites = () =>
-    products.slice(1, 5).map(([title, text, price, image, category]) => (
+    dbProducts.slice(0, 4).map(([title, text, price, image, category]) => (
       <article key={title} className="wishlist-item" data-detail-title={title} onClick={(e) => onCardClick(e, title)}>
         <img src={image} alt={title} />
         <div>
@@ -484,29 +486,29 @@ export default function Storefront() {
     ))
 
   const renderDeals = () => {
-    const deals: [string, string, string, string][] = [
-      ['RETRO GAMEPAD.', '$890', '$690', productImage.gamepad],
-      ['FAST POWER KIT.', '$540', '$390', productImage.charger],
-      ['SMART LIVING DISPLAY.', '$1,650', '$1,390', productImage.display],
-    ]
+    const dealProds = dbProducts.slice(0, 3)
+    const hero = dbProducts[0]
     return (
       <>
         <article className="deal-hero">
           <div>
             <span className="pill live"><Ic n="sparkles" /> Flash sale</span>
-            <h3>35% OFF EN GAMING.</h3>
-            <p>Bundles simulados para dar sensacion real de campana promocional.</p>
+            <h3>DESCUENTOS ESPECIALES.</h3>
+            <p>Productos seleccionados con precio especial por tiempo limitado.</p>
           </div>
-          <img src={productImage.console} alt="Promo gaming" />
+          <img src={hero?.[3] ?? slides[0].img} alt="Promo" />
         </article>
-        {deals.map(([title, oldPrice, price, image]) => (
-          <article key={title} className="deal-card" data-detail-title={title} onClick={(e) => onCardClick(e, title)}>
-            <img src={image} alt={title} />
-            <h3>{title}</h3>
-            <p><s>{oldPrice}</s> <strong>{price}</strong></p>
-            <button className="period-button active" type="button" onClick={(e) => { addToCart(title); bump(e.currentTarget) }}>Agregar oferta</button>
-          </article>
-        ))}
+        {dealProds.map(([title, , price, image]) => {
+          const original = Math.round(priceValue(price) * 1.22)
+          return (
+            <article key={title} className="deal-card" data-detail-title={title} onClick={(e) => onCardClick(e, title)}>
+              <img src={image} alt={title} />
+              <h3>{title}</h3>
+              <p><s>{formatPrice(original)}</s> <strong>{price}</strong></p>
+              <button className="period-button active" type="button" onClick={(e) => { addToCart(title); bump(e.currentTarget) }}>Agregar oferta</button>
+            </article>
+          )
+        })}
       </>
     )
   }
@@ -527,7 +529,9 @@ export default function Storefront() {
             <strong>{itemCount}</strong>
           </div>
           <div className="cart-list">
-            {cart.map(({ product, quantity }) => {
+            {cart.length === 0 ? (
+              <p style={{ color: '#9ca3af', fontSize: 14, padding: '20px 0', textAlign: 'center' }}>El carrito está vacío</p>
+            ) : cart.map(({ product, quantity }) => {
               const [title, , price, image, category] = product
               return (
                 <article key={title} className="cart-item">
@@ -537,7 +541,14 @@ export default function Storefront() {
                     <h3>{title}</h3>
                     <p>Cantidad {quantity} x {price}</p>
                   </div>
-                  <strong>{formatPrice(priceValue(price) * quantity)}</strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                    <strong>{formatPrice(priceValue(price) * quantity)}</strong>
+                    <button
+                      type="button"
+                      style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}
+                      onClick={() => setCart(prev => prev.filter(i => i.product[0] !== title))}
+                    >Quitar</button>
+                  </div>
                 </article>
               )
             })}
@@ -550,6 +561,14 @@ export default function Storefront() {
           <p><span>Descuento</span><strong>-{formatPrice(discount)}</strong></p>
           <div><span>Total</span><strong>{formatPrice(total)}</strong></div>
           <button className="period-button active" type="button">Continuar pago</button>
+          {cart.length > 0 && (
+            <button
+              className="period-button"
+              type="button"
+              style={{ marginTop: 8 }}
+              onClick={() => { setCart([]); try { localStorage.removeItem(CART_KEY) } catch {} }}
+            >Vaciar carrito</button>
+          )}
         </aside>
       </>
     )
@@ -576,7 +595,8 @@ export default function Storefront() {
     const q = searchQuery.trim()
     const nq = q.toLowerCase()
     const label = q || 'Todo'
-    const results = products.filter(([t, x, , , c]) => [t, x, c].some((v) => v.toLowerCase().includes(nq)))
+    const results = dbProducts.filter(([t, x, , , c]) => [t, x, c].some((v) => v.toLowerCase().includes(nq)))
+    const suggestions = categorias.slice(0, 3).join(', ') || 'productos disponibles'
     return (
       <>
         <aside className="filter-panel">
@@ -584,7 +604,7 @@ export default function Storefront() {
           <button className="category active" type="button"><Ic n="search" /><span>{label}</span><b>{results.length}</b></button>
           <div className="range-card">
             <span>Sugerencias</span>
-            <strong>keyboard, gaming, audio</strong>
+            <strong>{suggestions}</strong>
             <div></div>
           </div>
         </aside>
@@ -595,7 +615,7 @@ export default function Storefront() {
             <article className="empty-state">
               <Ic n="search-x" />
               <h3>Sin resultados</h3>
-              <p>No encontramos productos con ese termino en la muestra.</p>
+              <p>No encontramos productos con ese termino.</p>
             </article>
           )}
         </div>
@@ -607,13 +627,7 @@ export default function Storefront() {
     const product = findProduct(detailTitle)
     if (!product) return null
     const [title, text, price, image, category] = product
-    const detail = productDetails[title] || {
-      summary: text,
-      longDescription: text,
-      specs: ['Disponible', 'Garantia incluida', 'Envio rapido', 'Compra segura'],
-      gallery: [image],
-    }
-    const gallery = detail.gallery.length ? detail.gallery : [image]
+    const gallery = [image]
     return (
       <>
         <section className="product-gallery">
@@ -639,17 +653,8 @@ export default function Storefront() {
           </button>
           <span className="pill">{category}</span>
           <h3>{title}</h3>
-          <p>{detail.summary}</p>
+          <p>{text}</p>
           <strong className="detail-price">{price}</strong>
-
-          <div className="product-options" aria-label="Opciones del producto">
-            <span>Color</span>
-            <div>
-              <button className="swatch active" type="button" aria-label="Color negro" onClick={(e) => activateInGroup(e, '.swatch')}></button>
-              <button className="swatch blue" type="button" aria-label="Color azul" onClick={(e) => activateInGroup(e, '.swatch')}></button>
-              <button className="swatch pink" type="button" aria-label="Color rosa" onClick={(e) => activateInGroup(e, '.swatch')}></button>
-            </div>
-          </div>
 
           <div className="detail-actions">
             <button className="period-button active" type="button" onClick={(e) => { addToCart(title); bump(e.currentTarget) }}>Agregar al carrito</button>
@@ -657,7 +662,7 @@ export default function Storefront() {
           </div>
 
           <div className="product-specs">
-            {detail.specs.map((spec) => (
+            {['Disponible', 'Garantia incluida', 'Envio rapido', 'Compra segura'].map((spec) => (
               <span key={spec}><Ic n="check" />{spec}</span>
             ))}
           </div>
@@ -666,7 +671,7 @@ export default function Storefront() {
         <section className="detail-section product-story">
           <span>Descripcion completa</span>
           <h3>Todo lo que debes saber antes de comprar.</h3>
-          <p>{detail.longDescription || detail.summary}</p>
+          <p>{text}</p>
           <div className="story-highlights">
             <span><Ic n="package-check" /> Producto revisado antes de envio</span>
             <span><Ic n="shield-check" /> Compra protegida y garantia incluida</span>
@@ -837,7 +842,7 @@ export default function Storefront() {
               <span className="pill live"><Ic n="sparkles" /> Nuevo drop</span>
               <h2>TYPE SMARTER.<br />PLAY LONGER.</h2>
               <p>Teclados, consolas y accesorios seleccionados para setups compactos con mucha personalidad.</p>
-              <a className="text-link" href="#">Ver coleccion <Ic n="arrow-right" /></a>
+              <a className="text-link" href="#" onClick={(e) => { e.preventDefault(); goView('catalogo') }}>Ver catalogo <Ic n="arrow-right" /></a>
             </div>
             <img src="https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?auto=format&fit=crop&w=900&q=80" alt="Teclado mecanico verde" />
           </article>
@@ -846,7 +851,7 @@ export default function Storefront() {
             <div className="hero-copy">
               <h2>POCKET-SIZE<br />NOSTALGIA.</h2>
               <p>Juega clasicos con diseno moderno.</p>
-              <a className="text-link gold" href="#">Conocer <Ic n="arrow-right" /></a>
+              <a className="text-link gold" href="#" onClick={(e) => { e.preventDefault(); goView('catalogo') }}>Conocer <Ic n="arrow-right" /></a>
             </div>
             <img src="https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=700&q=80" alt="Control de videojuego retro" />
           </article>
