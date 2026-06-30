@@ -29,13 +29,13 @@ export async function middleware(request: NextRequest) {
 
   const isProtected = PROTECTED.some(r => pathname.startsWith(r))
 
-  // Sin sesión intentando acceder a ruta protegida → login
-  if (isProtected && !user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    url.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(url)
-  }
+  // Protección de rutas desactivada temporalmente
+  // if (isProtected && !user) {
+  //   const url = request.nextUrl.clone()
+  //   url.pathname = '/login'
+  //   url.searchParams.set('redirect', pathname)
+  //   return NextResponse.redirect(url)
+  // }
 
   // Con sesión en /login → dashboard
   if (pathname === '/login' && user) {
