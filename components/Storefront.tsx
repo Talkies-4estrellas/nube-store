@@ -964,7 +964,7 @@ export default function Storefront() {
               {/* <button onClick={() => openLoginModal('login')} style={...}>Iniciar sesión</button> */}
 
               {/* Botón: Panel administrativo */}
-              <a href="/login" style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                 🔒 Panel admin
               </a>
             </div>
