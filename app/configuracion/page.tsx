@@ -95,7 +95,7 @@ export default function ConfiguracionPage() {
     setLoadingSolicitudes(false)
   }
 
-  async function cambiarEstado(id: string, estado: 'aprobado' | 'rechazado') {
+  async function cambiarEstado(id: string, estado: 'aprobado' | 'rechazado' | 'pendiente') {
     setUpdatingId(id)
     await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
     setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado } : s))
