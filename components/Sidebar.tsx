@@ -74,13 +74,13 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
 
-  // Filtrar secciones y rutas según el rol del usuario
-  const allowed = user ? new Set(ROLE_ROUTES[user.role]) : new Set<string>()
+  // Sin usuario: mostrar todo (auth desactivada temporalmente)
+  const allowed = user ? new Set(ROLE_ROUTES[user.role]) : null
   const visibleSections = ALL_SECTIONS
-    .map(section => ({ ...section, items: section.items.filter(i => allowed.has(i.href)) }))
+    .map(section => ({ ...section, items: section.items.filter(i => !allowed || allowed.has(i.href)) }))
     .filter(section => section.items.length > 0)
 
-  const showConfig = user?.role === 'admin'
+  const showConfig = !user || user.role === 'admin'
   const badge = user ? ROLE_BADGE[user.role] : null
 
   return (

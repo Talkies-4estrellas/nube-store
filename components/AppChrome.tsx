@@ -31,8 +31,18 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     )
   }
 
-  // Sin sesión (el middleware ya redirige, pero por si acaso)
-  if (!user) return null
+  // Sin sesión — renderiza sin restricciones (middleware desactivado temporalmente)
+  if (!user) {
+    return (
+      <>
+        <Sidebar />
+        <Topbar />
+        <main style={{ marginLeft: 240, marginTop: 56, padding: '32px', minHeight: 'calc(100vh - 56px)', background: '#f9fafb' }}>
+          {children}
+        </main>
+      </>
+    )
+  }
 
   // Verificar permiso de rol para esta ruta
   const hasAccess = canAccess(user.role, pathname)
