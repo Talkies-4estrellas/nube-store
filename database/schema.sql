@@ -386,10 +386,18 @@ create policy "envios write admin bodega" on envios
 create policy "imagenes publicas" on storage.objects
   for select using (bucket_id = 'productos');
 
--- Solo autenticados pueden subir/eliminar
+-- Solo autenticados pueden subir imágenes de productos normales
 create policy "auth sube imagenes productos" on storage.objects
   for insert with check (
     bucket_id = 'productos' and auth.role() = 'authenticated'
+  );
+
+-- Proveedores anónimos pueden subir solo bajo solicitudes/
+create policy "anon sube solicitudes proveedores" on storage.objects
+  for insert with check (
+    bucket_id = 'productos'
+    and auth.role() = 'anon'
+    and (storage.foldername(name))[1] = 'solicitudes'
   );
 
 create policy "auth elimina imagenes productos" on storage.objects

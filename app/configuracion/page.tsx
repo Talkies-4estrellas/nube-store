@@ -5,16 +5,34 @@ import Icon from '@/components/Icon'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 
-type Section = 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 'usuarios'
+type Section = 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 'usuarios' | 'solicitudes'
 
 type UserRow = { id: string; user_id: string; nombre: string; role: string; created_at: string; email?: string }
+type Solicitud = {
+  id: string
+  proveedor_nombre: string
+  proveedor_empresa: string | null
+  proveedor_email: string
+  proveedor_telefono: string | null
+  producto_nombre: string
+  producto_sku: string
+  producto_descripcion: string | null
+  producto_precio: number
+  producto_stock: number
+  categoria_id: number | null
+  imagen_url: string | null
+  estado: 'pendiente' | 'aprobado' | 'rechazado'
+  created_at: string
+  categorias?: { nombre: string } | null
+}
 
 const ALL_NAV: { id: Section; label: string; icon: string; adminOnly?: boolean }[] = [
-  { id: 'negocio',        label: 'Datos del negocio', icon: 'store'      },
-  { id: 'contacto',       label: 'Contacto',           icon: 'users'      },
-  { id: 'pagos',          label: 'Métodos de pago',    icon: 'creditcard' },
-  { id: 'notificaciones', label: 'Notificaciones',      icon: 'warning'    },
-  { id: 'usuarios',       label: 'Usuarios y roles',    icon: 'settings', adminOnly: true },
+  { id: 'negocio',        label: 'Datos del negocio',    icon: 'store'      },
+  { id: 'contacto',       label: 'Contacto',              icon: 'users'      },
+  { id: 'pagos',          label: 'Métodos de pago',       icon: 'creditcard' },
+  { id: 'notificaciones', label: 'Notificaciones',         icon: 'warning'    },
+  { id: 'solicitudes',    label: 'Solicitudes proveedor',  icon: 'box',       adminOnly: true },
+  { id: 'usuarios',       label: 'Usuarios y roles',       icon: 'settings',  adminOnly: true },
 ]
 
 const monedas = ['MXN — Peso mexicano', 'USD — Dólar estadounidense', 'ARS — Peso argentino', 'COP — Peso colombiano', 'CLP — Peso chileno']
@@ -37,10 +55,18 @@ export default function ConfiguracionPage() {
   const [editingRole,     setEditingRole]     = useState<{ id: string; role: string } | null>(null)
   const [savingRole,      setSavingRole]      = useState(false)
 
+  // Estado para solicitudes de proveedores
+  const [solicitudes,        setSolicitudes]        = useState<Solicitud[]>([])
+  const [loadingSolicitudes, setLoadingSolicitudes] = useState(false)
+  const [filtroEstado,       setFiltroEstado]       = useState<'todas' | 'pendiente' | 'aprobado' | 'rechazado'>('pendiente')
+  const [updatingId,         setUpdatingId]         = useState<string | null>(null)
+  const [expandedId,         setExpandedId]         = useState<string | null>(null)
+
   const navItems = ALL_NAV.filter(n => !n.adminOnly || user?.role === 'admin')
 
   useEffect(() => {
     if (section === 'usuarios') fetchUsuarios()
+    if (section === 'solicitudes') fetchSolicitudes()
   }, [section])
 
   async function fetchUsuarios() {
@@ -57,6 +83,23 @@ export default function ConfiguracionPage() {
     setSavingRole(false)
     setEditingRole(null)
     fetchUsuarios()
+  }
+
+  async function fetchSolicitudes() {
+    setLoadingSolicitudes(true)
+    const { data } = await supabase
+      .from('solicitudes_productos')
+      .select('*, categorias(nombre)')
+      .order('created_at', { ascending: false })
+    setSolicitudes((data ?? []) as Solicitud[])
+    setLoadingSolicitudes(false)
+  }
+
+  async function cambiarEstado(id: string, estado: 'aprobado' | 'rechazado') {
+    setUpdatingId(id)
+    await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
+    setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado } : s))
+    setUpdatingId(null)
   }
 
   async function deleteUser(u: UserRow) {
@@ -166,6 +209,129 @@ export default function ConfiguracionPage() {
           </Card>
         )}
 
+        {section === 'solicitudes' && (
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111', margin: 0 }}>Solicitudes de proveedores</h2>
+              <button onClick={fetchSolicitudes} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#374151' }}>
+                ↻ Actualizar
+              </button>
+            </div>
+
+            {/* Filtros */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              {(['todas', 'pendiente', 'aprobado', 'rechazado'] as const).map(f => (
+                <button key={f} onClick={() => setFiltroEstado(f)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: filtroEstado === f ? '#252855' : '#f3f4f6',
+                    color: filtroEstado === f ? '#fff' : '#374151',
+                  }}>
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                  {f !== 'todas' && (
+                    <span style={{ marginLeft: 6, background: filtroEstado === f ? '#ffffff30' : '#e5e7eb', padding: '1px 6px', borderRadius: 10, fontSize: 10 }}>
+                      {solicitudes.filter(s => s.estado === f).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {loadingSolicitudes ? (
+              <p style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0' }}>Cargando solicitudes...</p>
+            ) : (() => {
+              const lista = filtroEstado === 'todas' ? solicitudes : solicitudes.filter(s => s.estado === filtroEstado)
+              if (lista.length === 0) return (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>📭</div>
+                  <p style={{ fontSize: 14, color: '#9ca3af' }}>No hay solicitudes {filtroEstado !== 'todas' ? `con estado "${filtroEstado}"` : ''}</p>
+                </div>
+              )
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {lista.map(s => {
+                    const isExpanded = expandedId === s.id
+                    const estadoColor = { pendiente: { bg: '#fef3c7', color: '#92400e' }, aprobado: { bg: '#dcfce7', color: '#166534' }, rechazado: { bg: '#fee2e2', color: '#991b1b' } }[s.estado]
+                    return (
+                      <div key={s.id} style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+                        {/* Fila principal */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: isExpanded ? '#f9fafb' : '#fff' }}
+                          onClick={() => setExpandedId(isExpanded ? null : s.id)}>
+                          {s.imagen_url ? (
+                            <img src={s.imagen_url} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid #e5e7eb' }} />
+                          ) : (
+                            <div style={{ width: 48, height: 48, borderRadius: 8, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📦</div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.producto_nombre}</p>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: estadoColor.bg, color: estadoColor.color, flexShrink: 0 }}>
+                                {s.estado.toUpperCase()}
+                              </span>
+                            </div>
+                            <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>
+                              SKU: {s.producto_sku} · ${s.producto_precio.toLocaleString('es-MX')}
+                              {s.categorias?.nombre && ` · ${s.categorias.nombre}`}
+                              {' · '}<strong>{s.proveedor_nombre}</strong>
+                              {s.proveedor_empresa && ` (${s.proveedor_empresa})`}
+                            </p>
+                          </div>
+                          <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{new Date(s.created_at).toLocaleDateString('es-MX')}</span>
+                          <span style={{ fontSize: 16, color: '#9ca3af', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                        </div>
+
+                        {/* Detalle expandible */}
+                        {isExpanded && (
+                          <div style={{ borderTop: '1px solid #f3f4f6', padding: '16px 20px', background: '#fafafa' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                              <div>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 8px' }}>Proveedor</p>
+                                <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}><strong>{s.proveedor_nombre}</strong></p>
+                                {s.proveedor_empresa && <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>{s.proveedor_empresa}</p>}
+                                <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>📧 {s.proveedor_email}</p>
+                                {s.proveedor_telefono && <p style={{ margin: 0, fontSize: 13, color: '#374151' }}>📞 {s.proveedor_telefono}</p>}
+                              </div>
+                              <div>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 8px' }}>Producto</p>
+                                <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}><strong>{s.producto_nombre}</strong></p>
+                                <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>SKU: {s.producto_sku}</p>
+                                <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>Precio: ${s.producto_precio.toLocaleString('es-MX')} · Stock: {s.producto_stock}</p>
+                                {s.producto_descripcion && <p style={{ margin: 0, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{s.producto_descripcion}</p>}
+                              </div>
+                            </div>
+
+                            {/* Acciones */}
+                            {s.estado === 'pendiente' && (
+                              <div style={{ display: 'flex', gap: 10, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+                                <button onClick={() => cambiarEstado(s.id, 'aprobado')} disabled={updatingId === s.id}
+                                  style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingId === s.id ? 0.6 : 1 }}>
+                                  {updatingId === s.id ? '...' : '✓ Aprobar'}
+                                </button>
+                                <button onClick={() => cambiarEstado(s.id, 'rechazado')} disabled={updatingId === s.id}
+                                  style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingId === s.id ? 0.6 : 1 }}>
+                                  ✕ Rechazar
+                                </button>
+                              </div>
+                            )}
+                            {s.estado !== 'pendiente' && (
+                              <div style={{ paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+                                <button onClick={() => cambiarEstado(s.id, 'pendiente')} disabled={updatingId === s.id}
+                                  style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                  Volver a pendiente
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
         {section === 'usuarios' && (
           <Card title="Usuarios y roles">
             <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>
@@ -232,7 +398,7 @@ export default function ConfiguracionPage() {
           </Card>
         )}
 
-        {section !== 'usuarios' && (
+        {section !== 'usuarios' && section !== 'solicitudes' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button onClick={handleSave} style={{ background: saved ? '#059669' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'background 0.2s' }}>
             {saved ? '¡Guardado!' : 'Guardar cambios'}
