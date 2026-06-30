@@ -960,8 +960,10 @@ export default function Storefront() {
                 📦 Soy proveedor
               </a>
 
-              {/* Botón: Iniciar sesión (clientes) — desactivado temporalmente */}
-              {/* <button onClick={() => openLoginModal('login')} style={...}>Iniciar sesión</button> */}
+              {/* Botón: Iniciar sesión */}
+              <a href="/login" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                → Iniciar sesión
+              </a>
 
               {/* Botón: Panel administrativo */}
               <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
