@@ -353,38 +353,110 @@ export default function ProveedoresPage() {
 
             {/* ---- Lista de productos añadidos ---- */}
             {productos.length > 0 && (
-              <div style={{ background: '#fff', borderRadius: 20, padding: '20px 28px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <span style={{ fontSize: 15 }}>🗂️</span>
-                  <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: 0 }}>
-                    Productos en esta solicitud
-                  </h3>
-                  <span style={{ marginLeft: 'auto', background: PINK, color: '#fff', fontSize: 12, fontWeight: 800, padding: '2px 10px', borderRadius: 20 }}>
-                    {productos.length}
+              <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', marginBottom: 20, overflow: 'hidden' }}>
+
+                {/* Cabecera */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 28px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                  <div style={{ width: 32, height: 32, background: `${NAVY}12`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🗂️</div>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: 0 }}>Productos en esta solicitud</h3>
+                    <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Revisa y edita antes de enviar</p>
+                  </div>
+                  <span style={{ marginLeft: 'auto', background: PINK, color: '#fff', fontSize: 12, fontWeight: 900, padding: '3px 12px', borderRadius: 20 }}>
+                    {productos.length} {productos.length === 1 ? 'producto' : 'productos'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                {/* Encabezados de tabla */}
+                <div style={{ display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 40px', gap: 0, padding: '8px 20px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                  {['#', '', 'Producto / SKU', 'Precio', 'Stock', 'Categoría', ''].map((h, i) => (
+                    <span key={i} style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 6px' }}>{h}</span>
+                  ))}
+                </div>
+
+                {/* Filas */}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {productos.map((p, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f9fafb', borderRadius: 12, padding: '12px 16px', border: '1px solid #e5e7eb' }}>
-                      {p.imagenPreview && (
-                        <img src={p.imagenPreview} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid #e5e7eb' }} />
-                      )}
-                      {!p.imagenPreview && (
-                        <div style={{ width: 44, height: 44, borderRadius: 8, background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📦</div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nombre}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
-                          SKU: {p.sku} · ${Number(p.precio).toLocaleString('es-MX')}
-                          {p.categoria_id && ` · ${catNombre(p.categoria_id)}`}
-                        </p>
+                    <div key={i} style={{
+                      display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 40px', gap: 0,
+                      alignItems: 'center', padding: '10px 20px',
+                      borderBottom: i < productos.length - 1 ? '1px solid #f3f4f6' : 'none',
+                      background: i % 2 === 0 ? '#fff' : '#fafafa',
+                    }}>
+                      {/* # */}
+                      <span style={{ fontSize: 12, color: '#9ca3af', fontWeight: 700, textAlign: 'center' }}>{i + 1}</span>
+
+                      {/* Imagen */}
+                      <div style={{ padding: '0 6px' }}>
+                        {p.imagenPreview ? (
+                          <img src={p.imagenPreview} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid #e5e7eb', display: 'block' }} />
+                        ) : (
+                          <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, border: '1px solid #e5e7eb' }}>📦</div>
+                        )}
                       </div>
-                      <button type="button" onClick={() => eliminarProducto(i)}
-                        style={{ background: '#fee2e2', color: '#dc2626', border: 'none', width: 30, height: 30, borderRadius: 8, fontWeight: 800, cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>
-                        ×
-                      </button>
+
+                      {/* Nombre + SKU */}
+                      <div style={{ padding: '0 6px', minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{p.sku}</p>
+                        {p.descripcion && (
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.descripcion}</p>
+                        )}
+                      </div>
+
+                      {/* Precio */}
+                      <div style={{ padding: '0 6px' }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#059669' }}>
+                          ${Number(p.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      {/* Stock */}
+                      <div style={{ padding: '0 6px' }}>
+                        <span style={{
+                          fontSize: 12, fontWeight: 700,
+                          color: Number(p.stock) === 0 ? '#9ca3af' : Number(p.stock) < 5 ? '#d97706' : '#374151',
+                        }}>
+                          {p.stock || '0'} uds
+                        </span>
+                      </div>
+
+                      {/* Categoría */}
+                      <div style={{ padding: '0 6px' }}>
+                        {p.categoria_id ? (
+                          <span style={{ fontSize: 11, fontWeight: 700, background: `${NAVY}10`, color: NAVY, padding: '3px 8px', borderRadius: 20, display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {catNombre(p.categoria_id)}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
+                        )}
+                      </div>
+
+                      {/* Eliminar */}
+                      <div style={{ padding: '0 4px', display: 'flex', justifyContent: 'center' }}>
+                        <button type="button" onClick={() => eliminarProducto(i)}
+                          title="Eliminar producto"
+                          style={{ background: 'transparent', color: '#d1d5db', border: 'none', width: 28, height: 28, borderRadius: 6, fontWeight: 900, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fee2e2'; (e.currentTarget as HTMLButtonElement).style.color = '#dc2626' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#d1d5db' }}>
+                          ×
+                        </button>
+                      </div>
                     </div>
                   ))}
+                </div>
+
+                {/* Footer: resumen total */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: `${NAVY}06`, borderTop: '1px solid #e5e7eb' }}>
+                  <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>
+                    {productos.reduce((s, p) => s + (Number(p.stock) || 0), 0)} unidades en total
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>Valor total estimado:</span>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: NAVY }}>
+                      ${productos.reduce((s, p) => s + Number(p.precio) * (Number(p.stock) || 1), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

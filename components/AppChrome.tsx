@@ -3,22 +3,20 @@
 import { usePathname } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
+import GlobalSearch from '@/components/GlobalSearch'
 import { useAuth, canAccess } from '@/lib/auth-context'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
 
-// Páginas sin chrome: storefront y login
 const PUBLIC_PATHS = ['/', '/login', '/proveedores']
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, loading } = useAuth()
 
-  // Storefront y login renderizan sin chrome
   if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>
 
-  // Spinner de carga mientras se verifica la sesión
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f8' }}>
@@ -31,12 +29,12 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     )
   }
 
-  // Sin sesión — renderiza sin restricciones (middleware desactivado temporalmente)
   if (!user) {
     return (
       <>
         <Sidebar />
         <Topbar />
+        <GlobalSearch />
         <main style={{ marginLeft: 240, marginTop: 56, padding: '32px', minHeight: 'calc(100vh - 56px)', background: '#f9fafb' }}>
           {children}
         </main>
@@ -44,13 +42,13 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     )
   }
 
-  // Verificar permiso de rol para esta ruta
   const hasAccess = canAccess(user.role, pathname)
 
   return (
     <>
       <Sidebar />
       <Topbar />
+      <GlobalSearch />
       <main style={{ marginLeft: 240, marginTop: 56, padding: '32px', minHeight: 'calc(100vh - 56px)', background: '#f9fafb' }}>
         {hasAccess ? children : <AccessDenied role={user.role} />}
       </main>

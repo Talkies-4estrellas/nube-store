@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CSSProperties } from 'react'
+import { CSSProperties, useEffect, useState } from 'react'
 import Icon from '@/components/Icon'
 import { useAuth, ROLE_ROUTES, type Role } from '@/lib/auth-context'
+import { supabase } from '@/lib/supabase'
 
 type NavItem = { href: string; label: string; icon: string; badge?: string }
 type NavSection = { label: string; items: NavItem[] }
@@ -73,8 +74,16 @@ function NavLink({ href, label, icon, badge, active }: NavItem & { active: boole
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState(0)
 
-  // Sin usuario: mostrar todo (auth desactivada temporalmente)
+  useEffect(() => {
+    supabase
+      .from('solicitudes_productos')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'pendiente')
+      .then(({ count }) => setSolicitudesPendientes(count ?? 0))
+  }, [])
+
   const allowed = user ? new Set(ROLE_ROUTES[user.role]) : null
   const visibleSections = ALL_SECTIONS
     .map(section => ({ ...section, items: section.items.filter(i => !allowed || allowed.has(i.href)) }))
@@ -100,8 +109,13 @@ export default function Sidebar() {
           </div>
         ))}
         {showConfig && (
-          <div style={{ marginTop: 4 }}>
+          <div style={{ marginTop: 4, position: 'relative' }}>
             <NavLink href="/configuracion" label="Configuración" icon="settings" active={pathname === '/configuracion'} />
+            {solicitudesPendientes > 0 && (
+              <span style={{ position: 'absolute', top: 8, right: 10, background: PINK, color: '#fff', fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', pointerEvents: 'none' }}>
+                {solicitudesPendientes > 99 ? '99+' : solicitudesPendientes}
+              </span>
+            )}
           </div>
         )}
       </nav>

@@ -6,38 +6,106 @@ import { supabase } from '@/lib/supabase'
 import Icon from '@/components/Icon'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
+type VentaGrafica = { total: number; estado: string; created_at: string }
 type ProductoBajo = { nombre: string; stock: number }
 type Toast = { id: number; message: string; icon: string; color: string }
 
-const statusColor: Record<string, string> = { Pagado: '#d1fae5', Enviado: '#dbeafe', Pendiente: '#fef3c7', Cancelado: '#fee2e2' }
-const statusText:  Record<string, string> = { Pagado: '#065f46', Enviado: '#1e40af', Pendiente: '#92400e', Cancelado: '#991b1b' }
+const statusColor: Record<string, string> = { Pagado: '#d1fae5', Enviado: '#dbeafe', Pendiente: '#fef3c7', Cancelado: '#fee2e2', 'En proceso': '#ede9fe' }
+const statusText:  Record<string, string> = { Pagado: '#065f46', Enviado: '#1e40af', Pendiente: '#92400e', Cancelado: '#991b1b', 'En proceso': '#6d28d9' }
 
 type Periodo = 'hoy' | 'semana' | 'mes'
 const periodoLabel: Record<Periodo, string> = { hoy: 'Hoy', semana: 'Esta semana', mes: 'Este mes' }
+
+const NAVY = '#252855'
+const PINK = '#e7226d'
+const BLUE = '#0049ff'
 
 function getPeriodoStart(periodo: Periodo): string {
   const now = new Date()
   if (periodo === 'hoy') {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
   } else if (periodo === 'semana') {
-    const d = new Date(now)
-    d.setDate(d.getDate() - d.getDay())
-    d.setHours(0, 0, 0, 0)
+    const d = new Date(now); d.setDate(d.getDate() - d.getDay()); d.setHours(0, 0, 0, 0)
     return d.toISOString()
   } else {
     return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   }
 }
 
+function buildChartData(ventas: VentaGrafica[], periodo: Periodo): { label: string; total: number }[] {
+  const pagados = ventas.filter(v => v.estado === 'Pagado')
+  if (periodo === 'hoy') {
+    const slots = ['0-4h', '4-8h', '8-12h', '12-16h', '16-20h', '20-24h']
+    const totals = [0, 0, 0, 0, 0, 0]
+    pagados.forEach(v => {
+      const h = new Date(v.created_at).getHours()
+      totals[Math.floor(h / 4)] += Number(v.total)
+    })
+    return slots.map((label, i) => ({ label, total: totals[i] }))
+  } else if (periodo === 'semana') {
+    const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    const totals: number[] = [0, 0, 0, 0, 0, 0, 0]
+    pagados.forEach(v => { totals[new Date(v.created_at).getDay()] += Number(v.total) })
+    return days.map((label, i) => ({ label, total: totals[i] }))
+  } else {
+    const byWeek: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    pagados.forEach(v => {
+      const d = new Date(v.created_at).getDate()
+      const w = Math.ceil(d / 7)
+      byWeek[w] = (byWeek[w] || 0) + Number(v.total)
+    })
+    return Object.entries(byWeek).map(([w, total]) => ({ label: `Sem ${w}`, total }))
+  }
+}
+
+function GraficaBarras({ data }: { data: { label: string; total: number }[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const maxVal = Math.max(...data.map(d => d.total), 1)
+  const W = 520, H = 140, pad = 32, barW = Math.floor((W - pad * 2) / data.length) - 6
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H + 28}`} style={{ overflow: 'visible' }}>
+      {/* Líneas de guía */}
+      {[0.25, 0.5, 0.75, 1].map(f => (
+        <line key={f} x1={pad} y1={H - H * f} x2={W - pad} y2={H - H * f}
+          stroke="#f3f4f6" strokeWidth="1" />
+      ))}
+      {data.map((d, i) => {
+        const x = pad + i * ((W - pad * 2) / data.length) + 3
+        const barH = maxVal > 0 ? Math.max((d.total / maxVal) * H, d.total > 0 ? 4 : 0) : 0
+        const isHover = hover === i
+        return (
+          <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: 'pointer' }}>
+            <rect x={x} y={H - barH} width={barW} height={barH}
+              rx={4} fill={isHover ? PINK : BLUE}
+              style={{ transition: 'fill 0.15s' }} />
+            <text x={x + barW / 2} y={H + 16} textAnchor="middle"
+              fill="#9ca3af" fontSize={10} fontFamily="inherit">{d.label}</text>
+            {isHover && d.total > 0 && (
+              <g>
+                <rect x={x + barW / 2 - 36} y={H - barH - 28} width={72} height={22} rx={6} fill={NAVY} />
+                <text x={x + barW / 2} y={H - barH - 13} textAnchor="middle"
+                  fill="#fff" fontSize={11} fontWeight="700" fontFamily="inherit">
+                  ${d.total.toLocaleString('es-MX')}
+                </text>
+              </g>
+            )}
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 export default function DashboardPage() {
-  const [ventas, setVentas] = useState<Venta[]>([])
-  const [ventasPeriodo, setVentasPeriodo] = useState<{ total: number; estado: string }[]>([])
-  const [stockBajo, setStockBajo] = useState<ProductoBajo[]>([])
+  const [ventas, setVentas]             = useState<Venta[]>([])
+  const [ventasPeriodo, setVentasPeriodo] = useState<VentaGrafica[]>([])
+  const [stockBajo, setStockBajo]       = useState<ProductoBajo[]>([])
   const [totalClientes, setTotalClientes] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [periodo, setPeriodo] = useState<Periodo>('hoy')
+  const [loading, setLoading]           = useState(true)
+  const [periodo, setPeriodo]           = useState<Periodo>('semana')
   const [loadingPeriodo, setLoadingPeriodo] = useState(false)
-  const [toasts, setToasts] = useState<Toast[]>([])
+  const [toasts, setToasts]             = useState<Toast[]>([])
   const toastId = useRef(0)
 
   function addToast(message: string, icon: string, color: string) {
@@ -53,11 +121,8 @@ export default function DashboardPage() {
         const newStock = payload.new.stock as number
         const oldStock = payload.old?.stock as number
         const nombre = payload.new.nombre as string
-        if (newStock === 0 && oldStock > 0) {
-          addToast(`Sin stock: ${nombre}`, 'warning', '#dc2626')
-        } else if (newStock <= 3 && (oldStock === undefined || oldStock > 3)) {
-          addToast(`Stock bajo: ${nombre} (${newStock} restantes)`, 'warning', '#d97706')
-        }
+        if (newStock === 0 && oldStock > 0) addToast(`Sin stock: ${nombre}`, 'warning', '#dc2626')
+        else if (newStock <= 3 && (oldStock === undefined || oldStock > 3)) addToast(`Stock bajo: ${nombre} (${newStock} restantes)`, 'warning', '#d97706')
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -83,7 +148,7 @@ export default function DashboardPage() {
       setLoadingPeriodo(true)
       const { data } = await supabase
         .from('ventas')
-        .select('total, estado')
+        .select('total, estado, created_at')
         .gte('created_at', getPeriodoStart(periodo))
       setVentasPeriodo(data ?? [])
       setLoadingPeriodo(false)
@@ -92,12 +157,14 @@ export default function DashboardPage() {
   }, [periodo])
 
   const totalPeriodo = ventasPeriodo.filter(v => v.estado === 'Pagado').reduce((s, v) => s + Number(v.total), 0)
-  const pendientes = ventas.filter(v => v.estado === 'Pendiente').length
+  const pendientes   = ventas.filter(v => v.estado === 'Pendiente').length
+  const chartData    = buildChartData(ventasPeriodo, periodo)
+  const hayDatosGrafica = chartData.some(d => d.total > 0)
 
   const metrics = [
-    { label: `Ventas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString()}`, icon: 'dollar', href: '/ventas', color: '#059669' },
+    { label: `Ventas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString('es-MX')}`, icon: 'dollar', href: '/ventas', color: '#059669' },
     { label: 'Pedidos pendientes', value: pendientes, icon: 'clipboard', href: '/ventas', color: '#d97706' },
-    { label: 'Clientes registrados', value: totalClientes, icon: 'users', href: '/clientes', color: '#0049ff' },
+    { label: 'Clientes registrados', value: totalClientes, icon: 'users', href: '/clientes', color: BLUE },
     { label: 'Productos sin stock', value: stockBajo.filter(p => p.stock === 0).length, icon: 'warning', href: '/productos', color: '#dc2626' },
   ]
 
@@ -105,31 +172,61 @@ export default function DashboardPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Dashboard</h1>
-        <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', padding: 4, borderRadius: 10 }}>
-          {(['hoy', 'semana', 'mes'] as Periodo[]).map(p => (
-            <button key={p} onClick={() => setPeriodo(p)}
-              style={{ padding: '6px 14px', borderRadius: 7, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: periodo === p ? '#fff' : 'transparent', color: periodo === p ? '#111' : '#6b7280', boxShadow: periodo === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s' }}>
-              {periodoLabel[p]}
-            </button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>
+            <kbd style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 4, padding: '2px 6px', fontSize: 11 }}>Ctrl+K</kbd> Búsqueda global
+          </span>
+          <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', padding: 4, borderRadius: 10 }}>
+            {(['hoy', 'semana', 'mes'] as Periodo[]).map(p => (
+              <button key={p} onClick={() => setPeriodo(p)}
+                style={{ padding: '6px 14px', borderRadius: 7, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: periodo === p ? '#fff' : 'transparent', color: periodo === p ? '#111' : '#6b7280', boxShadow: periodo === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s' }}>
+                {periodoLabel[p]}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Métricas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {metrics.map(m => (
           <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer' }}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.15s' }}>
               <div style={{ width: 44, height: 44, borderRadius: 10, background: m.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
                 <Icon name={m.icon} size={22} color={m.color} />
               </div>
-              <p style={{ fontSize: 28, fontWeight: 700, color: '#111', marginBottom: 4 }}>
-                {loading ? '—' : m.value}
-              </p>
+              <p style={{ fontSize: 28, fontWeight: 700, color: '#111', marginBottom: 4 }}>{loading ? '—' : m.value}</p>
               <p style={{ fontSize: 13, color: '#6b7280' }}>{m.label}</p>
             </div>
           </Link>
         ))}
+      </div>
+
+      {/* Gráfica de ventas */}
+      <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111', margin: 0 }}>Ventas pagadas</h2>
+            <p style={{ fontSize: 12, color: '#9ca3af', margin: '4px 0 0' }}>{periodoLabel[periodo]}</p>
+          </div>
+          {!loadingPeriodo && (
+            <p style={{ fontSize: 22, fontWeight: 800, color: BLUE }}>
+              ${totalPeriodo.toLocaleString('es-MX')}
+            </p>
+          )}
+        </div>
+        {loadingPeriodo ? (
+          <div style={{ height: 168, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <p style={{ color: '#9ca3af', fontSize: 14 }}>Cargando datos...</p>
+          </div>
+        ) : !hayDatosGrafica ? (
+          <div style={{ height: 168, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span style={{ fontSize: 32 }}>📊</span>
+            <p style={{ color: '#9ca3af', fontSize: 14 }}>Sin ventas pagadas en este período</p>
+          </div>
+        ) : (
+          <GraficaBarras data={chartData} />
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
@@ -137,9 +234,8 @@ export default function DashboardPage() {
         <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <h2 style={{ fontSize: 16, fontWeight: 700 }}>Pedidos recientes</h2>
-            <Link href="/ventas" style={{ fontSize: 13, color: '#0049ff', textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
+            <Link href="/ventas" style={{ fontSize: 13, color: BLUE, textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
           </div>
-
           {loading ? (
             <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
           ) : ventas.length === 0 ? (
@@ -159,9 +255,9 @@ export default function DashboardPage() {
               <tbody>
                 {ventas.map(v => (
                   <tr key={v.id} style={{ borderBottom: '1px solid #f9fafb' }}>
-                    <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 700, color: '#0049ff' }}>#{v.numero}</td>
+                    <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 700, color: BLUE }}>#{v.numero}</td>
                     <td style={{ padding: '12px 0', fontSize: 13, color: '#374151' }}>{v.clientes?.nombre ?? '—'}</td>
-                    <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 600, color: '#111' }}>${Number(v.total).toLocaleString()}</td>
+                    <td style={{ padding: '12px 0', fontSize: 13, fontWeight: 600, color: '#111' }}>${Number(v.total).toLocaleString('es-MX')}</td>
                     <td style={{ padding: '12px 0' }}>
                       <span style={{ background: statusColor[v.estado], color: statusText[v.estado], fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
                         {v.estado}
@@ -180,9 +276,8 @@ export default function DashboardPage() {
             <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Icon name="warning" size={16} color="#d97706" /> Stock bajo
             </h2>
-            <Link href="/productos" style={{ fontSize: 13, color: '#0049ff', textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
+            <Link href="/productos" style={{ fontSize: 13, color: BLUE, textDecoration: 'none', fontWeight: 600 }}>Ver todos →</Link>
           </div>
-
           {loading ? (
             <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
           ) : stockBajo.length === 0 ? (
@@ -196,30 +291,28 @@ export default function DashboardPage() {
                 <div key={p.nombre} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
                   <span style={{ fontSize: 13, color: '#374151', flex: 1 }}>{p.nombre}</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: p.stock === 0 ? '#dc2626' : '#d97706', background: p.stock === 0 ? '#fee2e2' : '#fef3c7', padding: '2px 10px', borderRadius: 20 }}>
-                    {p.stock === 0 ? 'Sin stock' : `${p.stock} left`}
+                    {p.stock === 0 ? 'Sin stock' : `${p.stock} unid.`}
                   </span>
                 </div>
               ))}
-              {stockBajo.length > 0 && (
-                <div style={{ marginTop: 16, padding: 14, background: '#fffbeb', borderRadius: 10, border: '1px solid #fde68a' }}>
-                  <p style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>
-                    {stockBajo.length} producto{stockBajo.length > 1 ? 's' : ''} necesitan atención.
-                  </p>
-                </div>
-              )}
+              <div style={{ marginTop: 16, padding: 14, background: '#fffbeb', borderRadius: 10, border: '1px solid #fde68a' }}>
+                <p style={{ fontSize: 13, color: '#92400e', fontWeight: 600 }}>
+                  {stockBajo.length} producto{stockBajo.length > 1 ? 's' : ''} necesitan atención.
+                </p>
+              </div>
             </>
           )}
         </div>
       </div>
 
-      {/* Toasts de stock */}
+      {/* Toasts */}
       {toasts.length > 0 && (
         <div style={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 999 }}>
           {toasts.map(t => (
             <div key={t.id} style={{ background: '#fff', border: `1px solid ${t.color}30`, borderLeft: `4px solid ${t.color}`, borderRadius: 10, padding: '12px 16px', maxWidth: 320, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <Icon name={t.icon} size={16} color={t.color} />
               <span style={{ fontSize: 13, color: '#111', fontWeight: 600, flex: 1 }}>{t.message}</span>
-              <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16, lineHeight: 1 }}>×</button>
+              <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 16 }}>×</button>
             </div>
           ))}
         </div>

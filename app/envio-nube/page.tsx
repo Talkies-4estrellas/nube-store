@@ -6,6 +6,15 @@ import Icon from '@/components/Icon'
 
 const PAQUETERIAS = ['DHL', 'FedEx', 'Estafeta', 'Redpack', 'J&T Express', 'Paquetexpress']
 
+const TRACKING_URL: Record<string, (guia: string) => string> = {
+  'DHL':          g => `https://www.dhl.com/mx-es/home/rastreo.html?tracking-id=${g}`,
+  'FedEx':        g => `https://www.fedex.com/apps/fedextrack/?trknbr=${g}`,
+  'Estafeta':     g => `https://rastreo.estafeta.com/Index.aspx?internationalAirGuide=${g}`,
+  'Redpack':      g => `https://www.redpack.com.mx/es/rastreo/?guias=${g}`,
+  'J&T Express':  g => `https://www.jtexpress.mx/trajectoryQuery?expressList=${g}`,
+  'Paquetexpress':g => `https://www.paquetexpress.com.mx/rastreo/?guide=${g}`,
+}
+
 const estadoStyle: Record<string, { bg: string; text: string }> = {
   'Pendiente':    { bg: '#fef3c7', text: '#92400e' },
   'En tránsito': { bg: '#dbeafe', text: '#1e40af' },
@@ -206,7 +215,16 @@ export default function EnvioNubePage() {
                     <td style={{ padding: '14px 20px', fontSize: 13, fontWeight: 700, color: '#0049ff' }}>#{e.ventas?.numero}</td>
                     <td style={{ padding: '14px 20px', fontSize: 13, color: '#111', fontWeight: 600 }}>{e.ventas?.clientes?.nombre ?? '—'}</td>
                     <td style={{ padding: '14px 20px', fontSize: 13, color: '#374151' }}>{e.paqueteria}</td>
-                    <td style={{ padding: '14px 20px', fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>{e.numero_guia ?? '—'}</td>
+                    <td style={{ padding: '14px 20px' }}>
+                      {e.numero_guia
+                        ? TRACKING_URL[e.paqueteria]
+                          ? <a href={TRACKING_URL[e.paqueteria](e.numero_guia)} target="_blank" rel="noopener noreferrer"
+                              style={{ fontSize: 12, color: '#0049ff', fontFamily: 'monospace', fontWeight: 600, textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {e.numero_guia} ↗
+                            </a>
+                          : <span style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>{e.numero_guia}</span>
+                        : <span style={{ color: '#9ca3af' }}>—</span>}
+                    </td>
                     <td style={{ padding: '14px 20px', fontSize: 13, color: '#374151' }}>{e.costo_envio ? `$${Number(e.costo_envio).toLocaleString()}` : '—'}</td>
                     <td style={{ padding: '14px 20px' }}>
                       <span style={{ background: estadoStyle[e.estado_envio]?.bg, color: estadoStyle[e.estado_envio]?.text, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>

@@ -18,6 +18,7 @@ type Cliente = {
   created_at: string
   total_pedidos?: number
   total_gastado?: number
+  ultima_compra?: string | null
 }
 
 const tagStyle: Record<string, { bg: string; text: string }> = {
@@ -39,6 +40,8 @@ export default function ClientesPage() {
   const [confirmDelete, setConfirmDelete] = useState<Cliente | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [page, setPage] = useState(1)
+  const [sortBy, setSortBy] = useState<'nombre' | 'total_gastado' | 'total_pedidos' | 'ultima_compra'>('nombre')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [historial, setHistorial] = useState<{ id: string; numero: number; total: number; estado: string; created_at: string }[]>([])
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [showHistorial, setShowHistorial] = useState(false)
@@ -67,12 +70,14 @@ export default function ClientesPage() {
         const enriched = await Promise.all(data.map(async (c) => {
           const { data: ventas } = await supabase
             .from('ventas')
-            .select('total')
+            .select('total, created_at')
             .eq('cliente_id', c.id)
             .eq('estado', 'Pagado')
+            .order('created_at', { ascending: false })
           const total_pedidos = ventas?.length ?? 0
           const total_gastado = ventas?.reduce((s, v) => s + Number(v.total), 0) ?? 0
-          return { ...c, total_pedidos, total_gastado }
+          const ultima_compra = ventas?.[0]?.created_at ?? null
+          return { ...c, total_pedidos, total_gastado, ultima_compra }
         }))
         setClientes(enriched)
       }
@@ -90,13 +95,26 @@ export default function ClientesPage() {
     setConfirmDelete(null)
   }
 
-  const filtered = clientes.filter(c => {
-    const matchSearch = c.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()) ||
-      (c.ciudad ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchTag = tagFilter === 'Todos' || c.tag === tagFilter
-    return matchSearch && matchTag
-  })
+  const filtered = clientes
+    .filter(c => {
+      const matchSearch = c.nombre.toLowerCase().includes(search.toLowerCase()) ||
+        c.email.toLowerCase().includes(search.toLowerCase()) ||
+        (c.ciudad ?? '').toLowerCase().includes(search.toLowerCase())
+      const matchTag = tagFilter === 'Todos' || c.tag === tagFilter
+      return matchSearch && matchTag
+    })
+    .sort((a, b) => {
+      const mul = sortDir === 'asc' ? 1 : -1
+      if (sortBy === 'nombre')        return mul * a.nombre.localeCompare(b.nombre)
+      if (sortBy === 'total_gastado') return mul * ((a.total_gastado ?? 0) - (b.total_gastado ?? 0))
+      if (sortBy === 'total_pedidos') return mul * ((a.total_pedidos ?? 0) - (b.total_pedidos ?? 0))
+      if (sortBy === 'ultima_compra') {
+        const da = a.ultima_compra ? new Date(a.ultima_compra).getTime() : 0
+        const db = b.ultima_compra ? new Date(b.ultima_compra).getTime() : 0
+        return mul * (da - db)
+      }
+      return 0
+    })
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -134,6 +152,17 @@ export default function ClientesPage() {
               placeholder="Buscar por nombre, email o ciudad..."
               style={{ flex: 1, minWidth: 200, padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none' }}
             />
+            <select value={`${sortBy}-${sortDir}`} onChange={e => {
+              const [col, dir] = e.target.value.split('-')
+              setSortBy(col as typeof sortBy); setSortDir(dir as 'asc' | 'desc'); setPage(1)
+            }} style={{ padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer' }}>
+              <option value="nombre-asc">Nombre A→Z</option>
+              <option value="nombre-desc">Nombre Z→A</option>
+              <option value="total_gastado-desc">Mayor gasto</option>
+              <option value="total_gastado-asc">Menor gasto</option>
+              <option value="total_pedidos-desc">Más pedidos</option>
+              <option value="ultima_compra-desc">Más recientes</option>
+            </select>
             <div style={{ display: 'flex', gap: 6 }}>
               {tags.map(t => (
                 <button key={t} onClick={() => setTagFilter(t)} style={{
@@ -154,7 +183,7 @@ export default function ClientesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  {['Cliente', 'Ciudad', 'Pedidos', 'Total gastado', 'Tipo', ''].map(h => (
+                  {['Cliente', 'Ciudad', 'Pedidos', 'Total gastado', 'Última compra', 'Tipo', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                   ))}
                 </tr>
@@ -177,6 +206,9 @@ export default function ClientesPage() {
                     <td style={{ padding: '13px 0', fontSize: 13, color: '#6b7280' }}>{c.ciudad ?? '—'}</td>
                     <td style={{ padding: '13px 0', fontSize: 13, fontWeight: 600 }}>{c.total_pedidos ?? 0}</td>
                     <td style={{ padding: '13px 0', fontSize: 14, fontWeight: 700, color: '#111' }}>${(c.total_gastado ?? 0).toLocaleString()}</td>
+                    <td style={{ padding: '13px 0', fontSize: 12, color: '#6b7280' }}>
+                      {c.ultima_compra ? new Date(c.ultima_compra).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    </td>
                     <td style={{ padding: '13px 0' }}>
                       <span style={{ background: tagStyle[c.tag]?.bg, color: tagStyle[c.tag]?.text, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
                         {c.tag}
@@ -240,6 +272,7 @@ export default function ClientesPage() {
               { label: 'Ciudad', value: selected.ciudad ?? '—' },
               { label: 'Pedidos pagados', value: String(selected.total_pedidos ?? 0) },
               { label: 'Total gastado', value: `$${(selected.total_gastado ?? 0).toLocaleString()}` },
+              { label: 'Última compra', value: selected.ultima_compra ? new Date(selected.ultima_compra).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
             ].map(row => (
               <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f3f4f6' }}>
                 <span style={{ fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>{row.label}</span>

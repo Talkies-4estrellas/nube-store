@@ -45,6 +45,8 @@ export default function ProductosPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Product | null>(null)
   const [page, setPage] = useState(1)
+  const [sortBy, setSortBy] = useState<'nombre' | 'precio' | 'stock'>('nombre')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   async function fetchCategorias() {
     const { data } = await supabase.from('categorias').select('nombre').order('nombre')
@@ -140,15 +142,33 @@ export default function ProductosPage() {
 
   const categoriasConTodas = ['Todas', ...categorias]
 
-  const filtered = products.filter(p => {
-    const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      p.sku.toLowerCase().includes(search.toLowerCase())
-    const matchCat = categoria === 'Todas' || p.categoria === categoria
-    return matchSearch && matchCat
-  })
+  function toggleSort(col: typeof sortBy) {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(col); setSortDir('asc') }
+    setPage(1)
+  }
+
+  const filtered = products
+    .filter(p => {
+      const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase()) ||
+        p.sku.toLowerCase().includes(search.toLowerCase())
+      const matchCat = categoria === 'Todas' || p.categoria === categoria
+      return matchSearch && matchCat
+    })
+    .sort((a, b) => {
+      const mul = sortDir === 'asc' ? 1 : -1
+      if (sortBy === 'nombre') return mul * a.nombre.localeCompare(b.nombre)
+      if (sortBy === 'precio') return mul * (a.precio - b.precio)
+      return mul * (a.stock - b.stock)
+    })
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  function SortIcon({ col }: { col: typeof sortBy }) {
+    if (sortBy !== col) return <span style={{ color: '#d1d5db', fontSize: 10, marginLeft: 4 }}>↕</span>
+    return <span style={{ color: '#0049ff', fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+  }
 
   return (
     <div>
@@ -189,6 +209,19 @@ export default function ProductosPage() {
             style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 160 }}>
             {categoriasConTodas.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          {view === 'grid' && (
+            <select value={`${sortBy}-${sortDir}`} onChange={e => {
+              const [col, dir] = e.target.value.split('-')
+              setSortBy(col as typeof sortBy); setSortDir(dir as 'asc' | 'desc'); setPage(1)
+            }} style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer' }}>
+              <option value="nombre-asc">Nombre A→Z</option>
+              <option value="nombre-desc">Nombre Z→A</option>
+              <option value="precio-asc">Menor precio</option>
+              <option value="precio-desc">Mayor precio</option>
+              <option value="stock-asc">Menos stock</option>
+              <option value="stock-desc">Más stock</option>
+            </select>
+          )}
           <div style={{ display: 'flex', gap: 4 }}>
             {(['grid', 'list'] as const).map(v => (
               <button key={v} onClick={() => setView(v)} style={{
@@ -253,7 +286,16 @@ export default function ProductosPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                {['SKU', 'Producto', 'Categoría', 'Precio', 'Stock', 'Estado', 'Acciones'].map(h => (
+                {['SKU', 'Producto', 'Categoría'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                ))}
+                {(['precio', 'stock'] as const).map(col => (
+                  <th key={col} onClick={() => toggleSort(col)}
+                    style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: sortBy === col ? '#0049ff' : '#9ca3af', padding: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', userSelect: 'none' }}>
+                    {col === 'precio' ? 'Precio' : 'Stock'}<SortIcon col={col} />
+                  </th>
+                ))}
+                {['Estado', 'Acciones'].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>

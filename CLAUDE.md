@@ -28,9 +28,9 @@ app/
   productos/page.tsx        ← CRUD completo + upload imagen WebP a Supabase Storage
   clientes/page.tsx         ← Lista clientes + panel detalle + historial de pedidos
   envio-nube/page.tsx       ← Gestión real de envíos: crear, actualizar estado
-  tienda-en-linea/page.tsx  ← Vista storefront embebida
-  punto-de-venta/page.tsx   ← Punto de venta (informativo)
-  configuracion/page.tsx    ← Ajustes negocio + gestión de usuarios (admin only)
+  tienda-en-linea/page.tsx  ← Editor de configuración storefront (nombre, hero, colores, contacto) → guarda en config_storefront
+  punto-de-venta/page.tsx   ← POS completo: grid productos, carrito, cobro (efectivo/tarjeta/transferencia), find-or-create cliente
+  configuracion/page.tsx    ← Ajustes negocio + gestión de usuarios (admin only) + revisión de solicitudes de proveedores
 
 components/
   Sidebar.tsx         ← Filtrada por ROLE_ROUTES[user.role]; badge de rol; logout
@@ -40,6 +40,7 @@ components/
   ClienteModal.tsx    ← Modal agregar/editar cliente
   VentaModal.tsx      ← Modal nueva venta (fix: serverError en lugar de alert())
   Icon.tsx            ← SVG inline propio (sin dependencia externa para admin)
+  GlobalSearch.tsx    ← Ctrl+K global search modal; busca en productos, ventas y clientes; navegación con teclado
   ConfirmDialog.tsx   ← Confirmación antes de eliminar
   Storefront.tsx      ← Tienda pública completa (productos reales + carrito localStorage)
 
@@ -109,6 +110,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | `venta_items` | venta_id, producto_id, nombre, precio, cantidad, subtotal (generado) |
 | `envios` | venta_id, paqueteria, numero_guia, estado_envio, costo_envio |
 | `user_roles` | user_id (FK auth.users), role, nombre — tabla de roles del panel |
+| `solicitudes_productos` | solicitudes de proveedores: datos proveedor + producto + imagen_url + estado (pendiente/aprobado/rechazado) |
+| `config_storefront` | fila única (id=1): nombre_tienda, hero_titulo, hero_subtitulo, hero_cta, color_acento, whatsapp, email_contacto, instagram |
 
 ### Función helper de rol
 ```sql
@@ -129,6 +132,8 @@ Usada en todas las políticas RLS para verificar el rol sin romper el contexto d
 - Bucket: `productos` (público, SELECT sin restricción)
 - Path de imágenes: `{timestamp}-{SKU}.{ext}` (WebP via Canvas API)
 - INSERT/DELETE requieren `auth.role() = 'authenticated'`
+- Subcarpeta `solicitudes/` permite INSERT anónimo (política separada para proveedores)
+- Imágenes de proveedores: path `solicitudes/{timestamp}-{sku}.webp`
 
 ---
 
@@ -146,6 +151,11 @@ Las políticas antiguas permisivas (`anon total`) fueron reemplazadas por polít
 | `user_roles` | propio user_id | — | admin gestiona todos |
 
 ---
+
+## Convenciones de trabajo
+- **NO hacer git commit** — GitKraken gestiona todos los commits
+- **Middleware redirect COMENTADO** — temporalmente deshabilitado hasta configurar usuarios en Supabase Auth
+- **`productos_con_estado` VIEW** — usada en POS y Productos; incluye estado calculado
 
 ## Decisiones técnicas importantes
 - **Sin styled-jsx / sin Tailwind:** inline styles en TODOS los componentes
@@ -184,13 +194,28 @@ Las políticas antiguas permisivas (`anon total`) fueron reemplazadas por polít
 - [x] Iconos SVG propios en `Icon.tsx`; `ConfirmDialog.tsx` antes de eliminar
 - [x] VentaModal: errors inline (sin alert())
 - [x] Schema SQL completo en `database/schema.sql` + `database/auth.sql`
+- [x] Dashboard: gráfica SVG barras con selector de período (hoy/semana/mes), agrupación por slots 4h/días/semanas
+- [x] Productos: sort por nombre/precio/stock en grid y tabla; columnas clickables
+- [x] Ventas: estado "En proceso" agregado; stepper visual del pipeline Pendiente→En proceso→Pagado→Enviado
+- [x] Punto de Venta (POS): grid productos con búsqueda y filtro categoría, carrito, 3 métodos de pago, find-or-create cliente, crea venta+items+descuenta stock
+- [x] Envíos: links de rastreo clickables por paquetería (DHL, FedEx, Estafeta, Redpack, J&T, Paquetexpress)
+- [x] Clientes: columna/sort "Última compra" + sort dropdown (nombre, total gastado, total pedidos, última compra)
+- [x] Configuración: sección "Solicitudes proveedor" con filter chips, cards expandibles, aprobar/rechazar
+- [x] Sidebar: badge contador de solicitudes pendientes sobre ícono Configuración
+- [x] Ctrl+K: modal buscador global (GlobalSearch.tsx) integrado en AppChrome
+- [x] Proveedores (/proveedores): drag&drop imagen, múltiples productos, categoría inline, draft localStorage, submit bulk
+- [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] Ejecutar SQL de `config_storefront` en Supabase (ver `database/schema.sql`)
 - [ ] Ejecutar `database/auth.sql` en Supabase SQL Editor (Step 1 del setup auth)
 - [ ] Crear usuario admin en Supabase Authentication y hacer INSERT en user_roles (Steps 2-3)
+- [ ] Ejecutar política anon para `solicitudes/` en Storage (ver schema.sql)
+- [ ] Que el Storefront lea `config_storefront` para usar nombre/colores/textos dinámicos
 - [ ] Deploy a Vercel (producción desactualizada)
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
+- [ ] Notificaciones en tiempo real (badge topbar para ventas nuevas)
 - [ ] Modo oscuro
 
 ---

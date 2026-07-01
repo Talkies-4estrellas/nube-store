@@ -26,20 +26,24 @@ type Venta = {
 }
 
 const statusStyle: Record<string, { bg: string; text: string }> = {
-  Pagado:    { bg: '#d1fae5', text: '#065f46' },
-  Enviado:   { bg: '#dbeafe', text: '#1e40af' },
-  Pendiente: { bg: '#fef3c7', text: '#92400e' },
-  Cancelado: { bg: '#fee2e2', text: '#991b1b' },
+  Pendiente:   { bg: '#fef3c7', text: '#92400e'  },
+  'En proceso':{ bg: '#ede9fe', text: '#6d28d9'  },
+  Pagado:      { bg: '#d1fae5', text: '#065f46'  },
+  Enviado:     { bg: '#dbeafe', text: '#1e40af'  },
+  Cancelado:   { bg: '#fee2e2', text: '#991b1b'  },
 }
 
 const estadosSig: Record<string, string[]> = {
-  Pendiente: ['Pagado', 'Cancelado'],
-  Pagado:    ['Enviado', 'Cancelado'],
-  Enviado:   [],
-  Cancelado: [],
+  Pendiente:    ['En proceso', 'Cancelado'],
+  'En proceso': ['Pagado', 'Cancelado'],
+  Pagado:       ['Enviado', 'Cancelado'],
+  Enviado:      [],
+  Cancelado:    [],
 }
 
-const statuses = ['Todos', 'Pagado', 'Enviado', 'Pendiente', 'Cancelado']
+const PIPELINE = ['Pendiente', 'En proceso', 'Pagado', 'Enviado']
+
+const statuses = ['Todos', 'Pendiente', 'En proceso', 'Pagado', 'Enviado', 'Cancelado']
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -249,6 +253,40 @@ export default function VentasPage() {
               {detalle.estado}
             </span>
           </div>
+
+          {/* Stepper de estado */}
+          {detalle.estado !== 'Cancelado' && (
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f3f4f6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                {PIPELINE.map((step, i) => {
+                  const stepIdx    = PIPELINE.indexOf(step)
+                  const currentIdx = PIPELINE.indexOf(detalle.estado)
+                  const done       = stepIdx < currentIdx
+                  const active     = stepIdx === currentIdx
+                  return (
+                    <div key={step} style={{ display: 'flex', alignItems: 'center', flex: i < PIPELINE.length - 1 ? 1 : 0 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
+                          background: done ? '#059669' : active ? '#252855' : '#f3f4f6',
+                          color: done || active ? '#fff' : '#9ca3af',
+                          border: active ? '2px solid #252855' : '2px solid transparent',
+                        }}>
+                          {done ? '✓' : i + 1}
+                        </div>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: active ? '#252855' : done ? '#059669' : '#9ca3af', whiteSpace: 'nowrap', textAlign: 'center', lineHeight: 1.2 }}>
+                          {step}
+                        </span>
+                      </div>
+                      {i < PIPELINE.length - 1 && (
+                        <div style={{ flex: 1, height: 2, background: done ? '#059669' : '#f3f4f6', margin: '0 4px', marginBottom: 20 }} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div style={{ padding: '14px 20px', borderBottom: '1px solid #f3f4f6' }}>
             <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Cliente</p>

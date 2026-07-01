@@ -407,6 +407,34 @@ create policy "auth elimina imagenes productos" on storage.objects
 
 
 -- ============================================================
+--  TABLA: config_storefront
+-- ============================================================
+create table if not exists config_storefront (
+  id              int primary key default 1,
+  nombre_tienda   text not null default 'Order Express',
+  hero_titulo     text not null default 'Productos de calidad',
+  hero_subtitulo  text not null default 'Los mejores productos al mejor precio.',
+  hero_cta        text not null default 'Ver productos',
+  color_acento    text not null default '#e7226d',
+  whatsapp        text default '',
+  email_contacto  text default '',
+  instagram       text default '',
+  updated_at      timestamptz default now(),
+  constraint single_row check (id = 1)
+);
+
+-- Insertar fila inicial si no existe
+insert into config_storefront (id) values (1) on conflict do nothing;
+
+-- Solo admins autenticados pueden modificar; lectura pública para la storefront
+create policy "publico lee config storefront" on config_storefront
+  for select using (true);
+
+create policy "auth modifica config storefront" on config_storefront
+  for all using (auth.role() = 'authenticated');
+
+
+-- ============================================================
 --  CREAR PRIMER USUARIO ADMIN
 --  1. Ve a Supabase → Authentication → Users → Add user
 --  2. Crea el usuario con email + contraseña
