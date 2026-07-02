@@ -10,6 +10,7 @@ import {
   Grid2x2, SearchX, MessageCircle, LogIn, type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { isValidEmail } from '@/lib/validation'
 
 type CheckoutState = 'form' | 'loading' | 'success' | 'error'
 
@@ -144,9 +145,13 @@ export default function Storefront() {
   // Productos y categorías desde Supabase
   const [dbProducts, setDbProducts] = useState<Product[]>([])
   const [productIdMap, setProductIdMap] = useState<Record<string, string>>({})
+  const [productSkuMap, setProductSkuMap] = useState<Record<string, string>>({})
+  const [productStockMap, setProductStockMap] = useState<Record<string, number>>({})
   const [categorias, setCategorias] = useState<string[]>([])
   const [activeCat, setActiveCat] = useState('Todo')
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const [searchSuggestions, setSearchSuggestions] = useState<Product[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   // Checkout
   const [showCheckout, setShowCheckout] = useState(false)
@@ -191,8 +196,12 @@ export default function Storefront() {
         const typed = prods as unknown as SupabaseProduct[]
         setDbProducts(typed.map(toProduct))
         const idMap: Record<string, string> = {}
-        typed.forEach(p => { idMap[p.nombre] = p.id })
+        const skuMap: Record<string, string> = {}
+        const stockMap: Record<string, number> = {}
+        typed.forEach(p => { idMap[p.nombre] = p.id; skuMap[p.nombre] = p.sku; stockMap[p.nombre] = p.stock })
         setProductIdMap(idMap)
+        setProductSkuMap(skuMap)
+        setProductStockMap(stockMap)
       }
       if (cats) setCategorias(cats.map((c: { nombre: string }) => c.nombre))
       setLoadingProducts(false)
@@ -236,14 +245,24 @@ export default function Storefront() {
   const addToCart = (title: string) => {
     const product = findProduct(title)
     if (!product) return
+    const maxStock = productStockMap[title] ?? 0
     setCart((prev) => {
       const current = prev.find((i) => i.product[0] === title)
-      if (current) return prev.map((i) => (i.product[0] === title ? { ...i, quantity: i.quantity + 1 } : i))
+      if (current) {
+        if (current.quantity >= maxStock) return prev
+        return prev.map((i) => (i.product[0] === title ? { ...i, quantity: i.quantity + 1 } : i))
+      }
+      if (maxStock < 1) return prev
       return [...prev, { product, quantity: 1 }]
     })
   }
 
   const openDetail = (title: string) => {
+    const sku = productSkuMap[title]
+    if (sku) {
+      router.push(`/tienda/${sku.toLowerCase()}`)
+      return
+    }
     if (!findProduct(title)) return
     setDetailTitle(title)
     setGalleryIndex(0)
@@ -268,6 +287,7 @@ export default function Storefront() {
     const nombre = checkoutForm.nombre.trim()
     const email = checkoutForm.email.trim().toLowerCase()
     if (!nombre || !email) { setCheckoutError('Nombre y email son obligatorios'); return }
+    if (!isValidEmail(email)) { setCheckoutError('El email no es válido'); return }
     if (cart.length === 0) { setCheckoutError('El carrito está vacío'); return }
     setCheckoutState('loading')
     setCheckoutError('')
@@ -369,6 +389,7 @@ export default function Storefront() {
     setLoginSuccess('')
     const { nombre, email, password, confirm } = registerForm
     if (!nombre.trim()) { setLoginError('El nombre es obligatorio'); return }
+    if (!isValidEmail(email)) { setLoginError('El email no es válido'); return }
     if (password.length < 6) { setLoginError('La contraseña debe tener al menos 6 caracteres'); return }
     if (password !== confirm) { setLoginError('Las contraseñas no coinciden'); return }
     setLoginLoading(true)
@@ -407,8 +428,23 @@ export default function Storefront() {
 
   const onSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setShowSuggestions(false)
     setSearchQuery(searchValue)
     setView('busqueda')
+  }
+
+  const onSearchChange = (val: string) => {
+    setSearchValue(val)
+    if (val.trim().length > 1) {
+      const q = val.toLowerCase()
+      const sugs = dbProducts.filter(([t, , , , c]) =>
+        t.toLowerCase().includes(q) || c.toLowerCase().includes(q)
+      ).slice(0, 5)
+      setSearchSuggestions(sugs)
+      setShowSuggestions(sugs.length > 0)
+    } else {
+      setShowSuggestions(false)
+    }
   }
 
   const onCardClick = (e: React.MouseEvent, title: string) => {
@@ -584,6 +620,27 @@ export default function Storefront() {
           </div>
         </aside>
         <div className="store-grid">
+          {/* Chips de categoría encima del grid */}
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', paddingBottom: 4 }}>
+            {['Todo', ...categorias].map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCat(cat)}
+                style={{
+                  padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
+                  background: activeCat === cat ? NAVY : '#f3f4f6',
+                  color: activeCat === cat ? '#fff' : '#374151',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {cat}
+                <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 11 }}>
+                  {cat === 'Todo' ? dbProducts.length : dbProducts.filter(p => p[4] === cat).length}
+                </span>
+              </button>
+            ))}
+          </div>
           {loadingProducts ? (
             <article className="empty-state">
               <p>Cargando productos...</p>
@@ -948,11 +1005,50 @@ export default function Storefront() {
             <div className="top-actions" aria-label="Acciones superiores">
               <button className={`period-button${topPeriod === 'nuevo' ? ' active' : ''}`} type="button" onClick={() => goView('novedades')}>Nuevo</button>
               <button className={`period-button${topPeriod === 'ofertas' ? ' active' : ''}`} type="button" onClick={() => goView('ofertas')}>Ofertas</button>
-              <form className="search-box" onSubmit={onSearchSubmit} role="search">
-                <Ic n="search" />
-                <input type="search" placeholder="Buscar productos" aria-label="Buscar productos" value={searchValue} onChange={(e) => setSearchValue(e.target.value)} />
-                <button type="submit" aria-label="Buscar"><Ic n="arrow-right" /></button>
-              </form>
+              <div style={{ position: 'relative' }}>
+                <form className="search-box" onSubmit={onSearchSubmit} role="search">
+                  <Ic n="search" />
+                  <input
+                    type="search"
+                    placeholder="Buscar productos"
+                    aria-label="Buscar productos"
+                    value={searchValue}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                    onFocus={() => searchValue.length > 1 && setShowSuggestions(searchSuggestions.length > 0)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    autoComplete="off"
+                  />
+                  <button type="submit" aria-label="Buscar"><Ic n="arrow-right" /></button>
+                </form>
+                {showSuggestions && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', zIndex: 200, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                    {searchSuggestions.map(([title, , price, image, category]) => (
+                      <button
+                        key={title}
+                        type="button"
+                        onMouseDown={() => { openDetail(title); setShowSuggestions(false); setSearchValue('') }}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: '1px solid #f3f4f6' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                      >
+                        <img src={image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>{category}</p>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#0049ff', flexShrink: 0 }}>{price}</span>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onMouseDown={onSearchSubmit as unknown as React.MouseEventHandler}
+                      style={{ width: '100%', padding: '10px 14px', background: '#f9fafb', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6b7280', fontWeight: 600, textAlign: 'center' }}
+                    >
+                      Ver todos los resultados para "{searchValue}" →
+                    </button>
+                  </div>
+                )}
+              </div>
               <button className="icon-button dark" type="button" aria-label="Carrito" onClick={openCart}><Ic n="shopping-cart" /><span>{cartCount}</span></button>
 
               {/* Botón: Portal de proveedores */}

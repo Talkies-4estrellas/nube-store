@@ -58,6 +58,29 @@ export default function ProveedoresPage() {
   const [prod, setProd] = useState<ProductoLocal>(emptyProducto())
   const [prodError, setProdError] = useState('')
 
+  // Consulta historial por email
+  const [historialEmail, setHistorialEmail] = useState('')
+  const [historialItems, setHistorialItems] = useState<{ id: string; producto_nombre: string; producto_sku: string; estado: string; created_at: string }[] | null>(null)
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
+  const [historialError, setHistorialError] = useState('')
+
+  async function consultarHistorial() {
+    const email = historialEmail.trim().toLowerCase()
+    if (!email) return
+    setLoadingHistorial(true)
+    setHistorialError('')
+    setHistorialItems(null)
+    const { data, error } = await supabase
+      .from('solicitudes_productos')
+      .select('id, producto_nombre, producto_sku, estado, created_at')
+      .eq('proveedor_email', email)
+      .order('created_at', { ascending: false })
+    setLoadingHistorial(false)
+    if (error) { setHistorialError('Error al consultar. Intenta de nuevo.'); return }
+    if (!data || data.length === 0) { setHistorialError('No encontramos solicitudes con ese email.'); return }
+    setHistorialItems(data)
+  }
+
   const [proveedor, setProveedor] = useState({
     nombre: '', empresa: '', email: '', telefono: '',
   })
@@ -462,113 +485,159 @@ export default function ProveedoresPage() {
             )}
 
             {/* ---- Sección: Agregar producto ---- */}
-            <div style={{ background: '#fff', borderRadius: 20, padding: '28px 32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+            <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', marginBottom: 20, overflow: 'hidden' }}>
+
+              {/* Cabecera de sección */}
+              <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 32, height: 32, background: `${PINK}15`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>📦</div>
                 <div>
                   <h2 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: 0 }}>
-                    {productos.length === 0 ? 'Datos del producto' : 'Agregar otro producto'}
+                    {productos.length === 0 ? 'Datos del producto' : `Agregar producto ${productos.length + 1}`}
                   </h2>
-                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Puedes añadir varios productos en una sola solicitud</p>
+                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Completa los campos y agrégalo a tu lista</p>
                 </div>
+
+                {/* Indicador de campos completados */}
+                {(() => {
+                  const filled = [prod.nombre, prod.sku, prod.precio].filter(v => v.trim()).length
+                  const total = 3
+                  return (
+                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {Array.from({ length: total }).map((_, i) => (
+                          <div key={i} style={{ width: 28, height: 4, borderRadius: 2, background: i < filled ? PINK : '#e5e7eb', transition: 'background 0.2s' }} />
+                        ))}
+                      </div>
+                      <span style={{ fontSize: 11, color: filled === total ? PINK : '#9ca3af', fontWeight: 700 }}>
+                        {filled === total ? 'Listo para agregar' : `${filled}/${total} campos`}
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
 
               {prodError && (
-                <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 16 }}>
+                <div style={{ margin: '0 28px', marginTop: 16, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
                   {prodError}
                 </div>
               )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Layout 2 columnas: formulario | preview */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 0 }}>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* Columna izquierda: campos */}
+                <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                  {/* Nombre */}
                   <div>
-                    <label style={labelStyle}>Nombre del producto <span style={{ color: PINK }}>*</span></label>
+                    <label style={labelStyle}>
+                      Nombre del producto <span style={{ color: PINK }}>*</span>
+                    </label>
                     <input style={inputStyle} value={prod.nombre} onChange={e => setPR('nombre', e.target.value)}
                       placeholder="Ej: Teclado mecánico TKL RGB" onFocus={focus} onBlur={blur} />
                   </div>
-                  <div>
-                    <label style={labelStyle}>SKU / Código <span style={{ color: PINK }}>*</span></label>
-                    <input style={{ ...inputStyle, textTransform: 'uppercase' }} value={prod.sku}
-                      onChange={e => setPR('sku', e.target.value.toUpperCase())}
-                      placeholder="Ej: TEC-001" onFocus={focus} onBlur={blur} />
-                  </div>
-                </div>
 
-                <div>
-                  <label style={labelStyle}>Descripción</label>
-                  <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' } as React.CSSProperties}
-                    value={prod.descripcion} onChange={e => setPR('descripcion', e.target.value)}
-                    placeholder="Características, materiales, dimensiones..."
-                    onFocus={focus} onBlur={blur} />
-                </div>
+                  {/* SKU + Categoría en fila */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>
+                        SKU / Código <span style={{ color: PINK }}>*</span>
+                        <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Identificador único</span>
+                      </label>
+                      <input style={{ ...inputStyle, textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                        value={prod.sku} onChange={e => setPR('sku', e.target.value.toUpperCase())}
+                        placeholder="TEC-001" onFocus={focus} onBlur={blur} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Categoría</label>
+                      {!nuevaCatMode ? (
+                        <select style={{ ...inputStyle, cursor: 'pointer' }} value={prod.categoria_id}
+                          onChange={e => {
+                            if (e.target.value === '__nueva__') { setNuevaCatMode(true) }
+                            else { setPR('categoria_id', e.target.value) }
+                          }}
+                          onFocus={focus} onBlur={blur}>
+                          <option value="">Sin categoría</option>
+                          {categorias.map(c => (
+                            <option key={c.id} value={c.id}>{c.nombre}</option>
+                          ))}
+                          <option value="__nueva__">➕ Nueva categoría...</option>
+                        </select>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input style={{ ...inputStyle, flex: 1 }} value={nuevaCatNombre}
+                            onChange={e => setNuevaCatNombre(e.target.value)}
+                            placeholder="Nombre"
+                            onFocus={focus} onBlur={blur}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarNuevaCat() } }} />
+                          <button type="button" onClick={guardarNuevaCat} disabled={savingCat}
+                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 10px', borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>
+                            {savingCat ? '...' : '✓'}
+                          </button>
+                          <button type="button" onClick={() => setNuevaCatMode(false)}
+                            style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '0 8px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-                  <div>
-                    <label style={labelStyle}>Precio (MXN) <span style={{ color: PINK }}>*</span></label>
-                    <input type="number" min="0" step="0.01" style={inputStyle} value={prod.precio}
-                      onChange={e => setPR('precio', e.target.value)}
-                      placeholder="0.00" onFocus={focus} onBlur={blur} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Stock disponible</label>
-                    <input type="number" min="0" style={inputStyle} value={prod.stock}
-                      onChange={e => setPR('stock', e.target.value)}
-                      placeholder="0" onFocus={focus} onBlur={blur} />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Categoría</label>
-                    {!nuevaCatMode ? (
-                      <select style={{ ...inputStyle, cursor: 'pointer' }} value={prod.categoria_id}
-                        onChange={e => {
-                          if (e.target.value === '__nueva__') { setNuevaCatMode(true) }
-                          else { setPR('categoria_id', e.target.value) }
-                        }}
-                        onFocus={focus} onBlur={blur}>
-                        <option value="">Sin categoría</option>
-                        {categorias.map(c => (
-                          <option key={c.id} value={c.id}>{c.nombre}</option>
-                        ))}
-                        <option value="__nueva__">➕ Crear nueva categoría...</option>
-                      </select>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <input style={{ ...inputStyle, flex: 1 }} value={nuevaCatNombre}
-                          onChange={e => setNuevaCatNombre(e.target.value)}
-                          placeholder="Nombre de la categoría"
-                          onFocus={focus} onBlur={blur}
-                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarNuevaCat() } }} />
-                        <button type="button" onClick={guardarNuevaCat} disabled={savingCat}
-                          style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 12px', borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                          {savingCat ? '...' : '✓ Guardar'}
-                        </button>
-                        <button type="button" onClick={() => setNuevaCatMode(false)}
-                          style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '0 10px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                          ✕
-                        </button>
+                  {/* Precio + Stock en fila */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>Precio (MXN) <span style={{ color: PINK }}>*</span></label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9ca3af', fontWeight: 700, pointerEvents: 'none' }}>$</span>
+                        <input type="number" min="0" step="0.01"
+                          style={{ ...inputStyle, paddingLeft: 26 }}
+                          value={prod.precio} onChange={e => setPR('precio', e.target.value)}
+                          placeholder="0.00" onFocus={focus} onBlur={blur} />
                       </div>
-                    )}
+                    </div>
+                    <div>
+                      <label style={labelStyle}>
+                        Stock disponible
+                        <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Unidades</span>
+                      </label>
+                      <input type="number" min="0" style={inputStyle} value={prod.stock}
+                        onChange={e => setPR('stock', e.target.value)}
+                        placeholder="0" onFocus={focus} onBlur={blur} />
+                    </div>
                   </div>
+
+                  {/* Descripción */}
+                  <div>
+                    <label style={labelStyle}>
+                      Descripción
+                      <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Opcional</span>
+                    </label>
+                    <textarea style={{ ...inputStyle, minHeight: 72, resize: 'vertical' } as React.CSSProperties}
+                      value={prod.descripcion} onChange={e => setPR('descripcion', e.target.value)}
+                      placeholder="Características, materiales, dimensiones, color..."
+                      onFocus={focus} onBlur={blur} />
+                  </div>
+
                 </div>
 
-                {/* ---- Zona de imagen drag & drop ---- */}
-                <div>
-                  <label style={labelStyle}>Imagen del producto</label>
+                {/* Columna derecha: imagen + preview card */}
+                <div style={{ borderLeft: '1px solid #f3f4f6', padding: '20px 20px', display: 'flex', flexDirection: 'column', gap: 12, background: '#fafafa' }}>
+
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', margin: 0, textAlign: 'center' }}>Imagen del producto</p>
+
                   <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
 
+                  {/* Zona imagen */}
                   {prod.imagenPreview ? (
-                    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                      <div style={{ width: 120, height: 120, borderRadius: 12, overflow: 'hidden', border: '2px solid #e5e7eb', flexShrink: 0 }}>
-                        <img src={prod.imagenPreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: NAVY }}>Imagen seleccionada ✓</p>
-                        <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>Se convertirá automáticamente a WebP</p>
-                        <button type="button" onClick={() => setProd(p => ({ ...p, imagenFile: null, imagenPreview: null }))}
-                          style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '6px 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start' }}>
-                          Quitar imagen
-                        </button>
-                      </div>
+                    <div style={{ position: 'relative' }}>
+                      <img src={prod.imagenPreview} alt="preview"
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 12, border: '2px solid #e5e7eb', display: 'block' }} />
+                      <button type="button" onClick={() => setProd(p => ({ ...p, imagenFile: null, imagenPreview: null }))}
+                        title="Quitar imagen"
+                        style={{ position: 'absolute', top: 6, right: 6, background: '#000000aa', color: '#fff', border: 'none', width: 26, height: 26, borderRadius: '50%', fontWeight: 900, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        ×
+                      </button>
+                      <p style={{ textAlign: 'center', fontSize: 11, color: '#059669', fontWeight: 700, margin: '6px 0 0' }}>✓ WebP listo</p>
                     </div>
                   ) : (
                     <div
@@ -578,32 +647,59 @@ export default function ProveedoresPage() {
                       onClick={() => fileRef.current?.click()}
                       style={{
                         border: `2px dashed ${dragging ? PINK : '#d1d5db'}`,
-                        borderRadius: 12, padding: '28px 20px', textAlign: 'center',
-                        cursor: 'pointer', background: dragging ? `${PINK}08` : '#fafafa',
-                        transition: 'all 0.2s',
+                        borderRadius: 12, padding: '20px 12px', textAlign: 'center',
+                        cursor: 'pointer', background: dragging ? `${PINK}08` : '#fff',
+                        transition: 'all 0.2s', aspectRatio: '1', display: 'flex',
+                        flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
                       }}>
                       {convirtiendo ? (
-                        <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>Procesando imagen...</p>
+                        <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Procesando...</p>
                       ) : (
                         <>
-                          <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
-                          <p style={{ fontSize: 14, fontWeight: 600, color: NAVY, margin: '0 0 4px' }}>
-                            Arrastra una imagen o <span style={{ color: PINK, textDecoration: 'underline' }}>haz clic para elegir</span>
+                          <span style={{ fontSize: 32 }}>📷</span>
+                          <p style={{ fontSize: 12, fontWeight: 600, color: dragging ? PINK : NAVY, margin: 0, lineHeight: 1.3 }}>
+                            {dragging ? 'Suelta aquí' : 'Arrastra o toca para subir'}
                           </p>
-                          <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>JPG, PNG, WEBP · Máx. 10 MB</p>
+                          <p style={{ fontSize: 10, color: '#9ca3af', margin: 0 }}>JPG · PNG · WEBP</p>
                         </>
                       )}
                     </div>
                   )}
-                </div>
 
+                  {/* Mini preview card */}
+                  {(prod.nombre || prod.precio) && (
+                    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '10px 12px', marginTop: 4 }}>
+                      <p style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Vista previa</p>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {prod.nombre || '—'}
+                      </p>
+                      {prod.sku && <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 4px', fontFamily: 'monospace' }}>{prod.sku}</p>}
+                      {prod.precio && (
+                        <p style={{ fontSize: 13, fontWeight: 900, color: '#059669', margin: 0 }}>
+                          ${Number(prod.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Botón agregar producto */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <div style={{ padding: '16px 28px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafafa' }}>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>
+                  {productos.length > 0 ? `Ya tienes ${productos.length} producto${productos.length > 1 ? 's' : ''} en la lista` : 'Agrega todos los productos que quieras enviar'}
+                </p>
                 <button type="button" onClick={agregarProducto}
-                  style={{ background: `${NAVY}15`, color: NAVY, border: `1.5px solid ${NAVY}30`, padding: '10px 22px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  ＋ Agregar producto a la lista
+                  disabled={!prod.nombre.trim() || !prod.sku.trim() || !prod.precio}
+                  style={{
+                    background: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? '#f3f4f6' : PINK,
+                    color: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? '#9ca3af' : '#fff',
+                    border: 'none', padding: '11px 24px', borderRadius: 10, fontWeight: 800, fontSize: 14,
+                    cursor: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? 'not-allowed' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
+                    boxShadow: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? 'none' : `0 4px 12px ${PINK}40`,
+                  }}>
+                  ＋ Agregar a la lista
                 </button>
               </div>
             </div>
@@ -631,6 +727,81 @@ export default function ProveedoresPage() {
             </button>
           </form>
         )}
+      </div>
+
+      {/* ---- Sección: Consultar historial de solicitudes ---- */}
+      <div style={{ maxWidth: 780, margin: '0 auto', padding: '0 24px 60px' }}>
+        <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+          <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, background: `${NAVY}12`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🔍</div>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: 0 }}>Consultar mis solicitudes</h3>
+              <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Ingresa tu email para ver el estado de tus productos enviados</p>
+            </div>
+          </div>
+
+          <div style={{ padding: '20px 28px' }}>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input
+                type="email"
+                value={historialEmail}
+                onChange={e => { setHistorialEmail(e.target.value); setHistorialItems(null); setHistorialError('') }}
+                onKeyDown={e => e.key === 'Enter' && consultarHistorial()}
+                placeholder="tu@email.com"
+                style={{ ...inputStyle, flex: 1 }}
+                onFocus={focus} onBlur={blur}
+              />
+              <button
+                type="button"
+                onClick={consultarHistorial}
+                disabled={loadingHistorial || !historialEmail.trim()}
+                style={{ background: !historialEmail.trim() ? '#f3f4f6' : NAVY, color: !historialEmail.trim() ? '#9ca3af' : '#fff', border: 'none', padding: '0 24px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: !historialEmail.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {loadingHistorial ? 'Buscando...' : 'Consultar'}
+              </button>
+            </div>
+
+            {historialError && (
+              <div style={{ marginTop: 14, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400e', fontWeight: 600 }}>
+                {historialError}
+              </div>
+            )}
+
+            {historialItems && historialItems.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
+                  {historialItems.length} solicitud{historialItems.length > 1 ? 'es' : ''} encontrada{historialItems.length > 1 ? 's' : ''}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {historialItems.map(item => {
+                    const estadoStyle: Record<string, { bg: string; text: string; icon: string }> = {
+                      pendiente:  { bg: '#fef3c7', text: '#92400e', icon: '⏳' },
+                      aprobado:   { bg: '#d1fae5', text: '#065f46', icon: '✅' },
+                      rechazado:  { bg: '#fee2e2', text: '#991b1b', icon: '❌' },
+                    }
+                    const st = estadoStyle[item.estado] ?? estadoStyle.pendiente
+                    return (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#f9fafb', borderRadius: 10, padding: '12px 16px', border: '1px solid #e5e7eb' }}>
+                        <span style={{ fontSize: 20, flexShrink: 0 }}>{st.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</p>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <span style={{ display: 'inline-block', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20, textTransform: 'capitalize' }}>
+                            {item.estado}
+                          </span>
+                          <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                            {new Date(item.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Footer */}

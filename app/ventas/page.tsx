@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import VentaModal from '@/components/VentaModal'
 import Icon from '@/components/Icon'
+import { SkeletonTableBody } from '@/components/Skeleton'
 
 const PAGE_SIZE = 15
 
@@ -47,6 +48,71 @@ const statuses = ['Todos', 'Pendiente', 'En proceso', 'Pagado', 'Enviado', 'Canc
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function imprimirVenta(venta: Venta, items: VentaItem[]) {
+  const w = window.open('', '_blank', 'width=600,height=700')
+  if (!w) return
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Venta #${venta.numero}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', sans-serif; color: #111; padding: 40px; font-size: 14px; }
+    .logo { font-size: 22px; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 4px; }
+    .logo span { color: #e7226d; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 2px solid #111; }
+    .numero { font-size: 13px; color: #6b7280; margin-top: 2px; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; background: #d1fae5; color: #065f46; }
+    .section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 8px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+    .info-block p:first-child { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 4px; }
+    .info-block p:last-child { font-size: 14px; font-weight: 600; color: #111; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    thead th { text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af; padding: 0 0 10px; border-bottom: 1px solid #e5e7eb; }
+    thead th:last-child { text-align: right; }
+    tbody td { padding: 12px 0; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    tbody td:last-child { text-align: right; font-weight: 700; color: #0049ff; }
+    .subtotal-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; color: #6b7280; }
+    .total-row { display: flex; justify-content: space-between; padding: 14px 0; font-size: 18px; font-weight: 900; border-top: 2px solid #111; margin-top: 4px; }
+    .total-row span:last-child { color: #0049ff; }
+    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
+    @media print { body { padding: 20px; } }
+  </style></head><body>
+  <div class="header">
+    <div>
+      <div class="logo">Order<span>Express</span></div>
+      <div class="numero">Comprobante de venta</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:22px;font-weight:900;color:#0049ff">#${venta.numero}</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:2px">${formatDate(venta.created_at)}</div>
+      <div style="margin-top:6px"><span class="badge">${venta.estado}</span></div>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-block"><p>Cliente</p><p>${venta.clientes?.nombre ?? '—'}</p></div>
+    <div class="info-block"><p>Email</p><p>${venta.clientes?.email ?? '—'}</p></div>
+    ${venta.notas ? `<div class="info-block" style="grid-column:1/-1"><p>Notas</p><p>${venta.notas}</p></div>` : ''}
+  </div>
+  <p class="section-title">Productos</p>
+  <table>
+    <thead><tr><th>Producto</th><th>Cant.</th><th>Precio unit.</th><th>Subtotal</th></tr></thead>
+    <tbody>
+      ${items.map(it => `<tr>
+        <td><strong>${it.nombre}</strong></td>
+        <td style="color:#6b7280">${it.cantidad}</td>
+        <td style="color:#6b7280">$${Number(it.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+        <td>$${Number(it.subtotal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+  <div style="max-width:260px;margin-left:auto">
+    <div class="subtotal-row"><span>Subtotal</span><span>$${Number(venta.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span></div>
+    <div class="total-row"><span>Total</span><span>$${Number(venta.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span></div>
+  </div>
+  <div class="footer">Order Express · Gracias por tu compra · orderexpress.mx</div>
+  <script>window.onload=()=>{window.print();}</script>
+  </body></html>`)
+  w.document.close()
 }
 
 export default function VentasPage() {
@@ -151,13 +217,7 @@ export default function VentasPage() {
             </div>
           </div>
 
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
-              <Icon name="cart" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
-              <p>Cargando ventas...</p>
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
                   {['#', 'Cliente', 'Fecha', 'Total', 'Estado', 'Acciones'].map(h => (
@@ -166,7 +226,9 @@ export default function VentasPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginated.map(v => (
+                {loading ? (
+                  <SkeletonTableBody rows={8} cols={['40px','140px','80px','80px','80px','80px']} />
+                ) : paginated.map(v => (
                   <tr key={v.id} style={{ borderBottom: '1px solid #f9fafb', background: detalle?.id === v.id ? '#f0f5ff' : 'transparent' }}>
                     <td style={{ padding: '13px 0', fontSize: 13, fontWeight: 700, color: '#0049ff' }}>#{v.numero}</td>
                     <td style={{ padding: '13px 0' }}>
@@ -206,7 +268,6 @@ export default function VentasPage() {
                 ))}
               </tbody>
             </table>
-          )}
 
           {!loading && filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
@@ -249,9 +310,18 @@ export default function VentasPage() {
               <p style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>Venta #{detalle.numero}</p>
               <p style={{ fontSize: 12, color: '#9ca3af' }}>{formatDate(detalle.created_at)}</p>
             </div>
-            <span style={{ background: statusStyle[detalle.estado]?.bg, color: statusStyle[detalle.estado]?.text, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
-              {detalle.estado}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ background: statusStyle[detalle.estado]?.bg, color: statusStyle[detalle.estado]?.text, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
+                {detalle.estado}
+              </span>
+              <button
+                onClick={() => imprimirVenta(detalle, items)}
+                disabled={loadingItems}
+                title="Imprimir comprobante"
+                style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, cursor: loadingItems ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>
+                🖨️
+              </button>
+            </div>
           </div>
 
           {/* Stepper de estado */}

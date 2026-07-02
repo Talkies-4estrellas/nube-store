@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import ClienteModal from '@/components/ClienteModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import Icon from '@/components/Icon'
+import { SkeletonTableBody } from '@/components/Skeleton'
 
 const PAGE_SIZE = 15
 
@@ -28,6 +29,17 @@ const tagStyle: Record<string, { bg: string; text: string }> = {
 }
 
 const tags = ['Todos', 'VIP', 'Regular', 'Nuevo']
+
+const AVATAR_COLORS = ['#0049ff','#7c3aed','#db2777','#059669','#d97706','#dc2626','#0891b2','#374151']
+function avatarColor(nombre: string) {
+  let h = 0
+  for (let i = 0; i < nombre.length; i++) h = (h * 31 + nombre.charCodeAt(i)) % AVATAR_COLORS.length
+  return AVATAR_COLORS[h]
+}
+function initials(nombre: string) {
+  const parts = nombre.trim().split(/\s+/)
+  return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : nombre.slice(0, 2).toUpperCase()
+}
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -63,6 +75,7 @@ export default function ClientesPage() {
       const { data } = await supabase
         .from('clientes')
         .select('*')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
 
       if (data) {
@@ -88,7 +101,7 @@ export default function ClientesPage() {
 
   async function handleDelete(c: Cliente) {
     setDeleting(true)
-    await supabase.from('clientes').delete().eq('id', c.id)
+    await supabase.from('clientes').update({ deleted_at: new Date().toISOString() }).eq('id', c.id)
     if (selected?.id === c.id) setSelected(null)
     await fetchClientes()
     setDeleting(false)
@@ -174,13 +187,7 @@ export default function ClientesPage() {
             </div>
           </div>
 
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
-              <Icon name="users" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
-              <p>Cargando clientes...</p>
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
                   {['Cliente', 'Ciudad', 'Pedidos', 'Total gastado', 'Última compra', 'Tipo', ''].map(h => (
@@ -189,13 +196,15 @@ export default function ClientesPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginated.map(c => (
+                {loading ? (
+                  <SkeletonTableBody rows={8} cols={['180px','80px','50px','90px','90px','60px','110px']} />
+                ) : paginated.map(c => (
                   <tr key={c.id} onClick={() => { if (c === selected) { setSelected(null) } else { setSelected(c); setShowHistorial(false); setHistorial([]) } }}
                     style={{ borderBottom: '1px solid #f9fafb', cursor: 'pointer', background: selected?.id === c.id ? '#eff6ff' : 'transparent' }}>
                     <td style={{ padding: '13px 0' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 34, height: 34, background: '#0049ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
-                          {c.nombre[0]}
+                        <div style={{ width: 34, height: 34, background: avatarColor(c.nombre), borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                          {initials(c.nombre)}
                         </div>
                         <div>
                           <p style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{c.nombre}</p>
@@ -224,7 +233,6 @@ export default function ClientesPage() {
                 ))}
               </tbody>
             </table>
-          )}
 
           {!loading && filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
@@ -258,8 +266,8 @@ export default function ClientesPage() {
               <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9ca3af' }}>×</button>
             </div>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <div style={{ width: 60, height: 60, background: '#0049ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 22, margin: '0 auto 10px' }}>
-                {selected.nombre[0]}
+              <div style={{ width: 60, height: 60, background: avatarColor(selected.nombre), borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 20, margin: '0 auto 10px', letterSpacing: '0.02em' }}>
+                {initials(selected.nombre)}
               </div>
               <p style={{ fontWeight: 700, fontSize: 16 }}>{selected.nombre}</p>
               <span style={{ background: tagStyle[selected.tag]?.bg, color: tagStyle[selected.tag]?.text, fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>

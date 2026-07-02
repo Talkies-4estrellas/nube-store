@@ -9,7 +9,7 @@ import { useAuth, canAccess } from '@/lib/auth-context'
 const NAVY = '#252855'
 const PINK = '#e7226d'
 
-const PUBLIC_PATHS = ['/', '/login', '/proveedores']
+const PUBLIC_PATHS = ['/', '/login', '/proveedores', '/presentacion']
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

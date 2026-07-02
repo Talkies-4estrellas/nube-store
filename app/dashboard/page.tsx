@@ -9,6 +9,7 @@ type Venta = { id: string; numero: number; total: number; estado: string; create
 type VentaGrafica = { total: number; estado: string; created_at: string }
 type ProductoBajo = { nombre: string; stock: number }
 type Toast = { id: number; message: string; icon: string; color: string }
+type TopMetric = { label: string; value: string; sub: string; icon: string; color: string }
 
 const statusColor: Record<string, string> = { Pagado: '#d1fae5', Enviado: '#dbeafe', Pendiente: '#fef3c7', Cancelado: '#fee2e2', 'En proceso': '#ede9fe' }
 const statusText:  Record<string, string> = { Pagado: '#065f46', Enviado: '#1e40af', Pendiente: '#92400e', Cancelado: '#991b1b', 'En proceso': '#6d28d9' }
@@ -106,6 +107,7 @@ export default function DashboardPage() {
   const [periodo, setPeriodo]           = useState<Periodo>('semana')
   const [loadingPeriodo, setLoadingPeriodo] = useState(false)
   const [toasts, setToasts]             = useState<Toast[]>([])
+  const [topMetrics, setTopMetrics]     = useState<TopMetric[]>([])
   const toastId = useRef(0)
 
   function addToast(message: string, icon: string, color: string) {
@@ -130,14 +132,53 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: v }, { data: p }, { count }] = await Promise.all([
+      const [{ data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }] = await Promise.all([
         supabase.from('ventas').select('*, clientes(nombre)').order('created_at', { ascending: false }).limit(5),
         supabase.from('productos').select('nombre, stock').lte('stock', 3).order('stock'),
         supabase.from('clientes').select('id', { count: 'exact', head: true }),
+        supabase.from('venta_items').select('nombre, cantidad, productos(categorias(nombre))'),
+        supabase.from('ventas').select('cliente_id, total, clientes(nombre)').eq('estado', 'Pagado'),
       ])
       if (v) setVentas(v)
       if (p) setStockBajo(p)
       setTotalClientes(count ?? 0)
+
+      // Calcular top metrics
+      const tops: TopMetric[] = []
+
+      // Producto más vendido
+      if (items && items.length > 0) {
+        const prodCount: Record<string, number> = {}
+        items.forEach((i: { nombre: string; cantidad: number }) => {
+          prodCount[i.nombre] = (prodCount[i.nombre] ?? 0) + i.cantidad
+        })
+        const topProd = Object.entries(prodCount).sort((a, b) => b[1] - a[1])[0]
+        if (topProd) tops.push({ label: 'Producto más vendido', value: topProd[0], sub: `${topProd[1]} unidades vendidas`, icon: '📦', color: '#7c3aed' })
+
+        // Categoría más popular
+        const catCount: Record<string, number> = {}
+        items.forEach((i: { cantidad: number; productos: { categorias: { nombre: string } | null } | null }) => {
+          const cat = i.productos?.categorias?.nombre ?? 'Sin categoría'
+          catCount[cat] = (catCount[cat] ?? 0) + i.cantidad
+        })
+        const topCat = Object.entries(catCount).sort((a, b) => b[1] - a[1])[0]
+        if (topCat) tops.push({ label: 'Categoría top', value: topCat[0], sub: `${topCat[1]} unidades`, icon: '🏷️', color: '#0891b2' })
+      }
+
+      // Cliente más activo
+      if (clientesGasto && clientesGasto.length > 0) {
+        const clienteGasto: Record<string, { nombre: string; total: number }> = {}
+        clientesGasto.forEach((v: { cliente_id: string; total: number; clientes: { nombre: string } | null }) => {
+          if (!v.cliente_id) return
+          const nombre = v.clientes?.nombre ?? 'Desconocido'
+          if (!clienteGasto[v.cliente_id]) clienteGasto[v.cliente_id] = { nombre, total: 0 }
+          clienteGasto[v.cliente_id].total += Number(v.total)
+        })
+        const topCliente = Object.values(clienteGasto).sort((a, b) => b.total - a.total)[0]
+        if (topCliente) tops.push({ label: 'Cliente más activo', value: topCliente.nombre, sub: `$${topCliente.total.toLocaleString('es-MX')} en compras`, icon: '👑', color: '#d97706' })
+      }
+
+      setTopMetrics(tops)
       setLoading(false)
     }
     load()
@@ -201,6 +242,24 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Top métricas: producto, categoría, cliente */}
+      {topMetrics.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${topMetrics.length}, 1fr)`, gap: 16, marginBottom: 24 }}>
+          {topMetrics.map(m => (
+            <div key={m.label} style={{ background: '#fff', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: m.color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                {m.icon}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 3px' }}>{m.label}</p>
+                <p style={{ fontSize: 15, fontWeight: 800, color: '#111', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.value}</p>
+                <p style={{ fontSize: 12, color: m.color, fontWeight: 600, margin: 0 }}>{m.sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Gráfica de ventas */}
       <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 24 }}>

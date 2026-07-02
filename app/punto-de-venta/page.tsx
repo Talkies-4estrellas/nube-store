@@ -86,6 +86,23 @@ export default function PuntoDeVentaPage() {
     setProcesando(true)
     setError('')
 
+    // Verificar stock actual antes de procesar
+    const ids = carrito.map(i => i.producto.id)
+    const { data: stockActual } = await supabase
+      .from('productos')
+      .select('id, stock, nombre')
+      .in('id', ids)
+    if (stockActual) {
+      for (const item of carrito) {
+        const real = stockActual.find(p => p.id === item.producto.id)
+        if (!real || real.stock < item.cantidad) {
+          setError(`Stock insuficiente para "${item.producto.nombre}". Disponible: ${real?.stock ?? 0}`)
+          setProcesando(false)
+          return
+        }
+      }
+    }
+
     // Crear o buscar cliente
     let clienteId: string | null = null
     const nombreCliente = clienteNombre.trim() || 'Público en general'

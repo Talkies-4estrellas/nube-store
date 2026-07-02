@@ -6,6 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
 import Icon from '@/components/Icon'
+import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
 
 const PAGE_SIZE = 12
 
@@ -233,14 +234,12 @@ export default function ProductosPage() {
           </div>
         </div>
 
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
-            <Icon name="box" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
-            <p style={{ fontSize: 14 }}>Cargando productos...</p>
+        {/* Vista Grid */}
+        {loading && view === 'grid' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} h={140} />)}
           </div>
         )}
-
-        {/* Vista Grid */}
         {!loading && view === 'grid' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {paginated.map(p => (
@@ -282,6 +281,11 @@ export default function ProductosPage() {
         )}
 
         {/* Vista Lista */}
+        {loading && view === 'list' && (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody><SkeletonTableBody rows={8} cols={['50px','160px','80px','70px','70px','80px','100px']} /></tbody>
+          </table>
+        )}
         {!loading && view === 'list' && (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>

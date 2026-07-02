@@ -76,8 +76,12 @@ create table if not exists clientes (
   ciudad      text,
   tag         text    not null default 'Nuevo' check (tag in ('Nuevo', 'Regular', 'VIP')),
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  deleted_at  timestamptz
 );
+
+-- Agregar columna si la tabla ya existe (migración incremental)
+alter table clientes add column if not exists deleted_at timestamptz;
 
 
 -- ============================================================
