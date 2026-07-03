@@ -149,7 +149,7 @@ export default function DashboardPage() {
       // Producto más vendido
       if (items && items.length > 0) {
         const prodCount: Record<string, number> = {}
-        items.forEach((i: { nombre: string; cantidad: number }) => {
+        items.forEach((i) => {
           prodCount[i.nombre] = (prodCount[i.nombre] ?? 0) + i.cantidad
         })
         const topProd = Object.entries(prodCount).sort((a, b) => b[1] - a[1])[0]
@@ -170,9 +170,10 @@ export default function DashboardPage() {
       // Cliente más activo
       if (clientesGasto && clientesGasto.length > 0) {
         const clienteGasto: Record<string, { nombre: string; total: number }> = {}
-        clientesGasto.forEach((v: { cliente_id: string; total: number; clientes: { nombre: string } | null }) => {
+        clientesGasto.forEach((v) => {
           if (!v.cliente_id) return
-          const nombre = v.clientes?.nombre ?? 'Desconocido'
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const nombre = (v.clientes as unknown as { nombre: string } | null)?.nombre ?? 'Desconocido'
           if (!clienteGasto[v.cliente_id]) clienteGasto[v.cliente_id] = { nombre, total: 0 }
           clienteGasto[v.cliente_id].total += Number(v.total)
         })
