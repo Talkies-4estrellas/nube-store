@@ -158,7 +158,8 @@ export default function DashboardPage() {
         // Categoría más popular
         const catCount: Record<string, number> = {}
         items.forEach((i) => {
-          const prod = i.productos as { categorias: { nombre: string } | null } | null
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const prod = i.productos as unknown as { categorias: { nombre: string } | null } | null
           const cat = prod?.categorias?.nombre ?? 'Sin categoría'
           catCount[cat] = (catCount[cat] ?? 0) + (i.cantidad as number)
         })
