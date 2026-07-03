@@ -15,6 +15,10 @@ type Cliente = {
   email: string
   telefono: string | null
   ciudad: string | null
+  direccion: string | null
+  codigo_postal: string | null
+  estado_region: string | null
+  pais: string | null
   tag: string
   created_at: string
   total_pedidos?: number
@@ -71,30 +75,30 @@ export default function ClientesPage() {
   }
 
   async function fetchClientes() {
-      setLoading(true)
-      const { data } = await supabase
-        .from('clientes')
-        .select('*')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false })
+    setLoading(true)
+    const [{ data }, { data: todasVentas }] = await Promise.all([
+      supabase.from('clientes').select('*').is('deleted_at', null).order('created_at', { ascending: false }),
+      supabase.from('ventas').select('cliente_id, total, created_at').eq('estado', 'Pagado'),
+    ])
 
-      if (data) {
-        // Enriquecer con conteo de ventas
-        const enriched = await Promise.all(data.map(async (c) => {
-          const { data: ventas } = await supabase
-            .from('ventas')
-            .select('total, created_at')
-            .eq('cliente_id', c.id)
-            .eq('estado', 'Pagado')
-            .order('created_at', { ascending: false })
-          const total_pedidos = ventas?.length ?? 0
-          const total_gastado = ventas?.reduce((s, v) => s + Number(v.total), 0) ?? 0
-          const ultima_compra = ventas?.[0]?.created_at ?? null
-          return { ...c, total_pedidos, total_gastado, ultima_compra }
-        }))
-        setClientes(enriched)
+    if (data) {
+      const ventaMap: Record<string, { total: number; created_at: string }[]> = {}
+      for (const v of (todasVentas ?? [])) {
+        if (!ventaMap[v.cliente_id]) ventaMap[v.cliente_id] = []
+        ventaMap[v.cliente_id].push(v)
       }
-      setLoading(false)
+      const enriched = data.map(c => {
+        const ventas = (ventaMap[c.id] ?? []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        return {
+          ...c,
+          total_pedidos: ventas.length,
+          total_gastado: ventas.reduce((s, v) => s + Number(v.total), 0),
+          ultima_compra: ventas[0]?.created_at ?? null,
+        }
+      })
+      setClientes(enriched)
+    }
+    setLoading(false)
   }
 
   useEffect(() => { fetchClientes() }, [])
@@ -333,7 +337,18 @@ export default function ClientesPage() {
 
       {showModal && (
         <ClienteModal
-          inicial={editando ? { id: editando.id, nombre: editando.nombre, email: editando.email, telefono: editando.telefono ?? '', ciudad: editando.ciudad ?? '', tag: editando.tag as 'Nuevo' | 'Regular' | 'VIP' } : undefined}
+          inicial={editando ? {
+            id: editando.id,
+            nombre: editando.nombre,
+            email: editando.email,
+            telefono: editando.telefono ?? '',
+            ciudad: editando.ciudad ?? '',
+            direccion: editando.direccion ?? '',
+            codigo_postal: editando.codigo_postal ?? '',
+            estado_region: editando.estado_region ?? '',
+            pais: editando.pais ?? 'México',
+            tag: editando.tag as 'Nuevo' | 'Regular' | 'VIP',
+          } : undefined}
           onClose={() => { setShowModal(false); setEditando(null) }}
           onSave={() => { setShowModal(false); setEditando(null); fetchClientes() }}
         />

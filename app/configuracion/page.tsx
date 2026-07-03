@@ -97,6 +97,23 @@ export default function ConfiguracionPage() {
 
   async function cambiarEstado(id: string, estado: 'aprobado' | 'rechazado' | 'pendiente') {
     setUpdatingId(id)
+
+    if (estado === 'aprobado') {
+      const solicitud = solicitudes.find(s => s.id === id)
+      if (solicitud) {
+        // Crear el producto en el catálogo al aprobar
+        await supabase.from('productos').insert({
+          nombre:       solicitud.producto_nombre,
+          sku:          solicitud.producto_sku,
+          precio:       solicitud.producto_precio,
+          stock:        solicitud.producto_stock,
+          imagen_url:   solicitud.imagen_url,
+          categoria_id: solicitud.categoria_id,
+          activo:       true,
+        })
+      }
+    }
+
     await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
     setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado } : s))
     setUpdatingId(null)
@@ -109,7 +126,7 @@ export default function ConfiguracionPage() {
   }
 
   const [negocio, setNegocio] = useState({ nombre: 'Order Express', moneda: 'MXN — Peso mexicano', zona: 'America/Mexico_City', idioma: 'Español (México)' })
-  const [contacto, setContacto] = useState({ email: '', telefono: '', whatsapp: '', direccion: '', ciudad: '', pais: 'México' })
+  const [contacto, setContacto] = useState({ email: '', telefono: '', whatsapp: '', instagram: '', facebook: '', direccion: '', ciudad: '', pais: 'México' })
   const [pagos, setPagos] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false })
   const [notif, setNotif] = useState({ stock_bajo: true, nueva_venta: true, email_resumen: false })
   const [heroTitulo, setHeroTitulo] = useState('')
@@ -117,26 +134,55 @@ export default function ConfiguracionPage() {
   const [heroCta, setHeroCta] = useState('')
 
   useEffect(() => {
+    // Cargar config_storefront
     supabase.from('config_storefront').select('*').eq('id', 1).single()
       .then(({ data }) => {
         if (!data) return
         setNegocio(prev => ({ ...prev, nombre: data.nombre_tienda ?? prev.nombre }))
-        setContacto(prev => ({ ...prev, email: data.email_contacto ?? '', whatsapp: data.whatsapp ?? '' }))
+        setContacto(prev => ({ ...prev, email: data.email_contacto ?? '', telefono: data.telefono ?? '', whatsapp: data.whatsapp ?? '', instagram: data.instagram ?? '', facebook: data.facebook ?? '' }))
         setHeroTitulo(data.hero_titulo ?? '')
         setHeroSubtitulo(data.hero_subtitulo ?? '')
         setHeroCta(data.hero_cta ?? '')
       })
+    // Cargar métodos de pago
+    supabase.from('config_metodos_pago').select('*').eq('id', 1).single()
+      .then(({ data }) => {
+        if (!data) return
+        setPagos({ efectivo: data.efectivo, transferencia: data.transferencia, tarjeta: data.tarjeta, mercadopago: data.mercadopago })
+      })
+    // Cargar preferencias de notificación del usuario actual
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('config_notificaciones').select('*').eq('user_id', user.id).maybeSingle()
+        .then(({ data }) => {
+          if (!data) return
+          setNotif({ stock_bajo: data.stock_bajo, nueva_venta: data.nueva_venta, email_resumen: data.email_resumen })
+        })
+    })
   }, [])
 
   async function handleSave() {
-    await supabase.from('config_storefront').update({
-      nombre_tienda:   negocio.nombre,
-      hero_titulo:     heroTitulo,
-      hero_subtitulo:  heroSubtitulo,
-      hero_cta:        heroCta,
-      email_contacto:  contacto.email,
-      whatsapp:        contacto.whatsapp,
-    }).eq('id', 1)
+    await Promise.all([
+      // Guardar config_storefront
+      supabase.from('config_storefront').update({
+        nombre_tienda:  negocio.nombre,
+        hero_titulo:    heroTitulo,
+        hero_subtitulo: heroSubtitulo,
+        hero_cta:       heroCta,
+        email_contacto: contacto.email,
+        telefono:       contacto.telefono,
+        whatsapp:       contacto.whatsapp,
+        instagram:      contacto.instagram,
+        facebook:       contacto.facebook,
+      }).eq('id', 1),
+      // Guardar métodos de pago
+      supabase.from('config_metodos_pago').upsert({ id: 1, ...pagos }).eq('id', 1),
+    ])
+    // Guardar notificaciones del usuario actual
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('config_notificaciones').upsert({ user_id: user.id, ...notif })
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -311,7 +357,13 @@ export default function ConfiguracionPage() {
                                 <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 8px' }}>Proveedor</p>
                                 <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}><strong>{s.proveedor_nombre}</strong></p>
                                 {s.proveedor_empresa && <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>{s.proveedor_empresa}</p>}
-                                <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>📧 {s.proveedor_email}</p>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 4px' }}>
+                                  <a href={`mailto:${s.proveedor_email}`} style={{ fontSize: 13, color: '#0049ff', fontWeight: 600 }}>📧 {s.proveedor_email}</a>
+                                  <button onClick={() => navigator.clipboard.writeText(s.proveedor_email)}
+                                    style={{ fontSize: 10, background: '#f3f4f6', border: 'none', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', color: '#6b7280', fontWeight: 600 }}>
+                                    Copiar
+                                  </button>
+                                </div>
                                 {s.proveedor_telefono && <p style={{ margin: 0, fontSize: 13, color: '#374151' }}>📞 {s.proveedor_telefono}</p>}
                               </div>
                               <div>
@@ -325,15 +377,16 @@ export default function ConfiguracionPage() {
 
                             {/* Acciones */}
                             {s.estado === 'pendiente' && (
-                              <div style={{ display: 'flex', gap: 10, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+                              <div style={{ display: 'flex', gap: 10, paddingTop: 12, borderTop: '1px solid #e5e7eb', alignItems: 'center', flexWrap: 'wrap' }}>
                                 <button onClick={() => cambiarEstado(s.id, 'aprobado')} disabled={updatingId === s.id}
                                   style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingId === s.id ? 0.6 : 1 }}>
-                                  {updatingId === s.id ? '...' : '✓ Aprobar'}
+                                  {updatingId === s.id ? 'Creando producto...' : '✓ Aprobar y publicar producto'}
                                 </button>
                                 <button onClick={() => cambiarEstado(s.id, 'rechazado')} disabled={updatingId === s.id}
                                   style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingId === s.id ? 0.6 : 1 }}>
                                   ✕ Rechazar
                                 </button>
+                                <span style={{ fontSize: 11, color: '#9ca3af' }}>Al aprobar se crea el producto en el catálogo automáticamente</span>
                               </div>
                             )}
                             {s.estado !== 'pendiente' && (

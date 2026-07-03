@@ -1,5 +1,19 @@
 # Order Express — Panel Administrativo
 
+## Documentación del proyecto
+
+Antes de hacer cualquier cambio, consultar estos archivos en orden:
+
+| Archivo | Qué contiene |
+|---------|-------------|
+| `Doc/indice.md` | Mapa de TODOS los archivos del proyecto: ubicación, URL y función exacta |
+| `Doc/documentacion/documento.md` | Referencia técnica completa: tablas DB, estados de cada página, funciones, mapa de operaciones Supabase, flujos, pendientes |
+| `Doc/memoria.md` | Cómo registrar cambios en el archivo de sesión del día |
+| `Doc/sesiones/seccion-DD-MM-YYYY.md` | Historial de cambios por día |
+| `Doc/database/` | schema.sql, auth.sql, migration_criticos.sql, migration_columnas.sql |
+
+---
+
 ## Descripción
 Dashboard administrativo tipo Tiendanube construido con Next.js 16 + Supabase.
 Nombre del proyecto: **Order Express** (nombre anterior provisional: Nube Store).
@@ -111,7 +125,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | `envios` | venta_id, paqueteria, numero_guia, estado_envio, costo_envio |
 | `user_roles` | user_id (FK auth.users), role, nombre — tabla de roles del panel |
 | `solicitudes_productos` | solicitudes de proveedores: datos proveedor + producto + imagen_url + estado (pendiente/aprobado/rechazado) |
-| `config_storefront` | fila única (id=1): nombre_tienda, hero_titulo, hero_subtitulo, hero_cta, color_acento, whatsapp, email_contacto, instagram |
+| `registros` | cuentas de clientes de la tienda: email, nombre, password_hash, token |
+| `solicitudes_productos` | solicitudes de proveedores: datos proveedor + producto + imagen_url + estado (pendiente/aprobado/rechazado) + updated_at |
+| `config_storefront` | fila única (id=1): nombre_tienda, hero_titulo, hero_subtitulo, hero_cta, color_acento, whatsapp, email_contacto, instagram, telefono, facebook — RLS habilitado |
+| `config_metodos_pago` | fila única (id=1): efectivo, transferencia, tarjeta (bool) |
+| `config_notificaciones` | por user_id: ventas_nuevas, stock_bajo, solicitudes_proveedor (bool) |
+| `cart_items` | carrito persistente: registro_id, producto_id, cantidad |
 
 ### Función helper de rol
 ```sql
@@ -123,10 +142,15 @@ $$;
 Usada en todas las políticas RLS para verificar el rol sin romper el contexto de seguridad.
 
 ### Triggers automáticos
-- `updated_at` se actualiza solo en cada cambio
+- `updated_at` se actualiza solo en cada cambio (tablas: ventas, productos, clientes, solicitudes_productos)
 - Total de venta se recalcula al insertar/editar `venta_items`
-- Stock baja automáticamente cuando venta cambia a `Pagado`
-- Tag del cliente sube (Nuevo → Regular → VIP) según pedidos pagados
+- `trg_descontar_stock` — baja stock al INSERT con estado='Pagado' O al UPDATE que transiciona a 'Pagado' (`AFTER INSERT OR UPDATE`)
+- `trg_actualizar_tag` — sube tag del cliente (Nuevo→Regular→VIP) al pagar (`AFTER INSERT OR UPDATE`, null-safe en cliente_id)
+- `trg_solicitudes_updated_at` — actualiza `updated_at` al aprobar/rechazar solicitudes
+
+### Estado de migraciones ejecutadas en Supabase (03/07/2026)
+- ✅ `Doc/database/migration_criticos.sql` — triggers INSERT+UPDATE, RLS config_storefront, tablas config_metodos_pago / config_notificaciones / cart_items
+- ✅ `Doc/database/migration_columnas.sql` — direccion/codigo_postal/estado_region/pais en clientes; telefono/facebook en config_storefront; updated_at en registros y solicitudes_productos
 
 ### Storage
 - Bucket: `productos` (público, SELECT sin restricción)
@@ -207,16 +231,24 @@ Las políticas antiguas permisivas (`anon total`) fueron reemplazadas por polít
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
-- [ ] Ejecutar SQL de `config_storefront` en Supabase (ver `database/schema.sql`)
 - [ ] Ejecutar `database/auth.sql` en Supabase SQL Editor (Step 1 del setup auth)
 - [ ] Crear usuario admin en Supabase Authentication y hacer INSERT en user_roles (Steps 2-3)
 - [ ] Ejecutar política anon para `solicitudes/` en Storage (ver schema.sql)
-- [ ] Que el Storefront lea `config_storefront` para usar nombre/colores/textos dinámicos
-- [ ] Deploy a Vercel (producción desactualizada)
+- [ ] Migrar sistema de login de tienda (registros) a Supabase Auth
+- [ ] Carrito de tienda persistente en DB para clientes con cuenta (cart_items)
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Notificaciones en tiempo real (badge topbar para ventas nuevas)
 - [ ] Modo oscuro
+
+## Completado (03/07/2026)
+- [x] Storefront conectado a config_storefront: hero_titulo, hero_subtitulo, hero_cta, nombre_tienda, color_acento, whatsapp, instagram, email_contacto
+- [x] Fix duplicados "Público en general" en POS (.maybeSingle + email fijo publico.general@pos.local)
+- [x] Fix N+1 en clientes/page.tsx: 2 queries totales (clientes + ventas bulk) con agregación en JS
+- [x] Tipo Cliente ampliado con campos de dirección; modal de edición los recibe correctamente
+- [x] Aprobación de solicitud de proveedor crea el producto en catálogo automáticamente
+- [x] Email del proveedor clickeable (mailto) + botón "Copiar" en panel de solicitudes
+- [x] Rutas /envio-nube y /tienda-en-linea confirmadas existentes en app/
 
 ---
 

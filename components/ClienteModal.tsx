@@ -8,6 +8,10 @@ type ClienteForm = {
   email: string
   telefono: string
   ciudad: string
+  direccion: string
+  codigo_postal: string
+  estado_region: string
+  pais: string
   tag: 'Nuevo' | 'Regular' | 'VIP'
 }
 
@@ -17,7 +21,11 @@ type Props = {
   onSave: () => void
 }
 
-const empty: ClienteForm = { nombre: '', email: '', telefono: '', ciudad: '', tag: 'Nuevo' }
+const empty: ClienteForm = {
+  nombre: '', email: '', telefono: '', ciudad: '',
+  direccion: '', codigo_postal: '', estado_region: '', pais: 'México',
+  tag: 'Nuevo',
+}
 
 export default function ClienteModal({ inicial, onClose, onSave }: Props) {
   const [form, setForm] = useState<ClienteForm>(inicial ?? empty)
@@ -46,11 +54,15 @@ export default function ClienteModal({ inicial, onClose, onSave }: Props) {
     setSaving(true)
 
     const payload = {
-      nombre: form.nombre.trim(),
-      email: form.email.trim(),
-      telefono: form.telefono.trim() || null,
-      ciudad: form.ciudad.trim() || null,
-      tag: form.tag,
+      nombre:        form.nombre.trim(),
+      email:         form.email.trim(),
+      telefono:      form.telefono.trim()      || null,
+      ciudad:        form.ciudad.trim()        || null,
+      direccion:     form.direccion.trim()     || null,
+      codigo_postal: form.codigo_postal.trim() || null,
+      estado_region: form.estado_region.trim() || null,
+      pais:          form.pais.trim()          || 'México',
+      tag:           form.tag,
     }
 
     const { error } = esEdicion
@@ -65,8 +77,8 @@ export default function ClienteModal({ inicial, onClose, onSave }: Props) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid #f3f4f6' }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid #f3f4f6', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>{esEdicion ? 'Editar cliente' : 'Agregar cliente'}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af' }}>×</button>
         </div>
@@ -86,6 +98,22 @@ export default function ClienteModal({ inicial, onClose, onSave }: Props) {
             </Field>
             <Field label="Ciudad">
               <input value={form.ciudad} onChange={e => set('ciudad', e.target.value)} placeholder="CDMX" style={input(false)} />
+            </Field>
+          </div>
+
+          <Field label="Dirección">
+            <input value={form.direccion} onChange={e => set('direccion', e.target.value)} placeholder="Calle, número, colonia" style={input(false)} />
+          </Field>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <Field label="C.P.">
+              <input value={form.codigo_postal} onChange={e => set('codigo_postal', e.target.value)} placeholder="06600" style={input(false)} />
+            </Field>
+            <Field label="Estado / Región">
+              <input value={form.estado_region} onChange={e => set('estado_region', e.target.value)} placeholder="CDMX" style={input(false)} />
+            </Field>
+            <Field label="País">
+              <input value={form.pais} onChange={e => set('pais', e.target.value)} placeholder="México" style={input(false)} />
             </Field>
           </div>
 

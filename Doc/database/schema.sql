@@ -74,6 +74,10 @@ create table if not exists clientes (
   email       text    not null unique,
   telefono    text,
   ciudad      text,
+  direccion   text,
+  codigo_postal text,
+  estado_region text,
+  pais        text    default 'México',
   tag         text    not null default 'Nuevo' check (tag in ('Nuevo', 'Regular', 'VIP')),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
@@ -204,11 +208,22 @@ create trigger trg_recalcular_total
 
 -- ============================================================
 --  FUNCIÓN: descontar stock al confirmar pago
+--  Activa en INSERT (POS crea venta con estado='Pagado')
+--  y en UPDATE (storefront cambia de Pendiente → Pagado)
 -- ============================================================
 create or replace function descontar_stock()
 returns trigger language plpgsql as $$
 begin
-  if new.estado = 'Pagado' and old.estado <> 'Pagado' then
+  -- INSERT directo con estado Pagado (POS)
+  if TG_OP = 'INSERT' and new.estado = 'Pagado' then
+    update productos p
+    set stock = p.stock - vi.cantidad
+    from venta_items vi
+    where vi.venta_id = new.id
+      and vi.producto_id = p.id;
+  end if;
+  -- UPDATE de Pendiente → Pagado (storefront / admin)
+  if TG_OP = 'UPDATE' and new.estado = 'Pagado' and old.estado <> 'Pagado' then
     update productos p
     set stock = p.stock - vi.cantidad
     from venta_items vi
@@ -219,19 +234,23 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_descontar_stock on ventas;
 create trigger trg_descontar_stock
-  after update on ventas
+  after insert or update on ventas
   for each row execute function descontar_stock();
 
 
 -- ============================================================
 --  FUNCIÓN: actualizar tag del cliente según pedidos pagados
+--  Activa en INSERT (POS) y en UPDATE (admin/storefront)
 -- ============================================================
 create or replace function actualizar_tag_cliente()
 returns trigger language plpgsql as $$
 declare
   total_pedidos integer;
 begin
+  if new.cliente_id is null then return new; end if;
+
   select count(*) into total_pedidos
   from ventas
   where cliente_id = new.cliente_id and estado = 'Pagado';
@@ -248,8 +267,9 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_actualizar_tag on ventas;
 create trigger trg_actualizar_tag
-  after update on ventas
+  after insert or update on ventas
   for each row
   when (new.estado = 'Pagado')
   execute function actualizar_tag_cliente();
@@ -416,16 +436,20 @@ create policy "auth elimina imagenes productos" on storage.objects
 create table if not exists config_storefront (
   id              int primary key default 1,
   nombre_tienda   text not null default 'Order Express',
-  hero_titulo     text not null default 'Productos de calidad',
-  hero_subtitulo  text not null default 'Los mejores productos al mejor precio.',
+  hero_titulo     text not null default 'Compra tech con estilo express.',
+  hero_subtitulo  text not null default 'Los mejores accesorios, periféricos y gadgets.',
   hero_cta        text not null default 'Ver productos',
   color_acento    text not null default '#e7226d',
   whatsapp        text default '',
+  telefono        text default '',
   email_contacto  text default '',
   instagram       text default '',
+  facebook        text default '',
   updated_at      timestamptz default now(),
   constraint single_row check (id = 1)
 );
+
+alter table config_storefront enable row level security;
 
 -- Insertar fila inicial si no existe
 insert into config_storefront (id) values (1) on conflict do nothing;
@@ -447,7 +471,8 @@ create table if not exists registros (
   email      text not null unique,
   password   text not null,
   activo     boolean not null default false,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 alter table registros enable row level security;
@@ -480,8 +505,13 @@ create table if not exists solicitudes_productos (
   categoria_id     int references categorias(id),
   estado           text not null default 'pendiente'
                    check (estado in ('pendiente','aprobado','rechazado')),
-  created_at       timestamptz default now()
+  created_at       timestamptz default now(),
+  updated_at       timestamptz default now()
 );
+
+create trigger trg_solicitudes_updated_at
+  before update on solicitudes_productos
+  for each row execute function set_updated_at();
 
 alter table solicitudes_productos enable row level security;
 
@@ -493,6 +523,77 @@ create policy "publico lee sus solicitudes" on solicitudes_productos
 
 create policy "auth gestiona solicitudes" on solicitudes_productos
   for all using (auth.role() = 'authenticated');
+
+
+-- ============================================================
+--  TABLA: config_notificaciones (preferencias por usuario admin)
+-- ============================================================
+create table if not exists config_notificaciones (
+  id           uuid primary key default uuid_generate_v4(),
+  user_id      uuid not null unique references auth.users(id) on delete cascade,
+  stock_bajo   boolean not null default true,
+  nueva_venta  boolean not null default true,
+  email_resumen boolean not null default false,
+  updated_at   timestamptz default now()
+);
+
+alter table config_notificaciones enable row level security;
+
+create policy "usuario lee sus notificaciones" on config_notificaciones
+  for select using (auth.uid() = user_id);
+
+create policy "usuario gestiona sus notificaciones" on config_notificaciones
+  for all using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+
+-- ============================================================
+--  TABLA: config_metodos_pago (métodos activos en la tienda)
+--  Fila única global (id = 1), igual que config_storefront
+-- ============================================================
+create table if not exists config_metodos_pago (
+  id            int primary key default 1,
+  efectivo      boolean not null default true,
+  transferencia boolean not null default true,
+  tarjeta       boolean not null default false,
+  mercadopago   boolean not null default false,
+  updated_at    timestamptz default now(),
+  constraint single_row_metodos check (id = 1)
+);
+
+alter table config_metodos_pago enable row level security;
+
+insert into config_metodos_pago (id) values (1) on conflict do nothing;
+
+create policy "publico lee metodos pago" on config_metodos_pago
+  for select using (true);
+
+create policy "auth modifica metodos pago" on config_metodos_pago
+  for all using (auth.role() = 'authenticated');
+
+
+-- ============================================================
+--  TABLA: cart_items (carrito persistente para clientes con cuenta)
+-- ============================================================
+create table if not exists cart_items (
+  id          uuid primary key default uuid_generate_v4(),
+  registro_id uuid not null references registros(id) on delete cascade,
+  producto_id uuid not null references productos(id) on delete cascade,
+  cantidad    int  not null default 1 check (cantidad > 0),
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now(),
+  unique (registro_id, producto_id)
+);
+
+alter table cart_items enable row level security;
+
+create policy "cliente lee su carrito" on cart_items
+  for select using (true);
+
+create policy "cliente gestiona su carrito" on cart_items
+  for all with check (true);
+
+create index if not exists idx_cart_items_registro on cart_items(registro_id);
 
 
 -- ============================================================

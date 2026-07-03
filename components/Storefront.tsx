@@ -481,8 +481,21 @@ export default function Storefront() {
     setQaInputs((p) => ({ ...p, [idx]: '' }))
   }
 
+  /* ---- Inyectar color de acento como CSS variable ---- */
+  useEffect(() => {
+    document.documentElement.style.setProperty('--store-accent', storeConfig.color_acento || '#e7226d')
+  }, [storeConfig.color_acento])
+
   /* ---- Preview header ---- */
   const preview = (() => {
+    if (view === 'inicio') {
+      return {
+        kicker: 'Inicio',
+        title: 'Seleccion curada para tu setup.',
+        text: storeConfig.hero_subtitulo || 'Los mejores accesorios, periféricos y gadgets.',
+        chips: ['Entrega rapida', 'Stock limitado', 'Garantia incluida'],
+      }
+    }
     if (view === 'producto') {
       const product = findProduct(detailTitle)
       return {
@@ -810,20 +823,55 @@ export default function Storefront() {
   }
 
   const renderSupport = () => {
-    const cards: [string, string, string][] = [
-      ['message-circle', 'Chat de compra', 'Resuelve dudas sobre productos antes de comprar.'],
-      ['truck', 'Envios y rastreo', 'Consulta estados simulados de entrega y tiempos.'],
-      ['shield-check', 'Garantias', 'Cambios, devoluciones y cobertura de accesorios.'],
-      ['sparkles', 'Asesoria', 'Recomendaciones para elegir tu setup ideal.'],
+    const cards: [string, string, string, string | null][] = [
+      ['message-circle', 'Chat de compra', 'Resuelve dudas sobre productos antes de comprar.', storeConfig.whatsapp ? `https://wa.me/${storeConfig.whatsapp.replace(/\D/g, '')}` : null],
+      ['truck', 'Envios y rastreo', 'Consulta estados y tiempos de entrega con el equipo.', storeConfig.email_contacto ? `mailto:${storeConfig.email_contacto}` : null],
+      ['shield-check', 'Garantias', 'Cambios, devoluciones y cobertura de accesorios.', null],
+      ['sparkles', 'Asesoria', 'Recomendaciones para elegir tu setup ideal.', storeConfig.instagram ? `https://instagram.com/${storeConfig.instagram.replace('@', '')}` : null],
     ]
-    return cards.map(([icon, title, text]) => (
-      <article key={title} className="support-card">
-        <Ic n={icon} />
-        <h3>{title}</h3>
-        <p>{text}</p>
-        <button className="round-button dark" type="button" aria-label={title}><Ic n="arrow-right" /></button>
-      </article>
-    ))
+    return (
+      <>
+        {cards.map(([icon, title, text, href]) => (
+          <article key={title} className="support-card">
+            <Ic n={icon} />
+            <h3>{title}</h3>
+            <p>{text}</p>
+            {href
+              ? <a href={href} target="_blank" rel="noopener noreferrer" className="round-button dark" aria-label={title} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: '#111', color: '#fff', textDecoration: 'none' }}><Ic n="arrow-right" /></a>
+              : <button className="round-button dark" type="button" aria-label={title}><Ic n="arrow-right" /></button>
+            }
+          </article>
+        ))}
+        {(storeConfig.whatsapp || storeConfig.instagram || storeConfig.email_contacto) && (
+          <article className="support-card" style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <h3>Contáctanos directamente</h3>
+              <p>Estamos disponibles para ayudarte en cualquier momento.</p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {storeConfig.whatsapp && (
+                <a href={`https://wa.me/${storeConfig.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#25d366', color: '#fff', borderRadius: 99, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                  💬 WhatsApp
+                </a>
+              )}
+              {storeConfig.instagram && (
+                <a href={`https://instagram.com/${storeConfig.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#e1306c', color: '#fff', borderRadius: 99, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                  📷 Instagram
+                </a>
+              )}
+              {storeConfig.email_contacto && (
+                <a href={`mailto:${storeConfig.email_contacto}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#252855', color: '#fff', borderRadius: 99, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                  ✉️ Email
+                </a>
+              )}
+            </div>
+          </article>
+        )}
+      </>
+    )
   }
 
   const renderSearch = () => {
@@ -1020,7 +1068,7 @@ export default function Storefront() {
         <section className="home-immersive">
           <header className="topbar">
             <div>
-              <p className="eyebrow">Ecommerce preview</p>
+              <p className="eyebrow">{storeConfig.nombre_tienda}</p>
               <h1>{storeConfig.hero_titulo}</h1>
             </div>
 
@@ -1084,7 +1132,7 @@ export default function Storefront() {
               </a>
 
               {/* Botón: Panel administrativo */}
-              <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 6, background: storeConfig.color_acento || '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                 🔒 Panel admin
               </a>
             </div>
@@ -1130,7 +1178,7 @@ export default function Storefront() {
               <span className="pill live"><Ic n="sparkles" /> Nuevo drop</span>
               <h2>TYPE SMARTER.<br />PLAY LONGER.</h2>
               <p>Teclados, consolas y accesorios seleccionados para setups compactos con mucha personalidad.</p>
-              <a className="text-link" href="#" onClick={(e) => { e.preventDefault(); goView('catalogo') }}>Ver catalogo <Ic n="arrow-right" /></a>
+              <a className="text-link" href="#" onClick={(e) => { e.preventDefault(); goView('catalogo') }}>{storeConfig.hero_cta || 'Ver catalogo'} <Ic n="arrow-right" /></a>
             </div>
             <img src="https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?auto=format&fit=crop&w=900&q=80" alt="Teclado mecanico verde" />
           </article>

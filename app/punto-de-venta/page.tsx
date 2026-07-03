@@ -106,19 +106,22 @@ export default function PuntoDeVentaPage() {
     // Crear o buscar cliente
     let clienteId: string | null = null
     const nombreCliente = clienteNombre.trim() || 'Público en general'
+    const esPublico = nombreCliente === 'Público en general'
+    // maybeSingle evita error cuando hay 0 o >1 filas (prevenía duplicados en cadena)
     const { data: clienteExistente } = await supabase
       .from('clientes')
       .select('id')
       .ilike('nombre', nombreCliente)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (clienteExistente) {
       clienteId = clienteExistente.id
     } else {
+      const emailPos = esPublico ? 'publico.general@pos.local' : `pos-${Date.now()}@pos.local`
       const { data: nuevoCliente } = await supabase
         .from('clientes')
-        .insert({ nombre: nombreCliente, email: `${Date.now()}@pos.local`, tag: 'Nuevo' })
+        .insert({ nombre: nombreCliente, email: emailPos, tag: 'Nuevo' })
         .select('id')
         .single()
       clienteId = nuevoCliente?.id ?? null
