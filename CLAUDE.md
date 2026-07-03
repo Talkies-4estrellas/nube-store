@@ -8,7 +8,7 @@ Antes de hacer cualquier cambio, consultar estos archivos en orden:
 |---------|-------------|
 | `Doc/indice.md` | Mapa de TODOS los archivos del proyecto: ubicación, URL y función exacta |
 | `Doc/documentacion/documento.md` | Referencia técnica completa: tablas DB, estados de cada página, funciones, mapa de operaciones Supabase, flujos, pendientes |
-| `Doc/memoria.md` | Cómo registrar cambios en el archivo de sesión del día |
+| `Doc/memoria.md` | Instrucciones para registrar commits en el archivo de sesión — **leer siempre al iniciar sesión** |
 | `Doc/sesiones/seccion-DD-MM-YYYY.md` | Historial de cambios por día |
 | `Doc/database/` | schema.sql, auth.sql, migration_criticos.sql, migration_columnas.sql |
 
@@ -180,6 +180,21 @@ Las políticas antiguas permisivas (`anon total`) fueron reemplazadas por polít
 - **NO hacer git commit** — GitKraken gestiona todos los commits
 - **Middleware redirect COMENTADO** — temporalmente deshabilitado hasta configurar usuarios en Supabase Auth
 - **`productos_con_estado` VIEW** — usada en POS y Productos; incluye estado calculado
+
+## Flujo de registro de sesión (memoria.md)
+
+Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. El proceso es:
+
+1. El usuario hace commits desde GitKraken
+2. Cuando dice "registra el commit" o "actualiza la memoria", ejecutar:
+   ```bash
+   git log -1 --stat
+   ```
+3. Abrir `Doc/sesiones/seccion-DD-MM-YYYY.md` del día actual
+4. Agregar una sección `### [HH:MM] Commit: {mensaje}` con hash, tabla de archivos y descripción
+5. Si el archivo de sesión del día no existe, crearlo con la estructura base de `memoria.md`
+
+**Probado y funcionando el 03/07/2026** — último commit registrado: `44f4595` ("agrego de documentación del proyecto y el arreglo de la base de datos")
 
 ## Decisiones técnicas importantes
 - **Sin styled-jsx / sin Tailwind:** inline styles en TODOS los componentes
