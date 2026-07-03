@@ -10,6 +10,20 @@ type VentaGrafica = { total: number; estado: string; created_at: string }
 type ProductoBajo = { nombre: string; stock: number }
 type Toast = { id: number; message: string; icon: string; color: string }
 type TopMetric = { label: string; value: string; sub: string; icon: string; color: string }
+type Solicitud = {
+  id: string
+  proveedor_nombre: string
+  proveedor_email: string
+  proveedor_empresa: string | null
+  producto_nombre: string
+  producto_sku: string
+  producto_precio: number
+  producto_stock: number
+  categoria_id: number | null
+  imagen_url: string | null
+  estado: string
+  created_at: string
+}
 
 const statusColor: Record<string, string> = { Pagado: '#d1fae5', Enviado: '#dbeafe', Pendiente: '#fef3c7', Cancelado: '#fee2e2', 'En proceso': '#ede9fe' }
 const statusText:  Record<string, string> = { Pagado: '#065f46', Enviado: '#1e40af', Pendiente: '#92400e', Cancelado: '#991b1b', 'En proceso': '#6d28d9' }
@@ -108,6 +122,8 @@ export default function DashboardPage() {
   const [loadingPeriodo, setLoadingPeriodo] = useState(false)
   const [toasts, setToasts]             = useState<Toast[]>([])
   const [topMetrics, setTopMetrics]     = useState<TopMetric[]>([])
+  const [solicitudes, setSolicitudes]   = useState<Solicitud[]>([])
+  const [procesando, setProcesando]     = useState<string | null>(null)
   const toastId = useRef(0)
 
   function addToast(message: string, icon: string, color: string) {
@@ -132,15 +148,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }] = await Promise.all([
+      const [{ data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }, { data: sols }] = await Promise.all([
         supabase.from('ventas').select('*, clientes(nombre)').order('created_at', { ascending: false }).limit(5),
         supabase.from('productos').select('nombre, stock').lte('stock', 3).order('stock'),
         supabase.from('clientes').select('id', { count: 'exact', head: true }),
         supabase.from('venta_items').select('nombre, cantidad, productos(categorias(nombre))'),
         supabase.from('ventas').select('cliente_id, total, clientes(nombre)').eq('estado', 'Pagado'),
+        supabase.from('solicitudes_productos').select('*').eq('estado', 'pendiente').order('created_at', { ascending: false }),
       ])
       if (v) setVentas(v)
       if (p) setStockBajo(p)
+      if (sols) setSolicitudes(sols)
       setTotalClientes(count ?? 0)
 
       // Calcular top metrics
@@ -199,6 +217,32 @@ export default function DashboardPage() {
     }
     loadPeriodo()
   }, [periodo])
+
+  async function cambiarEstado(id: string, estado: 'aprobado' | 'rechazado') {
+    setProcesando(id)
+    if (estado === 'aprobado') {
+      const sol = solicitudes.find(s => s.id === id)
+      if (sol) {
+        await supabase.from('productos').insert({
+          nombre: sol.producto_nombre,
+          sku: sol.producto_sku,
+          precio: sol.producto_precio,
+          stock: sol.producto_stock,
+          imagen_url: sol.imagen_url,
+          categoria_id: sol.categoria_id,
+          activo: true,
+        })
+      }
+    }
+    await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
+    setSolicitudes(prev => prev.filter(s => s.id !== id))
+    addToast(
+      estado === 'aprobado' ? 'Producto aprobado y publicado en el catálogo' : 'Solicitud rechazada',
+      estado === 'aprobado' ? 'check' : 'warning',
+      estado === 'aprobado' ? '#059669' : '#dc2626',
+    )
+    setProcesando(null)
+  }
 
   const totalPeriodo = ventasPeriodo.filter(v => v.estado === 'Pagado').reduce((s, v) => s + Number(v.total), 0)
   const pendientes   = ventas.filter(v => v.estado === 'Pendiente').length
@@ -366,6 +410,104 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Solicitudes de proveedores */}
+      {(solicitudes.length > 0 || loading) && (
+        <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginTop: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111', margin: 0 }}>Solicitudes de proveedores</h2>
+              {solicitudes.length > 0 && (
+                <span style={{ background: PINK, color: '#fff', fontSize: 11, fontWeight: 800, padding: '2px 10px', borderRadius: 20 }}>
+                  {solicitudes.length} pendiente{solicitudes.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {solicitudes.length > 1 && (
+                <button
+                  onClick={async () => {
+                    setProcesando('all')
+                    for (const sol of solicitudes) {
+                      await supabase.from('productos').insert({
+                        nombre: sol.producto_nombre, sku: sol.producto_sku,
+                        precio: sol.producto_precio, stock: sol.producto_stock,
+                        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
+                      })
+                      await supabase.from('solicitudes_productos').update({ estado: 'aprobado' }).eq('id', sol.id)
+                    }
+                    setSolicitudes([])
+                    addToast(`${solicitudes.length} productos aprobados y publicados`, 'check', '#059669')
+                    setProcesando(null)
+                  }}
+                  disabled={procesando !== null}
+                  style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: procesando !== null ? '#9ca3af' : '#059669', color: '#fff', fontSize: 13, fontWeight: 700, cursor: procesando !== null ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                  {procesando === 'all' ? 'Aprobando...' : `Aprobar todos (${solicitudes.length})`}
+                </button>
+              )}
+              <Link href="/configuracion" style={{ fontSize: 13, color: BLUE, textDecoration: 'none', fontWeight: 600 }}>Ver configuración →</Link>
+            </div>
+          </div>
+
+          {loading ? (
+            <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {solicitudes.map(sol => (
+                <div key={sol.id} style={{ display: 'grid', gridTemplateColumns: '56px 1fr auto', gap: 16, alignItems: 'center', background: '#f9fafb', borderRadius: 12, padding: '14px 18px', border: '1px solid #f3f4f6' }}>
+                  {/* Imagen */}
+                  <div style={{ width: 56, height: 56, borderRadius: 10, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                    {sol.imagen_url
+                      ? <img src={sol.imagen_url} alt={sol.producto_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : '📦'}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111' }}>{sol.producto_nombre}</p>
+                      <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{sol.producto_sku}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#059669' }}>
+                        ${Number(sol.producto_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </span>
+                      {sol.producto_stock > 0 && (
+                        <span style={{ fontSize: 11, color: '#6b7280' }}>{sol.producto_stock} uds</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                        {sol.proveedor_nombre}{sol.proveedor_empresa ? ` · ${sol.proveedor_empresa}` : ''}
+                      </span>
+                      <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
+                      <a href={`mailto:${sol.proveedor_email}`} style={{ fontSize: 11, color: BLUE, textDecoration: 'none' }}>{sol.proveedor_email}</a>
+                      <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                        {new Date(sol.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Acciones */}
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button
+                      onClick={() => cambiarEstado(sol.id, 'rechazado')}
+                      disabled={procesando === sol.id}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer', opacity: procesando === sol.id ? 0.5 : 1 }}>
+                      Rechazar
+                    </button>
+                    <button
+                      onClick={() => cambiarEstado(sol.id, 'aprobado')}
+                      disabled={procesando === sol.id}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: procesando === sol.id ? '#9ca3af' : '#059669', color: '#fff', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer' }}>
+                      {procesando === sol.id ? '...' : 'Aprobar y publicar'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Toasts */}
       {toasts.length > 0 && (

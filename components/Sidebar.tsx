@@ -77,11 +77,25 @@ export default function Sidebar() {
   const [solicitudesPendientes, setSolicitudesPendientes] = useState(0)
 
   useEffect(() => {
+    // Carga inicial
     supabase
       .from('solicitudes_productos')
       .select('id', { count: 'exact', head: true })
       .eq('estado', 'pendiente')
       .then(({ count }) => setSolicitudesPendientes(count ?? 0))
+
+    // Realtime: nueva solicitud o cambio de estado → actualiza badge
+    const channel = supabase
+      .channel('sidebar-solicitudes-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_productos' }, () => {
+        supabase
+          .from('solicitudes_productos')
+          .select('id', { count: 'exact', head: true })
+          .eq('estado', 'pendiente')
+          .then(({ count }) => setSolicitudesPendientes(count ?? 0))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   const allowed = user ? new Set(ROLE_ROUTES[user.role]) : null

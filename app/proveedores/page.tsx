@@ -11,6 +11,16 @@ const EMAIL_KEY    = 'proveedor_email_saved'
 
 type Categoria = { id: number; nombre: string }
 
+type MiSolicitud = {
+  id: string
+  producto_nombre: string
+  producto_sku: string
+  producto_precio: number
+  estado: string
+  created_at: string
+  imagen_url: string | null
+}
+
 type ProductoLocal = {
   nombre: string
   sku: string
@@ -44,7 +54,7 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 }
 
 export default function ProveedoresPage() {
-  const [tab, setTab] = useState<'registro' | 'historial'>('registro')
+  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados'>('registro')
   const [savedEmail, setSavedEmail] = useState('')
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -66,6 +76,22 @@ export default function ProveedoresPage() {
   const [historialItems, setHistorialItems] = useState<{ id: string; producto_nombre: string; producto_sku: string; estado: string; created_at: string }[] | null>(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [historialError, setHistorialError] = useState('')
+
+  // Panel "Mis productos enviados" en tab registro
+  const [showMisProductos, setShowMisProductos] = useState(false)
+  const [misProductos, setMisProductos] = useState<MiSolicitud[]>([])
+  const [loadingMisProductos, setLoadingMisProductos] = useState(false)
+
+  async function cargarMisProductos(email: string) {
+    setLoadingMisProductos(true)
+    const { data } = await supabase
+      .from('solicitudes_productos')
+      .select('id, producto_nombre, producto_sku, producto_precio, estado, created_at, imagen_url')
+      .eq('proveedor_email', email)
+      .order('created_at', { ascending: false })
+    setMisProductos(data ?? [])
+    setLoadingMisProductos(false)
+  }
 
   async function consultarHistorial() {
     const email = historialEmail.trim().toLowerCase()
@@ -115,6 +141,12 @@ export default function ProveedoresPage() {
           .eq('proveedor_email', email)
           .order('created_at', { ascending: false })
           .then(({ data }) => { if (data && data.length > 0) setHistorialItems(data) })
+        supabase
+          .from('solicitudes_productos')
+          .select('id, producto_nombre, producto_sku, producto_precio, estado, created_at, imagen_url')
+          .eq('proveedor_email', email)
+          .order('created_at', { ascending: false })
+          .then(({ data }) => { if (data) setMisProductos(data) })
       }
     } catch { /* ignorar */ }
   }, [])
@@ -275,8 +307,11 @@ export default function ProveedoresPage() {
     }
 
     localStorage.removeItem(DRAFT_KEY)
-    try { localStorage.setItem(EMAIL_KEY, proveedor.email.trim().toLowerCase()) } catch {}
-    setSavedEmail(proveedor.email.trim().toLowerCase())
+    const emailGuardado = proveedor.email.trim().toLowerCase()
+    try { localStorage.setItem(EMAIL_KEY, emailGuardado) } catch {}
+    setSavedEmail(emailGuardado)
+    // Recargar mis productos para que refleje los nuevos envíos
+    cargarMisProductos(emailGuardado)
     setFormState('success')
   }
 
@@ -291,10 +326,16 @@ export default function ProveedoresPage() {
 
   const catNombre = (id: string) => categorias.find(c => String(c.id) === id)?.nombre ?? '—'
 
-  const navItem = (id: 'registro' | 'historial', label: string, emoji: string) => {
+  const navItem = (id: 'registro' | 'historial' | 'misEnviados', label: string, emoji: string) => {
     const active = tab === id
     return (
-      <button onClick={() => setTab(id)} style={{
+      <button onClick={() => {
+        setTab(id)
+        if (id === 'misEnviados') {
+          const email = savedEmail || proveedor.email.trim().toLowerCase()
+          if (email) cargarMisProductos(email)
+        }
+      }} style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', width: '100%',
         color: NAVY, fontSize: 14, fontWeight: active ? 800 : 700, borderRadius: 999,
         background: active ? '#fff' : 'transparent', cursor: 'pointer',
@@ -325,6 +366,7 @@ export default function ProveedoresPage() {
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>PORTAL</span>
           {navItem('registro',  'Registrar producto', '📦')}
           {navItem('historial', 'Mis solicitudes',    '🔍')}
+          {navItem('misEnviados', 'Mis enviados', '📋')}
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '20px 14px 6px', display: 'block' }}>ACCESO</span>
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', color: NAVY, fontSize: 14, fontWeight: 700, borderRadius: 999, border: '2px solid transparent', textDecoration: 'none' }}>
             <span style={{ fontSize: 16 }}>🏠</span> Volver a la tienda
@@ -357,7 +399,7 @@ export default function ProveedoresPage() {
         {/* Topbar */}
         <header style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : 'Mis solicitudes'}
+            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : 'Mis enviados'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -826,6 +868,99 @@ export default function ProveedoresPage() {
             </button>
           </form>
         ) : null}
+
+        {/* ---- Tab: Mis enviados ---- */}
+        {tab === 'misEnviados' && (
+          <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+
+            {/* Si no hay email conocido, pedir al proveedor que lo ingrese */}
+            {!savedEmail && !historialEmail && misProductos.length === 0 && !loadingMisProductos ? (
+              <div style={{ padding: '32px 28px' }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>Ingresa tu email para ver tus productos</p>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px' }}>Consulta el estado de todos los productos que has enviado</p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input
+                    type="email"
+                    value={historialEmail}
+                    onChange={e => setHistorialEmail(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && historialEmail.trim()) cargarMisProductos(historialEmail.trim().toLowerCase()) }}
+                    placeholder="tu@email.com"
+                    style={{ ...inputStyle, flex: 1 }}
+                    onFocus={focus} onBlur={blur}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { if (historialEmail.trim()) cargarMisProductos(historialEmail.trim().toLowerCase()) }}
+                    disabled={!historialEmail.trim()}
+                    style={{ background: !historialEmail.trim() ? '#f3f4f6' : NAVY, color: !historialEmail.trim() ? '#9ca3af' : '#fff', border: 'none', padding: '0 24px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: !historialEmail.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    Consultar
+                  </button>
+                </div>
+              </div>
+            ) : loadingMisProductos ? (
+              <div style={{ padding: '48px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Cargando...</p>
+              </div>
+            ) : misProductos.length === 0 ? (
+              <div style={{ padding: '48px', textAlign: 'center' }}>
+                <p style={{ fontSize: 40, margin: '0 0 12px' }}>📭</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>No encontramos productos con ese email</p>
+                <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Verifica el email con el que registraste tus solicitudes.</p>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {misProductos.map((item, i) => {
+                    const estadoMap: Record<string, { bg: string; text: string; label: string }> = {
+                      pendiente: { bg: '#fef3c7', text: '#92400e', label: '⏳ Pendiente' },
+                      aprobado:  { bg: '#d1fae5', text: '#065f46', label: '✅ Aprobado' },
+                      rechazado: { bg: '#fee2e2', text: '#991b1b', label: '❌ Rechazado' },
+                    }
+                    const st = estadoMap[item.estado] ?? estadoMap.pendiente
+                    return (
+                      <div key={item.id} style={{
+                        display: 'grid', gridTemplateColumns: '56px 1fr auto',
+                        gap: 16, alignItems: 'center', padding: '14px 28px',
+                        borderBottom: i < misProductos.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        background: i % 2 === 0 ? '#fff' : '#fafafa',
+                      }}>
+                        <div style={{ width: 56, height: 56, borderRadius: 12, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                          {item.imagen_url
+                            ? <img src={item.imagen_url} alt={item.producto_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : '📦'}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
+                          <div style={{ display: 'flex', gap: 10, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</span>
+                            <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: '#059669' }}>
+                              ${Number(item.producto_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
+                            <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                              {new Date(item.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={{ display: 'inline-flex', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '5px 14px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {st.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ padding: '12px 28px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#9ca3af' }}>{misProductos.length} producto{misProductos.length !== 1 ? 's' : ''} encontrado{misProductos.length !== 1 ? 's' : ''}</span>
+                  <button type="button" onClick={() => { const email = savedEmail || historialEmail; if (email) cargarMisProductos(email) }}
+                    style={{ background: 'none', border: 'none', fontSize: 12, color: '#9ca3af', cursor: 'pointer', fontWeight: 600 }}>
+                    🔄 Actualizar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* ---- Tab: Mis solicitudes ---- */}
         {tab === 'historial' && (

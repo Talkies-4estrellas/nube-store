@@ -253,7 +253,6 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Carrito de tienda persistente en DB para clientes con cuenta (cart_items)
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
-- [ ] Notificaciones en tiempo real (badge topbar para ventas nuevas)
 - [ ] Modo oscuro
 
 ## Completado (03/07/2026)
@@ -263,7 +262,12 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tipo Cliente ampliado con campos de dirección; modal de edición los recibe correctamente
 - [x] Aprobación de solicitud de proveedor crea el producto en catálogo automáticamente
 - [x] Email del proveedor clickeable (mailto) + botón "Copiar" en panel de solicitudes
-- [x] Rutas /envio-nube y /tienda-en-linea confirmadas existentes en app/
+- [x] Rutas /envio-nube y /tienda-en-linea confirmadas existentes en app/ y funcionando correctamente
+- [x] Notificaciones Realtime en Topbar: campana con badge rojo para ventas nuevas, dropdown con detalle (venta #, cliente, total, hora)
+- [x] Sidebar badge de solicitudes pendientes actualizado en tiempo real (canal sidebar-solicitudes-realtime)
+- [x] Dashboard, Envíos y Tienda en línea auditados — todos leen datos reales de Supabase sin problemas
+- [x] Portal proveedores: tab "Mis enviados" independiente — muestra todas las solicitudes (pendiente/aprobado/rechazado) filtradas por email del proveedor; input de email cuando no hay sesión guardada
+- [x] Dashboard administrativo: sección "Solicitudes de proveedores" con aprobación/rechazo individual y botón "Aprobar todos (N)" para bulk; al aprobar inserta producto en catálogo automáticamente; toast de confirmación
 
 ---
 
