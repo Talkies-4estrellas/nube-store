@@ -158,8 +158,9 @@ export default function DashboardPage() {
         // Categoría más popular
         const catCount: Record<string, number> = {}
         items.forEach((i) => {
-          const cat = i.productos?.categorias?.nombre ?? 'Sin categoría'
-          catCount[cat] = (catCount[cat] ?? 0) + i.cantidad
+          const prod = i.productos as { categorias: { nombre: string } | null } | null
+          const cat = prod?.categorias?.nombre ?? 'Sin categoría'
+          catCount[cat] = (catCount[cat] ?? 0) + (i.cantidad as number)
         })
         const topCat = Object.entries(catCount).sort((a, b) => b[1] - a[1])[0]
         if (topCat) tops.push({ label: 'Categoría top', value: topCat[0], sub: `${topCat[1]} unidades`, icon: '🏷️', color: '#0891b2' })
