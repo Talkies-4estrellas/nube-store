@@ -112,8 +112,31 @@ export default function ConfiguracionPage() {
   const [contacto, setContacto] = useState({ email: '', telefono: '', whatsapp: '', direccion: '', ciudad: '', pais: 'México' })
   const [pagos, setPagos] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false })
   const [notif, setNotif] = useState({ stock_bajo: true, nueva_venta: true, email_resumen: false })
+  const [heroTitulo, setHeroTitulo] = useState('')
+  const [heroSubtitulo, setHeroSubtitulo] = useState('')
+  const [heroCta, setHeroCta] = useState('')
 
-  function handleSave() {
+  useEffect(() => {
+    supabase.from('config_storefront').select('*').eq('id', 1).single()
+      .then(({ data }) => {
+        if (!data) return
+        setNegocio(prev => ({ ...prev, nombre: data.nombre_tienda ?? prev.nombre }))
+        setContacto(prev => ({ ...prev, email: data.email_contacto ?? '', whatsapp: data.whatsapp ?? '' }))
+        setHeroTitulo(data.hero_titulo ?? '')
+        setHeroSubtitulo(data.hero_subtitulo ?? '')
+        setHeroCta(data.hero_cta ?? '')
+      })
+  }, [])
+
+  async function handleSave() {
+    await supabase.from('config_storefront').update({
+      nombre_tienda:   negocio.nombre,
+      hero_titulo:     heroTitulo,
+      hero_subtitulo:  heroSubtitulo,
+      hero_cta:        heroCta,
+      email_contacto:  contacto.email,
+      whatsapp:        contacto.whatsapp,
+    }).eq('id', 1)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }

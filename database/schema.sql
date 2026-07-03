@@ -439,6 +439,63 @@ create policy "auth modifica config storefront" on config_storefront
 
 
 -- ============================================================
+--  TABLA: registros (cuentas de clientes en la tienda)
+-- ============================================================
+create table if not exists registros (
+  id         uuid primary key default uuid_generate_v4(),
+  nombre     text not null,
+  email      text not null unique,
+  password   text not null,
+  activo     boolean not null default false,
+  created_at timestamptz default now()
+);
+
+alter table registros enable row level security;
+
+create policy "publico inserta registro" on registros
+  for insert with check (true);
+
+create policy "publico lee su propio registro" on registros
+  for select using (true);
+
+create policy "auth activa registros" on registros
+  for update using (auth.role() = 'authenticated');
+
+
+-- ============================================================
+--  TABLA: solicitudes_productos (portal de proveedores)
+-- ============================================================
+create table if not exists solicitudes_productos (
+  id               uuid primary key default uuid_generate_v4(),
+  proveedor_nombre text not null,
+  proveedor_empresa text,
+  proveedor_email  text not null,
+  proveedor_telefono text,
+  producto_nombre  text not null,
+  producto_sku     text not null,
+  producto_precio  numeric(10,2),
+  producto_stock   int,
+  producto_descripcion text,
+  producto_imagen_url text,
+  categoria_id     int references categorias(id),
+  estado           text not null default 'pendiente'
+                   check (estado in ('pendiente','aprobado','rechazado')),
+  created_at       timestamptz default now()
+);
+
+alter table solicitudes_productos enable row level security;
+
+create policy "publico inserta solicitud" on solicitudes_productos
+  for insert with check (true);
+
+create policy "publico lee sus solicitudes" on solicitudes_productos
+  for select using (true);
+
+create policy "auth gestiona solicitudes" on solicitudes_productos
+  for all using (auth.role() = 'authenticated');
+
+
+-- ============================================================
 --  CREAR PRIMER USUARIO ADMIN
 --  1. Ve a Supabase → Authentication → Users → Add user
 --  2. Crea el usuario con email + contraseña

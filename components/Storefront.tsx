@@ -175,10 +175,32 @@ export default function Storefront() {
 
   const cartCount = cart.reduce((t, i) => t + i.quantity, 0)
 
+  // Config de la tienda desde Supabase
+  const [storeConfig, setStoreConfig] = useState({
+    nombre_tienda: 'OrderExpress',
+    hero_titulo: 'Compra tech con estilo express.',
+    hero_subtitulo: 'Los mejores accesorios, periféricos y gadgets.',
+    hero_cta: 'Ver productos',
+    color_acento: '#e7226d',
+    whatsapp: '',
+    email_contacto: '',
+    instagram: '',
+  })
+
   /* ---- Persistir carrito en localStorage ---- */
   useEffect(() => {
     try { localStorage.setItem(CART_KEY, JSON.stringify(cart)) } catch {}
   }, [cart])
+
+  /* ---- Cargar config de tienda desde Supabase ---- */
+  useEffect(() => {
+    supabase
+      .from('config_storefront')
+      .select('*')
+      .eq('id', 1)
+      .single()
+      .then(({ data }) => { if (data) setStoreConfig(prev => ({ ...prev, ...data })) })
+  }, [])
 
   /* ---- Cargar productos y categorías desde Supabase ---- */
   useEffect(() => {
@@ -999,7 +1021,7 @@ export default function Storefront() {
           <header className="topbar">
             <div>
               <p className="eyebrow">Ecommerce preview</p>
-              <h1>Compra tech con estilo express.</h1>
+              <h1>{storeConfig.hero_titulo}</h1>
             </div>
 
             <div className="top-actions" aria-label="Acciones superiores">

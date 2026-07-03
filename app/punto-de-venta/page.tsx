@@ -154,14 +154,6 @@ export default function PuntoDeVentaPage() {
       return
     }
 
-    // Decrementar stock
-    for (const i of carrito) {
-      await supabase
-        .from('productos')
-        .update({ stock: i.producto.stock - i.cantidad })
-        .eq('id', i.producto.id)
-    }
-
     setVentaExito({ numero: venta.numero, total: subtotal })
     setPantalla('exito')
     setProcesando(false)

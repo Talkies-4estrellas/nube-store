@@ -35,16 +35,15 @@ const statusStyle: Record<string, { bg: string; text: string }> = {
 }
 
 const estadosSig: Record<string, string[]> = {
-  Pendiente:    ['En proceso', 'Cancelado'],
-  'En proceso': ['Pagado', 'Cancelado'],
-  Pagado:       ['Enviado', 'Cancelado'],
-  Enviado:      [],
-  Cancelado:    [],
+  Pendiente:  ['Pagado', 'Cancelado'],
+  Pagado:     ['Enviado', 'Cancelado'],
+  Enviado:    [],
+  Cancelado:  [],
 }
 
-const PIPELINE = ['Pendiente', 'En proceso', 'Pagado', 'Enviado']
+const PIPELINE = ['Pendiente', 'Pagado', 'Enviado']
 
-const statuses = ['Todos', 'Pendiente', 'En proceso', 'Pagado', 'Enviado', 'Cancelado']
+const statuses = ['Todos', 'Pendiente', 'Pagado', 'Enviado', 'Cancelado']
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
