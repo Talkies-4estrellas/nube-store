@@ -76,7 +76,8 @@ export default function ProductosPage() {
     let imagen_url: string | null = null
 
     if (form.imagen) {
-      const path = `${Date.now()}-${form.sku}.webp`
+      const safeSku = form.sku.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
+      const path = `${Date.now()}-${safeSku || 'producto'}.webp`
       try {
         imagen_url = await uploadToSupabase(form.imagen, supabase, 'productos', path)
       } catch (e) {

@@ -629,7 +629,7 @@ export default function Storefront() {
                 onClick={() => setActiveCat(cat)}
                 style={{
                   padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
-                  background: activeCat === cat ? NAVY : '#f3f4f6',
+                  background: activeCat === cat ? '#252855' : '#f3f4f6',
                   color: activeCat === cat ? '#fff' : '#374151',
                   transition: 'all 0.15s',
                 }}

@@ -6,7 +6,8 @@ import { convertToWebp, uploadToSupabase } from '@/lib/uploadWebp'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
-const DRAFT_KEY = 'proveedor_draft_v1'
+const DRAFT_KEY    = 'proveedor_draft_v1'
+const EMAIL_KEY    = 'proveedor_email_saved'
 
 type Categoria = { id: number; nombre: string }
 
@@ -43,6 +44,8 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 }
 
 export default function ProveedoresPage() {
+  const [tab, setTab] = useState<'registro' | 'historial'>('registro')
+  const [savedEmail, setSavedEmail] = useState('')
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [categorias, setCategorias] = useState<Categoria[]>([])
@@ -88,7 +91,7 @@ export default function ProveedoresPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Cargar borrador al inicio
+  // Cargar borrador + email guardado al inicio
   useEffect(() => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY)
@@ -96,6 +99,22 @@ export default function ProveedoresPage() {
         const { proveedor: p, prod: pr } = JSON.parse(raw)
         if (p) setProveedor(p)
         if (pr) setProd({ ...emptyProducto(), ...pr, imagenFile: null, imagenPreview: null })
+      }
+    } catch { /* ignorar */ }
+
+    // Si ya envió antes, auto-cargar su historial
+    try {
+      const email = localStorage.getItem(EMAIL_KEY)
+      if (email) {
+        setSavedEmail(email)
+        setHistorialEmail(email)
+        setTab('historial')
+        supabase
+          .from('solicitudes_productos')
+          .select('id, producto_nombre, producto_sku, estado, created_at')
+          .eq('proveedor_email', email)
+          .order('created_at', { ascending: false })
+          .then(({ data }) => { if (data && data.length > 0) setHistorialItems(data) })
       }
     } catch { /* ignorar */ }
   }, [])
@@ -256,6 +275,8 @@ export default function ProveedoresPage() {
     }
 
     localStorage.removeItem(DRAFT_KEY)
+    try { localStorage.setItem(EMAIL_KEY, proveedor.email.trim().toLowerCase()) } catch {}
+    setSavedEmail(proveedor.email.trim().toLowerCase())
     setFormState('success')
   }
 
@@ -270,69 +291,147 @@ export default function ProveedoresPage() {
 
   const catNombre = (id: string) => categorias.find(c => String(c.id) === id)?.nombre ?? '—'
 
+  const navItem = (id: 'registro' | 'historial', label: string, emoji: string) => {
+    const active = tab === id
+    return (
+      <button onClick={() => setTab(id)} style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', width: '100%',
+        color: NAVY, fontSize: 14, fontWeight: active ? 800 : 700, borderRadius: 999,
+        background: active ? '#fff' : 'transparent', cursor: 'pointer',
+        border: active ? `2px solid ${NAVY}` : '2px solid transparent',
+        boxShadow: active ? '0 6px 16px rgba(37,40,85,0.12)' : 'none',
+        textAlign: 'left',
+      }}>
+        <span style={{ fontSize: 16 }}>{emoji}</span>
+        <span style={{ flex: 1 }}>{label}</span>
+      </button>
+    )
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
-      {/* Header */}
-      <header style={{ background: NAVY, padding: '0 32px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 34, height: 34, background: PINK, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#fff', fontWeight: 900, fontSize: 13 }}>OE</span>
-          </div>
-          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.02em' }}>
-            <span style={{ color: '#fff' }}>Order</span>
-            <span style={{ color: PINK }}>Express</span>
-          </span>
-          <span style={{ color: '#ffffff60', fontSize: 13, marginLeft: 8 }}>/ Portal de Proveedores</span>
+      {/* ---- Sidebar (igual al admin) ---- */}
+      <aside style={{ width: 240, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, zIndex: 100, padding: '20px 14px 16px' }}>
+
+        {/* Logo */}
+        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', padding: '0 8px', marginBottom: 16 }}>
+          <span style={{ color: '#1b1f4b' }}>Order</span>
+          <span style={{ color: PINK }}>Express</span>
         </div>
-        <a href="/" style={{ color: '#ffffff80', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>← Volver a la tienda</a>
-      </header>
 
-      {/* Hero */}
-      <div style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a1d4e 100%)`, padding: '48px 32px', textAlign: 'center' }}>
-        <span style={{ background: PINK, color: '#fff', fontSize: 11, fontWeight: 800, padding: '4px 12px', borderRadius: 20, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          Portal Proveedores
-        </span>
-        <h1 style={{ color: '#fff', fontSize: 32, fontWeight: 900, margin: '16px 0 8px', letterSpacing: '-0.02em' }}>
-          Registra tus productos
-        </h1>
-        <p style={{ color: '#ffffff80', fontSize: 15, maxWidth: 480, margin: '0 auto' }}>
-          Agrega uno o varios productos en una sola solicitud. Nuestro equipo los revisará y te contactará en 24-48 horas hábiles.
-        </p>
+        {/* Nav */}
+        <nav style={{ flex: 1, minHeight: 0, background: '#f1f2f6', borderRadius: 22, padding: '12px 10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>PORTAL</span>
+          {navItem('registro',  'Registrar producto', '📦')}
+          {navItem('historial', 'Mis solicitudes',    '🔍')}
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '20px 14px 6px', display: 'block' }}>ACCESO</span>
+          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', color: NAVY, fontSize: 14, fontWeight: 700, borderRadius: 999, border: '2px solid transparent', textDecoration: 'none' }}>
+            <span style={{ fontSize: 16 }}>🏠</span> Volver a la tienda
+          </a>
+        </nav>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 0, marginTop: 36, flexWrap: 'wrap' }}>
-          {[
-            { n: '1', label: 'Llena el formulario' },
-            { n: '2', label: 'Revisamos tu solicitud' },
-            { n: '3', label: 'Publicamos tu producto' },
-          ].map((step, i) => (
-            <div key={step.n} style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '0 24px' }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: PINK, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 14 }}>{step.n}</div>
-                <span style={{ color: '#ffffff90', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{step.label}</span>
+        {/* Footer: email guardado */}
+        {savedEmail && (
+          <div style={{ paddingTop: 12, borderTop: '1px solid #f3f4f6', marginTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 10px' }}>
+              <div style={{ width: 34, height: 34, background: NAVY, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+                {savedEmail[0].toUpperCase()}
               </div>
-              {i < 2 && <div style={{ width: 40, height: 1, background: '#ffffff30', flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{savedEmail}</p>
+                <span style={{ fontSize: 10, fontWeight: 700, background: '#d1fae5', color: '#065f46', padding: '1px 7px', borderRadius: 20 }}>Proveedor</span>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Contenido */}
-      <div style={{ maxWidth: 780, margin: '0 auto', padding: '40px 24px 60px' }}>
-
-        {formState === 'success' ? (
-          <div style={{ background: '#fff', borderRadius: 20, padding: '56px 40px', textAlign: 'center', boxShadow: '0 4px 24px rgba(37,40,85,0.10)' }}>
-            <div style={{ width: 72, height: 72, background: '#dcfce7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 32 }}>✓</div>
-            <h2 style={{ fontSize: 24, fontWeight: 900, color: NAVY, marginBottom: 10 }}>¡Solicitud enviada!</h2>
-            <p style={{ fontSize: 15, color: '#6b7280', maxWidth: 420, margin: '0 auto 28px', lineHeight: 1.6 }}>
-              Recibimos tu solicitud con <strong>{productos.length + (prod.nombre ? 1 : 0)} producto(s)</strong>. Te contactaremos a <strong>{proveedor.email}</strong> en 24-48 horas hábiles.
-            </p>
-            <button onClick={resetForm}
-              style={{ background: NAVY, color: '#fff', border: 'none', padding: '12px 32px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
-              Enviar otra solicitud
+            <button type="button" onClick={() => { try { localStorage.removeItem(EMAIL_KEY) } catch {} setSavedEmail(''); setHistorialEmail(''); setHistorialItems(null); setTab('registro') }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', border: 'none', borderRadius: 999, background: 'rgba(231,34,109,0.10)', color: PINK, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+              Cambiar cuenta
             </button>
           </div>
-        ) : (
+        )}
+      </aside>
+
+      {/* ---- Área principal ---- */}
+      <div style={{ marginLeft: 240, flex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Topbar */}
+        <header style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
+            {tab === 'registro' ? 'Registrar producto' : 'Mis solicitudes'}
+          </h1>
+          {tab === 'registro' && formState !== 'success' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              {[
+                { n: '1', label: 'Llena el formulario' },
+                { n: '2', label: 'Revisamos' },
+                { n: '3', label: 'Publicamos' },
+              ].map((step, i) => (
+                <div key={step.n} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: PINK, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 11, flexShrink: 0 }}>{step.n}</div>
+                  <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, whiteSpace: 'nowrap' }}>{step.label}</span>
+                  {i < 2 && <span style={{ color: '#d1d5db', marginLeft: 4 }}>→</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </header>
+
+        {/* Contenido */}
+        <main style={{ flex: 1, padding: '28px 32px 48px' }}>
+
+        {tab === 'registro' && formState === 'success' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Confirmación */}
+            <div style={{ background: '#fff', borderRadius: 20, padding: '40px', textAlign: 'center', boxShadow: '0 4px 24px rgba(37,40,85,0.10)' }}>
+              <div style={{ width: 64, height: 64, background: '#dcfce7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 28 }}>✓</div>
+              <h2 style={{ fontSize: 22, fontWeight: 900, color: NAVY, marginBottom: 8 }}>¡Solicitud enviada!</h2>
+              <p style={{ fontSize: 14, color: '#6b7280', maxWidth: 380, margin: '0 auto 24px', lineHeight: 1.6 }}>
+                Recibimos <strong>{productos.length} producto{productos.length !== 1 ? 's' : ''}</strong> de <strong>{proveedor.nombre}</strong>. Te contactaremos a <strong>{proveedor.email}</strong> en 24-48 horas hábiles.
+              </p>
+              <button onClick={resetForm}
+                style={{ background: NAVY, color: '#fff', border: 'none', padding: '12px 28px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+                Enviar otra solicitud
+              </button>
+            </div>
+
+            {/* Lista de productos enviados */}
+            {productos.length > 0 && (
+              <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', overflow: 'hidden' }}>
+                <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 30, height: 30, background: `${NAVY}12`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📦</div>
+                  <div>
+                    <h3 style={{ fontSize: 14, fontWeight: 800, color: NAVY, margin: 0 }}>Productos registrados</h3>
+                    <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Pendientes de revisión por el equipo</p>
+                  </div>
+                  <span style={{ marginLeft: 'auto', background: PINK, color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20 }}>
+                    {productos.length}
+                  </span>
+                </div>
+                <div style={{ padding: '8px 0' }}>
+                  {productos.map((p, i) => (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '40px 1fr auto', gap: 12, alignItems: 'center', padding: '12px 28px', borderBottom: i < productos.length - 1 ? '1px solid #f9fafb' : 'none' }}>
+                      {/* Imagen o placeholder */}
+                      <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f3f4f6', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                        {p.imagenPreview
+                          ? <img src={p.imagenPreview} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : '📦'}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: NAVY, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                        <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>SKU: {p.sku || '—'} · Stock: {p.stock || 0}</p>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 800, color: '#0049ff', margin: '0 0 2px' }}>${Number(p.precio || 0).toLocaleString('es-MX')}</p>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#d97706', background: '#fef3c7', padding: '2px 8px', borderRadius: 20 }}>En revisión</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : tab === 'registro' ? (
           <form onSubmit={handleSubmit}>
 
             {errorMsg && (
@@ -726,11 +825,10 @@ export default function ProveedoresPage() {
                   : 'Enviar solicitud de producto →'}
             </button>
           </form>
-        )}
-      </div>
+        ) : null}
 
-      {/* ---- Sección: Consultar historial de solicitudes ---- */}
-      <div style={{ maxWidth: 780, margin: '0 auto', padding: '0 24px 60px' }}>
+        {/* ---- Tab: Mis solicitudes ---- */}
+        {tab === 'historial' && (
         <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
           <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 32, height: 32, background: `${NAVY}12`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🔍</div>
@@ -802,13 +900,8 @@ export default function ProveedoresPage() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <div style={{ background: NAVY, padding: '24px 32px', textAlign: 'center' }}>
-        <p style={{ color: '#ffffff50', fontSize: 12, margin: 0 }}>
-          © 2026 OrderExpress · ¿Dudas? Escríbenos a soporte@orderexpress.mx
-        </p>
+        )}
+        </main>
       </div>
     </div>
   )
