@@ -69,11 +69,29 @@
 | `Doc/indice.md` | Este archivo. Mapa de todos los archivos del proyecto. |
 | `Doc/memoria.md` | Instrucciones para Claude: cómo analizar el último commit y actualizar el archivo de sesión del día. |
 | `Doc/documentacion/documento.md` | Referencia técnica completa: tablas de DB, estados de cada página, funciones, mapa de operaciones Supabase, flujos principales, pendientes técnicos. Consultar antes de hacer cambios. |
-| `Doc/sesiones/seccion-DD-MM-YYYY.md` | Registro diario de cambios. Un archivo por día. Se actualiza cada vez que se hace un commit. |
+| `Doc/sesiones/seccion-DD-MM-YYYY.md` | Registro diario de cambios. Un archivo por día. Se actualiza cada vez que se hace un commit. Ver detalle abajo. |
 | `Doc/database/schema.sql` | Esquema completo de la base de datos: tablas, triggers, RLS, categorías iniciales. |
 | `Doc/database/auth.sql` | Sistema de autenticación: tabla `user_roles`, función `get_my_role()`, políticas RLS por rol. |
 | `Doc/database/seed.sql` | Datos de prueba: 20 productos, 10 clientes, 10 ventas con items. |
 | `Doc/database/migration_tablas_faltantes.sql` | Migración segura (`IF NOT EXISTS`): crea `registros`, `solicitudes_productos`, agrega `deleted_at` en clientes, inserta fila inicial en `config_storefront`. Ejecutar en Supabase SQL Editor. |
+
+---
+
+## `Doc/sesiones/` — Registro diario de cambios
+
+Un archivo por día, en orden cronológico. Cada entrada documenta un commit: hash, tabla de archivos y descripción.
+
+| Archivo | Día | Contenido |
+|---------|-----|-----------|
+| `seccion-26-06-2026.md` | 26/06/2026 | Initial commit (Create Next App): andamiaje base del proyecto. |
+| `seccion-27-06-2026.md` | 27/06/2026 | Primeras páginas del panel (Envío Nube, Tienda en línea, POS), Sidebar/Topbar, ajustes Vercel. |
+| `seccion-28-06-2026.md` | 28/06/2026 | Páginas Dashboard/Productos/Ventas/Clientes, conexión Supabase, schema inicial, subida WebP, modales, iconos, rebranding a Order Express. |
+| `seccion-29-06-2026.md` | 29/06/2026 | Storefront público, autenticación + roles + middleware, categorías dinámicas, envíos reales, portal de proveedores, separación panel/tienda. |
+| `seccion-30-06-2026.md` | 30/06/2026 | Mejoras a la subida de productos de proveedores, ajustes de configuración, `.claude/settings.json`. |
+| `seccion-01-07-2026.md` | 01/07/2026 | POS completo, mejoras generales, editor de tienda en línea, buscador global Ctrl+K, tablas `config_storefront` y `solicitudes_productos`. |
+| `seccion-02-07-2026.md` | 02/07/2026 | Inicio del arreglo para presentación: validación email, skeletons, página de presentación, ruta de tienda por slug. |
+| `seccion-03-07-2026.md` | 03/07/2026 | Robustez, fixes críticos, rediseño portal de proveedores, migraciones DB, documentación del proyecto. |
+| `seccion-05-07-2026.md` | 05/07/2026 | "Adiós nube-store": consolidación definitiva del nombre Order Express. |
 
 ---
 
