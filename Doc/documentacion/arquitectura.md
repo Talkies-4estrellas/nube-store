@@ -138,3 +138,15 @@ const ROLE_HOME_CHROME = { admin: '/dashboard', vendedor: '/dashboard', bodega: 
 4. Si no tiene fila en `user_roles` → `signOut()` automático
 
 > La tabla `user_roles` y sus políticas RLS se documentan en [Datos](./datos.md).
+
+---
+
+## 🕗 Sesiones relacionadas
+
+Días de trabajo que tocaron esta área:
+
+- [26/06/2026](../sesiones/seccion-26-06-2026.md) — andamiaje inicial (Create Next App).
+- [27/06/2026](../sesiones/seccion-27-06-2026.md) — primeras páginas y navegación; ajustes Vercel.
+- [28/06/2026](../sesiones/seccion-28-06-2026.md) — rebranding a Order Express, cliente Supabase.
+- [29/06/2026](../sesiones/seccion-29-06-2026.md) — autenticación, roles, middleware y rutas públicas.
+- [05/07/2026](../sesiones/seccion-05-07-2026.md) — consolidación definitiva del nombre Order Express.

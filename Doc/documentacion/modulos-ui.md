@@ -409,3 +409,17 @@ inicio | catalogo | novedades | favoritos | ofertas | carrito | soporte
 **`addToCart(title)`:** verifica `productStockMap[title]` antes de agregar — no permite superar el stock disponible
 
 **Supabase:** Lee `productos` (activo=true, stock>0, con categorias), `config_storefront` (id=1). Escribe `clientes` (select/insert), `ventas` (insert), `venta_items` (insert). Auth: `registros` (select login, insert registro).
+
+---
+
+## 🕗 Sesiones relacionadas
+
+Días de trabajo que tocaron esta área:
+
+- [27/06/2026](../sesiones/seccion-27-06-2026.md) — Sidebar, Topbar y primeras páginas de sección.
+- [28/06/2026](../sesiones/seccion-28-06-2026.md) — páginas centrales, modales e `Icon.tsx`.
+- [29/06/2026](../sesiones/seccion-29-06-2026.md) — Storefront, AppChrome, login, configuración y proveedores.
+- [30/06/2026](../sesiones/seccion-30-06-2026.md) — mejoras en proveedores y configuración.
+- [01/07/2026](../sesiones/seccion-01-07-2026.md) — POS completo, GlobalSearch (Ctrl+K), badge en Sidebar.
+- [02/07/2026](../sesiones/seccion-02-07-2026.md) — `lib/validation`, skeletons y retoques en páginas.
+- [03/07/2026](../sesiones/seccion-03-07-2026.md) — rediseño de proveedores, fixes en POS/clientes/dashboard.

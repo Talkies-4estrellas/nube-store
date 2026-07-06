@@ -85,3 +85,15 @@ Admin → /configuracion → edita hero, nombre, contacto
 | `public/storefront/logo.svg` | Logo completo "OrderExpress" usado en la tienda pública |
 | `public/storefront/monograma.svg` | Monograma compacto usado en versión colapsada de la tienda |
 | `public/imagenes/logo-oe_1-png-300x49.avif` | Logo oficial Order Express (panel admin) |
+
+---
+
+## 🕗 Sesiones relacionadas
+
+Días de trabajo que tocaron esta área:
+
+- [28/06/2026](../sesiones/seccion-28-06-2026.md) — subida de imágenes WebP y assets del logo.
+- [29/06/2026](../sesiones/seccion-29-06-2026.md) — flujos de compra en tienda y portal de proveedores.
+- [30/06/2026](../sesiones/seccion-30-06-2026.md) — flujo de subida y revisión de productos de proveedores.
+- [01/07/2026](../sesiones/seccion-01-07-2026.md) — flujo de venta POS y configuración de la tienda.
+- [03/07/2026](../sesiones/seccion-03-07-2026.md) — revisión de flujos de punta a punta.

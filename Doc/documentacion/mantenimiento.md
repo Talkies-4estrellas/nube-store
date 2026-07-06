@@ -45,3 +45,12 @@ Pendiente de ejecutar: `Doc/database/migration_tablas_faltantes.sql` (ver tabla 
 Cada día de trabajo tiene su archivo en `Doc/sesiones/seccion-DD-MM-YYYY.md` con las entradas por commit (hash, archivos, descripción).
 
 El flujo para generar estas entradas lo ejecuta el asistente siguiendo `Doc/memoria.md` — documentado en [Inteligencia artificial](./ia.md).
+
+---
+
+## 🕗 Sesiones relacionadas
+
+Días de trabajo que tocaron esta área:
+
+- [03/07/2026](../sesiones/seccion-03-07-2026.md) — migraciones ejecutadas en Supabase y pendientes técnicos.
+- [05/07/2026](../sesiones/seccion-05-07-2026.md) — reconstrucción del registro diario de sesiones.

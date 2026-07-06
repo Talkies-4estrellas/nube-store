@@ -72,3 +72,12 @@ Al hacer cambios significativos, la IA debe actualizar (además del código):
 - `Doc/indice.md` — si se agregan/eliminan/renombran archivos.
 - El área correspondiente de `Doc/documentacion/` — si cambian tablas, estados de página, flujos o recursos.
 - `Doc/sesiones/…` — la entrada del commit según el flujo de arriba.
+
+---
+
+## 🕗 Sesiones relacionadas
+
+Días de trabajo que tocaron esta área:
+
+- [03/07/2026](../sesiones/seccion-03-07-2026.md) — creación de `Doc/` (documentación, índice y `memoria.md`).
+- [05/07/2026](../sesiones/seccion-05-07-2026.md) — reconstrucción histórica de las sesiones desde los commits.

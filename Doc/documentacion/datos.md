@@ -195,3 +195,16 @@ Todo lo demás (ventas, productos, clientes, config, solicitudes) vive en Supaba
 | `migration_tablas_faltantes.sql` | Migración segura (`IF NOT EXISTS`): crea `registros`, `solicitudes_productos`, agrega `deleted_at` en clientes, inserta fila inicial en `config_storefront` |
 
 > El estado de qué migraciones ya se ejecutaron en Supabase está en [Mantenimiento](./mantenimiento.md).
+
+---
+
+## 🕗 Sesiones relacionadas
+
+Días de trabajo que tocaron esta área:
+
+- [28/06/2026](../sesiones/seccion-28-06-2026.md) — schema inicial y conexión a Supabase.
+- [29/06/2026](../sesiones/seccion-29-06-2026.md) — `auth.sql`, `user_roles` y categorías dinámicas.
+- [30/06/2026](../sesiones/seccion-30-06-2026.md) — soporte de `solicitudes_productos`.
+- [01/07/2026](../sesiones/seccion-01-07-2026.md) — tablas `config_storefront` y `solicitudes_productos`.
+- [02/07/2026](../sesiones/seccion-02-07-2026.md) — ajustes de schema para robustez.
+- [03/07/2026](../sesiones/seccion-03-07-2026.md) — fix de triggers INSERT+UPDATE, migraciones y tablas nuevas.

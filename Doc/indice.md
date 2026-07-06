@@ -68,7 +68,13 @@
 |---------|---------|
 | `Doc/indice.md` | Este archivo. Mapa de todos los archivos del proyecto. |
 | `Doc/memoria.md` | Instrucciones para Claude: cómo analizar el último commit y actualizar el archivo de sesión del día. |
-| `Doc/documentacion/documento.md` | Referencia técnica completa: tablas de DB, estados de cada página, funciones, mapa de operaciones Supabase, flujos principales, pendientes técnicos. Consultar antes de hacer cambios. |
+| `Doc/documentacion/documento.md` | Portada de la documentación por áreas. Enlaza las 6 áreas de abajo. Consultar antes de hacer cambios. |
+| `Doc/documentacion/arquitectura.md` | Stack, estructura de carpetas, configuración base (env vars, colores), rutas públicas y sistema de autenticación por roles. |
+| `Doc/documentacion/datos.md` | Tablas de la DB, triggers, localStorage, mapa de operaciones Supabase por tabla y los scripts SQL de `Doc/database/`. |
+| `Doc/documentacion/modulos-ui.md` | Inventario de páginas, componentes y utilidades (`lib/`) con sus estados, constantes, funciones y operaciones Supabase. |
+| `Doc/documentacion/operaciones.md` | Flujos de negocio de punta a punta, manejo de imágenes/Storage, dependencias y assets. |
+| `Doc/documentacion/mantenimiento.md` | Pendientes técnicos, convenciones obligatorias, estado de migraciones y registro diario de sesiones. |
+| `Doc/documentacion/ia.md` | Cómo la IA (Claude) trabaja el proyecto: qué leer, reglas a respetar y el sistema de memoria/sesiones. |
 | `Doc/sesiones/seccion-DD-MM-YYYY.md` | Registro diario de cambios. Un archivo por día. Se actualiza cada vez que se hace un commit. Ver detalle abajo. |
 | `Doc/database/schema.sql` | Esquema completo de la base de datos: tablas, triggers, RLS, categorías iniciales. |
 | `Doc/database/auth.sql` | Sistema de autenticación: tabla `user_roles`, función `get_my_role()`, políticas RLS por rol. |
@@ -92,6 +98,26 @@ Un archivo por día, en orden cronológico. Cada entrada documenta un commit: ha
 | `seccion-02-07-2026.md` | 02/07/2026 | Inicio del arreglo para presentación: validación email, skeletons, página de presentación, ruta de tienda por slug. |
 | `seccion-03-07-2026.md` | 03/07/2026 | Robustez, fixes críticos, rediseño portal de proveedores, migraciones DB, documentación del proyecto. |
 | `seccion-05-07-2026.md` | 05/07/2026 | "Adiós nube-store": consolidación definitiva del nombre Order Express. |
+
+---
+
+## Mapa de navegación: documentación ↔ sesiones
+
+Punto de entrada central que cruza cada **área de documentación** (columnas) con las **sesiones de trabajo** que la tocaron (filas). Cada área tiene al final una sección "🕗 Sesiones relacionadas" y cada sesión un bloque "📚 Documentación relacionada" — esta matriz los resume.
+
+| Sesión | [Arquitectura](documentacion/arquitectura.md) | [Datos](documentacion/datos.md) | [Módulos UI](documentacion/modulos-ui.md) | [Operaciones](documentacion/operaciones.md) | [Mantenimiento](documentacion/mantenimiento.md) | [IA](documentacion/ia.md) |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|
+| [26/06](sesiones/seccion-26-06-2026.md) | ✓ | | | | | |
+| [27/06](sesiones/seccion-27-06-2026.md) | ✓ | | ✓ | | | |
+| [28/06](sesiones/seccion-28-06-2026.md) | ✓ | ✓ | ✓ | ✓ | | |
+| [29/06](sesiones/seccion-29-06-2026.md) | ✓ | ✓ | ✓ | ✓ | | |
+| [30/06](sesiones/seccion-30-06-2026.md) | | ✓ | ✓ | ✓ | ✓ | |
+| [01/07](sesiones/seccion-01-07-2026.md) | | ✓ | ✓ | ✓ | | |
+| [02/07](sesiones/seccion-02-07-2026.md) | | ✓ | ✓ | ✓ | | |
+| [03/07](sesiones/seccion-03-07-2026.md) | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| [05/07](sesiones/seccion-05-07-2026.md) | ✓ | | | | ✓ | ✓ |
+
+> La portada de la documentación por áreas está en [`Doc/documentacion/documento.md`](documentacion/documento.md).
 
 ---
 
