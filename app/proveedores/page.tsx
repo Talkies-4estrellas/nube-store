@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef, DragEvent, ChangeEvent } from 'react'
 import { supabase } from '@/lib/supabase'
-import { convertToWebp, uploadToSupabase } from '@/lib/uploadWebp'
+import { convertToWebp, captureFrameAsWebp, uploadToSupabase } from '@/lib/uploadWebp'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
 const DRAFT_KEY    = 'proveedor_draft_v1'
 const EMAIL_KEY    = 'proveedor_email_saved'
+const PERFIL_KEY   = 'proveedor_perfil_v1'
 
 type Categoria = { id: number; nombre: string }
 
@@ -30,11 +31,22 @@ type ProductoLocal = {
   categoria_id: string
   imagenFile: File | null
   imagenPreview: string | null
+  // Opcionales
+  colores: string[]
+  tallas: string[]
+  variantes: Array<{ color: string; talla: string; stock: string }>
+  peso: string
+  largo: string
+  ancho: string
+  alto: string
+  imagenesExtra: Array<{ file: File | null; preview: string | null }>
 }
 
 const emptyProducto = (): ProductoLocal => ({
   nombre: '', sku: '', descripcion: '', precio: '',
   stock: '', categoria_id: '', imagenFile: null, imagenPreview: null,
+  colores: [], tallas: [], variantes: [],
+  peso: '', largo: '', ancho: '', alto: '', imagenesExtra: [],
 })
 
 const inputStyle: React.CSSProperties = {
@@ -54,7 +66,7 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 }
 
 export default function ProveedoresPage() {
-  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados'>('registro')
+  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'ajustes'>('registro')
   const [savedEmail, setSavedEmail] = useState('')
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -71,16 +83,18 @@ export default function ProveedoresPage() {
   const [prod, setProd] = useState<ProductoLocal>(emptyProducto())
   const [prodError, setProdError] = useState('')
 
-  // Consulta historial por email
-  const [historialEmail, setHistorialEmail] = useState('')
+  // Mis solicitudes (historial)
   const [historialItems, setHistorialItems] = useState<{ id: string; producto_nombre: string; producto_sku: string; estado: string; created_at: string }[] | null>(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
-  const [historialError, setHistorialError] = useState('')
 
   // Panel "Mis productos enviados" en tab registro
   const [showMisProductos, setShowMisProductos] = useState(false)
   const [misProductos, setMisProductos] = useState<MiSolicitud[]>([])
   const [loadingMisProductos, setLoadingMisProductos] = useState(false)
+
+  // Tab Ajustes — perfil guardado del proveedor
+  const [perfil, setPerfil] = useState({ nombre: '', empresa: '', email: '', telefono: '' })
+  const [perfilGuardado, setPerfilGuardado] = useState(false)
 
   async function cargarMisProductos(email: string) {
     setLoadingMisProductos(true)
@@ -93,21 +107,16 @@ export default function ProveedoresPage() {
     setLoadingMisProductos(false)
   }
 
-  async function consultarHistorial() {
-    const email = historialEmail.trim().toLowerCase()
+  async function cargarHistorial(email: string) {
     if (!email) return
     setLoadingHistorial(true)
-    setHistorialError('')
-    setHistorialItems(null)
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('solicitudes_productos')
       .select('id, producto_nombre, producto_sku, estado, created_at')
       .eq('proveedor_email', email)
       .order('created_at', { ascending: false })
+    setHistorialItems(data ?? [])
     setLoadingHistorial(false)
-    if (error) { setHistorialError('Error al consultar. Intenta de nuevo.'); return }
-    if (!data || data.length === 0) { setHistorialError('No encontramos solicitudes con ese email.'); return }
-    setHistorialItems(data)
   }
 
   const [proveedor, setProveedor] = useState({
@@ -115,10 +124,135 @@ export default function ProveedoresPage() {
   })
 
   const fileRef = useRef<HTMLInputElement>(null)
+  const extraFileRef = useRef<HTMLInputElement>(null)
+  const [extraSlotTarget, setExtraSlotTarget] = useState(-1)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Chips colores/tallas
+  const [colorInput, setColorInput] = useState('')
+  const [tallaInput, setTallaInput] = useState('')
+  const [mostrarOpcionales, setMostrarOpcionales] = useState(false)
+
+  function buildVariantes(
+    colores: string[], tallas: string[],
+    existing: Array<{ color: string; talla: string; stock: string }>
+  ) {
+    if (colores.length === 0 && tallas.length === 0) return []
+    if (colores.length > 0 && tallas.length === 0)
+      return colores.map(color => ({ color, talla: '', stock: existing.find(v => v.color === color && v.talla === '')?.stock ?? '' }))
+    if (tallas.length > 0 && colores.length === 0)
+      return tallas.map(talla => ({ color: '', talla, stock: existing.find(v => v.color === '' && v.talla === talla)?.stock ?? '' }))
+    return colores.flatMap(color => tallas.map(talla => ({ color, talla, stock: existing.find(v => v.color === color && v.talla === talla)?.stock ?? '' })))
+  }
+
+  function addColor(val: string) {
+    const v = val.trim()
+    if (!v || prod.colores.includes(v)) { setColorInput(''); return }
+    const newColores = [...prod.colores, v]
+    setProd(p => ({ ...p, colores: newColores, variantes: buildVariantes(newColores, p.tallas, p.variantes) }))
+    setColorInput('')
+  }
+  function removeColor(c: string) {
+    const newColores = prod.colores.filter(x => x !== c)
+    setProd(p => ({ ...p, colores: newColores, variantes: buildVariantes(newColores, p.tallas, p.variantes) }))
+  }
+  function addTalla(val: string) {
+    const v = val.trim()
+    if (!v || prod.tallas.includes(v)) { setTallaInput(''); return }
+    const newTallas = [...prod.tallas, v]
+    setProd(p => ({ ...p, tallas: newTallas, variantes: buildVariantes(p.colores, newTallas, p.variantes) }))
+    setTallaInput('')
+  }
+  function removeTalla(t: string) {
+    const newTallas = prod.tallas.filter(x => x !== t)
+    setProd(p => ({ ...p, tallas: newTallas, variantes: buildVariantes(p.colores, newTallas, p.variantes) }))
+  }
+  function setVarianteStock(idx: number, stock: string) {
+    setProd(p => {
+      const v = [...p.variantes]
+      v[idx] = { ...v[idx], stock }
+      return { ...p, variantes: v }
+    })
+  }
+
+  function onExtraFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || extraSlotTarget < 0) return
+    setConvirtiendo(true)
+    convertToWebp(file).then(webp => {
+      const url = URL.createObjectURL(webp)
+      setProd(p => {
+        const extras = [...p.imagenesExtra]
+        extras[extraSlotTarget] = { file: webp, preview: url }
+        return { ...p, imagenesExtra: extras }
+      })
+      setConvirtiendo(false)
+      e.target.value = ''
+    }).catch(() => setConvirtiendo(false))
+  }
+  function removeExtraImagen(idx: number) {
+    setProd(p => {
+      const extras = [...p.imagenesExtra]
+      extras.splice(idx, 1)
+      return { ...p, imagenesExtra: extras }
+    })
+  }
+
+  // Cámara
+  const [camaraActiva, setCamaraActiva] = useState(false)
+  const [camaraError, setCamaraError] = useState('')
+
+  useEffect(() => {
+    return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
+  }, [])
+
+  async function abrirCamara() {
+    setCamaraError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      streamRef.current = stream
+      setCamaraActiva(true)
+      setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream }, 50)
+    } catch {
+      setCamaraError('No se pudo acceder a la cámara. Verifica los permisos del navegador.')
+    }
+  }
+
+  function cerrarCamara() {
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+    setCamaraActiva(false)
+    setCamaraError('')
+  }
+
+  async function tomarFoto() {
+    if (!videoRef.current) return
+    setConvirtiendo(true)
+    try {
+      const webp = await captureFrameAsWebp(videoRef.current)
+      const url = URL.createObjectURL(webp)
+      setProd(p => ({ ...p, imagenFile: webp, imagenPreview: url }))
+      cerrarCamara()
+    } finally {
+      setConvirtiendo(false)
+    }
+  }
 
   // Cargar borrador + email guardado al inicio
   useEffect(() => {
+    // Cargar perfil guardado del proveedor
+    try {
+      const rawPerfil = localStorage.getItem(PERFIL_KEY)
+      if (rawPerfil) {
+        const p = JSON.parse(rawPerfil)
+        setPerfil(p)
+        // Pre-llenar el form de registro con el perfil
+        setProveedor(p)
+      }
+    } catch { /* ignorar */ }
+
     try {
       const raw = localStorage.getItem(DRAFT_KEY)
       if (raw) {
@@ -133,23 +267,25 @@ export default function ProveedoresPage() {
       const email = localStorage.getItem(EMAIL_KEY)
       if (email) {
         setSavedEmail(email)
-        setHistorialEmail(email)
         setTab('historial')
-        supabase
-          .from('solicitudes_productos')
-          .select('id, producto_nombre, producto_sku, estado, created_at')
-          .eq('proveedor_email', email)
-          .order('created_at', { ascending: false })
-          .then(({ data }) => { if (data && data.length > 0) setHistorialItems(data) })
-        supabase
-          .from('solicitudes_productos')
-          .select('id, producto_nombre, producto_sku, producto_precio, estado, created_at, imagen_url')
-          .eq('proveedor_email', email)
-          .order('created_at', { ascending: false })
-          .then(({ data }) => { if (data) setMisProductos(data) })
+        cargarHistorial(email)
+        cargarMisProductos(email)
       }
     } catch { /* ignorar */ }
   }, [])
+
+  // Realtime: cuando el admin cambia el estado de una solicitud → refrescar
+  useEffect(() => {
+    if (!savedEmail) return
+    const channel = supabase
+      .channel('proveedor-solicitudes-' + savedEmail)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_productos' }, () => {
+        cargarHistorial(savedEmail)
+        cargarMisProductos(savedEmail)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [savedEmail])
 
   // Guardar borrador (debounced)
   useEffect(() => {
@@ -278,6 +414,28 @@ export default function ProveedoresPage() {
           imagen_url = await uploadToSupabase(p.imagenFile, supabase, 'productos', path)
         } catch { /* si falla el upload, se guarda sin imagen */ }
       }
+
+      // Subir imágenes extra
+      const imagenesExtraUrls: string[] = []
+      for (const extra of p.imagenesExtra) {
+        if (extra.file) {
+          try {
+            const path = `solicitudes/${Date.now()}-${p.sku}-extra${imagenesExtraUrls.length}.webp`
+            const url = await uploadToSupabase(extra.file, supabase, 'productos', path)
+            if (url) imagenesExtraUrls.push(url)
+          } catch { /* ignorar */ }
+        }
+      }
+
+      // Detalles opcionales
+      const detalles: Record<string, unknown> = {}
+      if (p.colores.length)    detalles.colores   = p.colores
+      if (p.tallas.length)     detalles.tallas    = p.tallas
+      if (p.variantes.length)  detalles.variantes = p.variantes
+      if (p.peso)              detalles.peso_g    = Number(p.peso)
+      if (p.largo || p.ancho || p.alto) detalles.dimensiones = { largo: Number(p.largo)||0, ancho: Number(p.ancho)||0, alto: Number(p.alto)||0 }
+      if (imagenesExtraUrls.length) detalles.imagenes_extra = imagenesExtraUrls
+
       rows.push({
         proveedor_nombre:     proveedor.nombre.trim(),
         proveedor_empresa:    proveedor.empresa.trim() || null,
@@ -291,6 +449,7 @@ export default function ProveedoresPage() {
         categoria_id:         p.categoria_id ? Number(p.categoria_id) : null,
         imagen_url,
         estado:               'pendiente',
+        detalles:             Object.keys(detalles).length ? detalles : null,
       })
     }
 
@@ -310,8 +469,9 @@ export default function ProveedoresPage() {
     const emailGuardado = proveedor.email.trim().toLowerCase()
     try { localStorage.setItem(EMAIL_KEY, emailGuardado) } catch {}
     setSavedEmail(emailGuardado)
-    // Recargar mis productos para que refleje los nuevos envíos
+    // Recargar listas para que reflejen los nuevos envíos
     cargarMisProductos(emailGuardado)
+    cargarHistorial(emailGuardado)
     setFormState('success')
   }
 
@@ -326,15 +486,13 @@ export default function ProveedoresPage() {
 
   const catNombre = (id: string) => categorias.find(c => String(c.id) === id)?.nombre ?? '—'
 
-  const navItem = (id: 'registro' | 'historial' | 'misEnviados', label: string, emoji: string) => {
+  const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'ajustes', label: string, emoji: string) => {
     const active = tab === id
     return (
       <button onClick={() => {
         setTab(id)
-        if (id === 'misEnviados') {
-          const email = savedEmail || proveedor.email.trim().toLowerCase()
-          if (email) cargarMisProductos(email)
-        }
+        if (id === 'misEnviados' && savedEmail) cargarMisProductos(savedEmail)
+        if (id === 'historial' && savedEmail) cargarHistorial(savedEmail)
       }} style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', width: '100%',
         color: NAVY, fontSize: 14, fontWeight: active ? 800 : 700, borderRadius: 999,
@@ -371,6 +529,7 @@ export default function ProveedoresPage() {
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', color: NAVY, fontSize: 14, fontWeight: 700, borderRadius: 999, border: '2px solid transparent', textDecoration: 'none' }}>
             <span style={{ fontSize: 16 }}>🏠</span> Volver a la tienda
           </a>
+          {navItem('ajustes', 'Ajustes', '⚙️')}
         </nav>
 
         {/* Footer: email guardado */}
@@ -385,7 +544,7 @@ export default function ProveedoresPage() {
                 <span style={{ fontSize: 10, fontWeight: 700, background: '#d1fae5', color: '#065f46', padding: '1px 7px', borderRadius: 20 }}>Proveedor</span>
               </div>
             </div>
-            <button type="button" onClick={() => { try { localStorage.removeItem(EMAIL_KEY) } catch {} setSavedEmail(''); setHistorialEmail(''); setHistorialItems(null); setTab('registro') }}
+            <button type="button" onClick={() => { try { localStorage.removeItem(EMAIL_KEY) } catch {} setSavedEmail(''); setHistorialItems(null); setTab('registro') }}
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', border: 'none', borderRadius: 999, background: 'rgba(231,34,109,0.10)', color: PINK, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
               Cambiar cuenta
             </button>
@@ -399,7 +558,7 @@ export default function ProveedoresPage() {
         {/* Topbar */}
         <header style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : 'Mis enviados'}
+            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis enviados' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -482,38 +641,20 @@ export default function ProveedoresPage() {
               </div>
             )}
 
-            {/* ---- Sección: Datos del proveedor ---- */}
-            <div style={{ background: '#fff', borderRadius: 20, padding: '28px 32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-                <div style={{ width: 32, height: 32, background: `${NAVY}15`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>👤</div>
-                <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: 0 }}>Datos del proveedor</h2>
-                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Tu información de contacto</p>
-                </div>
+            {/* Aviso si no hay perfil configurado */}
+            {!proveedor.nombre && !proveedor.email && (
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 12, padding: '12px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 18 }}>⚙️</span>
+                <p style={{ fontSize: 13, color: '#1e40af', margin: 0, fontWeight: 600 }}>
+                  Configura tus datos en{' '}
+                  <button type="button" onClick={() => setTab('ajustes')}
+                    style={{ background: 'none', border: 'none', color: '#1e40af', fontWeight: 800, fontSize: 13, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                    Ajustes
+                  </button>
+                  {' '}para no tener que llenarlos cada vez.
+                </p>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <label style={labelStyle}>Nombre completo <span style={{ color: PINK }}>*</span></label>
-                  <input style={inputStyle} value={proveedor.nombre} onChange={e => setP('nombre', e.target.value)}
-                    placeholder="Tu nombre" required onFocus={focus} onBlur={blur} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Empresa / Marca</label>
-                  <input style={inputStyle} value={proveedor.empresa} onChange={e => setP('empresa', e.target.value)}
-                    placeholder="Nombre de tu empresa (opcional)" onFocus={focus} onBlur={blur} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Email de contacto <span style={{ color: PINK }}>*</span></label>
-                  <input type="email" style={inputStyle} value={proveedor.email} onChange={e => setP('email', e.target.value)}
-                    placeholder="proveedor@email.com" required onFocus={focus} onBlur={blur} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Teléfono</label>
-                  <input type="tel" style={inputStyle} value={proveedor.telefono} onChange={e => setP('telefono', e.target.value)}
-                    placeholder="+52 55 0000 0000 (opcional)" onFocus={focus} onBlur={blur} />
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* ---- Lista de productos añadidos ---- */}
             {productos.length > 0 && (
@@ -759,28 +900,200 @@ export default function ProveedoresPage() {
                       onFocus={focus} onBlur={blur} />
                   </div>
 
+                  {/* Toggle campos opcionales */}
+                  <button type="button" onClick={() => setMostrarOpcionales(v => !v)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: '6px 0', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#6b7280' }}>
+                    <span style={{ fontSize: 10, transform: mostrarOpcionales ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>▶</span>
+                    Datos adicionales <span style={{ fontWeight: 400, color: '#9ca3af' }}>— colores, tallas, variantes, peso, dimensiones, fotos extra</span>
+                  </button>
+
+                  {mostrarOpcionales && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
+
+                      {/* Colores */}
+                      <div>
+                        <label style={labelStyle}>Colores disponibles</label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                          {prod.colores.map(c => (
+                            <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: `${NAVY}12`, color: NAVY, fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>
+                              {c}
+                              <button type="button" onClick={() => removeColor(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                            </span>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input style={{ ...inputStyle, flex: 1 }} value={colorInput}
+                            onChange={e => setColorInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addColor(colorInput) } }}
+                            placeholder="Ej: Rojo, Negro, Blanco..." onFocus={focus} onBlur={blur} />
+                          <button type="button" onClick={() => addColor(colorInput)}
+                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            + Agregar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tallas */}
+                      <div>
+                        <label style={labelStyle}>Tallas / Tamaños</label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                          {prod.tallas.map(t => (
+                            <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: `${PINK}12`, color: PINK, fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>
+                              {t}
+                              <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                            </span>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input style={{ ...inputStyle, flex: 1 }} value={tallaInput}
+                            onChange={e => setTallaInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
+                            placeholder="Ej: XS, S, M, L, XL o 38, 40, 42..." onFocus={focus} onBlur={blur} />
+                          <button type="button" onClick={() => addTalla(tallaInput)}
+                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            + Agregar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Variantes (stock por combinación) */}
+                      {prod.variantes.length > 0 && (
+                        <div>
+                          <label style={labelStyle}>Stock por variante</label>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
+                            {prod.variantes.map((v, i) => (
+                              <div key={i} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '8px 12px', background: '#fff' }}>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: NAVY, margin: '0 0 5px' }}>
+                                  {[v.color, v.talla].filter(Boolean).join(' · ')}
+                                </p>
+                                <input type="number" min="0" style={{ ...inputStyle, padding: '6px 10px', fontSize: 13 }}
+                                  value={v.stock} onChange={e => setVarianteStock(i, e.target.value)}
+                                  placeholder="0" onFocus={focus} onBlur={blur} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Peso y Dimensiones */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <label style={labelStyle}>Peso <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>gramos</span></label>
+                          <input type="number" min="0" style={inputStyle} value={prod.peso}
+                            onChange={e => setProd(p => ({ ...p, peso: e.target.value }))}
+                            placeholder="Ej: 250" onFocus={focus} onBlur={blur} />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Dimensiones <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>cm</span></label>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {(['largo', 'ancho', 'alto'] as const).map(dim => (
+                              <input key={dim} type="number" min="0" style={{ ...inputStyle, flex: 1, padding: '11px 8px', textAlign: 'center' }}
+                                value={prod[dim]} onChange={e => setProd(p => ({ ...p, [dim]: e.target.value }))}
+                                placeholder={dim.charAt(0).toUpperCase()} onFocus={focus} onBlur={blur} />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Imágenes extra */}
+                      <div>
+                        <label style={labelStyle}>Fotos adicionales <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>Hasta 4</span></label>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                          {Array.from({ length: 4 }).map((_, i) => {
+                            const extra = prod.imagenesExtra[i]
+                            return (
+                              <div key={i} style={{ aspectRatio: '1', borderRadius: 10, overflow: 'hidden', border: `2px dashed ${extra?.preview ? NAVY : '#d1d5db'}`, background: extra?.preview ? 'transparent' : '#fafafa', position: 'relative', cursor: extra?.preview ? 'default' : 'pointer' }}
+                                onClick={() => { if (!extra?.preview) { setExtraSlotTarget(i); extraFileRef.current?.click() } }}>
+                                {extra?.preview ? (
+                                  <>
+                                    <img src={extra.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                    <button type="button" onClick={e => { e.stopPropagation(); removeExtraImagen(i) }}
+                                      style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(220,38,38,0.85)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      ×
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                    <span style={{ fontSize: 22, opacity: 0.3 }}>+</span>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
+
                 </div>
 
-                {/* Columna derecha: imagen + preview card */}
-                <div style={{ borderLeft: '1px solid #f3f4f6', padding: '20px 20px', display: 'flex', flexDirection: 'column', gap: 12, background: '#fafafa' }}>
+                {/* Columna derecha: imagen */}
+                <div style={{ borderLeft: '1px solid #f3f4f6', padding: '20px', display: 'flex', flexDirection: 'column', gap: 10, background: '#fafafa' }}>
 
-                  <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', margin: 0, textAlign: 'center' }}>Imagen del producto</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', margin: 0 }}>Imagen del producto</p>
+                    {!camaraActiva && !prod.imagenPreview && (
+                      <button type="button" onClick={abrirCamara}
+                        style={{ background: '#f3f4f6', border: 'none', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        📷 Cámara
+                      </button>
+                    )}
+                  </div>
 
-                  <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
+                  <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onFileChange} />
+                  <input ref={extraFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onExtraFileChange} />
 
-                  {/* Zona imagen */}
-                  {prod.imagenPreview ? (
+                  {/* Vista de cámara activa */}
+                  {camaraActiva && (
+                    <div style={{ borderRadius: 10, overflow: 'hidden', border: `2px solid ${NAVY}`, position: 'relative', background: '#000' }}>
+                      <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
+                      <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 10 }}>
+                        <button type="button" onClick={cerrarCamara}
+                          style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          Cancelar
+                        </button>
+                        <button type="button" onClick={tomarFoto} disabled={convirtiendo}
+                          style={{ background: '#fff', color: '#111', border: 'none', padding: '6px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                          {convirtiendo ? '⏳ Procesando...' : '📸 Tomar foto'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {camaraError && (
+                    <p style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, margin: 0 }}>⚠️ {camaraError}</p>
+                  )}
+
+                  {/* Preview de imagen */}
+                  {!camaraActiva && prod.imagenPreview && (
                     <div style={{ position: 'relative' }}>
                       <img src={prod.imagenPreview} alt="preview"
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 12, border: '2px solid #e5e7eb', display: 'block' }} />
-                      <button type="button" onClick={() => setProd(p => ({ ...p, imagenFile: null, imagenPreview: null }))}
-                        title="Quitar imagen"
-                        style={{ position: 'absolute', top: 6, right: 6, background: '#000000aa', color: '#fff', border: 'none', width: 26, height: 26, borderRadius: '50%', fontWeight: 900, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        ×
-                      </button>
-                      <p style={{ textAlign: 'center', fontSize: 11, color: '#059669', fontWeight: 700, margin: '6px 0 0' }}>✓ WebP listo</p>
+                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 12, border: '1px solid #e5e7eb', display: 'block' }} />
+                      <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 5 }}>
+                        <button type="button" onClick={abrirCamara}
+                          style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11 }}>
+                          📷
+                        </button>
+                        <button type="button" onClick={() => fileRef.current?.click()}
+                          style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11 }}>
+                          🖼️
+                        </button>
+                        <button type="button" onClick={() => setProd(p => ({ ...p, imagenFile: null, imagenPreview: null }))}
+                          style={{ background: 'rgba(220,38,38,0.85)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          ×
+                        </button>
+                      </div>
+                      {prod.imagenFile && (
+                        <div style={{ position: 'absolute', bottom: 6, left: 6, background: 'rgba(0,0,0,0.65)', color: '#fff', borderRadius: 6, padding: '2px 7px', fontSize: 10 }}>
+                          ✅ WebP · {(prod.imagenFile.size / 1024).toFixed(0)} KB
+                        </div>
+                      )}
                     </div>
-                  ) : (
+                  )}
+
+                  {/* Zona drag & drop */}
+                  {!camaraActiva && !prod.imagenPreview && (
                     <div
                       onDragOver={e => { e.preventDefault(); setDragging(true) }}
                       onDragLeave={() => setDragging(false)}
@@ -794,27 +1107,28 @@ export default function ProveedoresPage() {
                         flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
                       }}>
                       {convirtiendo ? (
-                        <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Procesando...</p>
+                        <>
+                          <span style={{ fontSize: 28 }}>⏳</span>
+                          <p style={{ fontSize: 12, color: '#6b7280', margin: 0, fontWeight: 600 }}>Convirtiendo a WebP...</p>
+                        </>
                       ) : (
                         <>
-                          <span style={{ fontSize: 32 }}>📷</span>
+                          <span style={{ fontSize: 32 }}>🖼️</span>
                           <p style={{ fontSize: 12, fontWeight: 600, color: dragging ? PINK : NAVY, margin: 0, lineHeight: 1.3 }}>
                             {dragging ? 'Suelta aquí' : 'Arrastra o toca para subir'}
                           </p>
-                          <p style={{ fontSize: 10, color: '#9ca3af', margin: 0 }}>JPG · PNG · WEBP</p>
+                          <p style={{ fontSize: 10, color: '#9ca3af', margin: 0 }}>PNG · JPG · WEBP · Se convierte a WebP</p>
                         </>
                       )}
                     </div>
                   )}
 
                   {/* Mini preview card */}
-                  {(prod.nombre || prod.precio) && (
-                    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '10px 12px', marginTop: 4 }}>
-                      <p style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Vista previa</p>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {prod.nombre || '—'}
-                      </p>
-                      {prod.sku && <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 4px', fontFamily: 'monospace' }}>{prod.sku}</p>}
+                  {(prod.nombre || prod.precio) && !camaraActiva && (
+                    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '10px 12px' }}>
+                      <p style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 5px' }}>Vista previa</p>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.nombre || '—'}</p>
+                      {prod.sku && <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 3px', fontFamily: 'monospace' }}>{prod.sku}</p>}
                       {prod.precio && (
                         <p style={{ fontSize: 13, fontWeight: 900, color: '#059669', margin: 0 }}>
                           ${Number(prod.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
@@ -873,31 +1187,7 @@ export default function ProveedoresPage() {
         {tab === 'misEnviados' && (
           <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
 
-            {/* Si no hay email conocido, pedir al proveedor que lo ingrese */}
-            {!savedEmail && !historialEmail && misProductos.length === 0 && !loadingMisProductos ? (
-              <div style={{ padding: '32px 28px' }}>
-                <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>Ingresa tu email para ver tus productos</p>
-                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px' }}>Consulta el estado de todos los productos que has enviado</p>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <input
-                    type="email"
-                    value={historialEmail}
-                    onChange={e => setHistorialEmail(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && historialEmail.trim()) cargarMisProductos(historialEmail.trim().toLowerCase()) }}
-                    placeholder="tu@email.com"
-                    style={{ ...inputStyle, flex: 1 }}
-                    onFocus={focus} onBlur={blur}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { if (historialEmail.trim()) cargarMisProductos(historialEmail.trim().toLowerCase()) }}
-                    disabled={!historialEmail.trim()}
-                    style={{ background: !historialEmail.trim() ? '#f3f4f6' : NAVY, color: !historialEmail.trim() ? '#9ca3af' : '#fff', border: 'none', padding: '0 24px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: !historialEmail.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    Consultar
-                  </button>
-                </div>
-              </div>
-            ) : loadingMisProductos ? (
+            {loadingMisProductos ? (
               <div style={{ padding: '48px', textAlign: 'center' }}>
                 <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Cargando...</p>
               </div>
@@ -952,7 +1242,7 @@ export default function ProveedoresPage() {
                 </div>
                 <div style={{ padding: '12px 28px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: '#9ca3af' }}>{misProductos.length} producto{misProductos.length !== 1 ? 's' : ''} encontrado{misProductos.length !== 1 ? 's' : ''}</span>
-                  <button type="button" onClick={() => { const email = savedEmail || historialEmail; if (email) cargarMisProductos(email) }}
+                  <button type="button" onClick={() => { if (savedEmail) cargarMisProductos(savedEmail) }}
                     style={{ background: 'none', border: 'none', fontSize: 12, color: '#9ca3af', cursor: 'pointer', fontWeight: 600 }}>
                     🔄 Actualizar
                   </button>
@@ -962,78 +1252,192 @@ export default function ProveedoresPage() {
           </div>
         )}
 
-        {/* ---- Tab: Mis solicitudes ---- */}
-        {tab === 'historial' && (
-        <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
-          <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, background: `${NAVY}12`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🔍</div>
-            <div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: 0 }}>Consultar mis solicitudes</h3>
-              <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Ingresa tu email para ver el estado de tus productos enviados</p>
-            </div>
-          </div>
-
-          <div style={{ padding: '20px 28px' }}>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <input
-                type="email"
-                value={historialEmail}
-                onChange={e => { setHistorialEmail(e.target.value); setHistorialItems(null); setHistorialError('') }}
-                onKeyDown={e => e.key === 'Enter' && consultarHistorial()}
-                placeholder="tu@email.com"
-                style={{ ...inputStyle, flex: 1 }}
-                onFocus={focus} onBlur={blur}
-              />
-              <button
-                type="button"
-                onClick={consultarHistorial}
-                disabled={loadingHistorial || !historialEmail.trim()}
-                style={{ background: !historialEmail.trim() ? '#f3f4f6' : NAVY, color: !historialEmail.trim() ? '#9ca3af' : '#fff', border: 'none', padding: '0 24px', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: !historialEmail.trim() ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {loadingHistorial ? 'Buscando...' : 'Consultar'}
-              </button>
+        {/* ---- Tab: Ajustes ---- */}
+        {tab === 'ajustes' && (
+          <div style={{ background: '#fff', borderRadius: 20, padding: '32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', maxWidth: 640 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+              <div style={{ width: 40, height: 40, background: `${NAVY}12`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>⚙️</div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>Datos del proveedor</h2>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Se guardan en este navegador y se llenan automáticamente al registrar productos</p>
+              </div>
             </div>
 
-            {historialError && (
-              <div style={{ marginTop: 14, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400e', fontWeight: 600 }}>
-                {historialError}
+            {perfilGuardado && (
+              <div style={{ background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: 10, padding: '10px 16px', fontSize: 13, color: '#065f46', fontWeight: 600, marginBottom: 20 }}>
+                ✓ Datos guardados correctamente
               </div>
             )}
 
-            {historialItems && historialItems.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-                  {historialItems.length} solicitud{historialItems.length > 1 ? 'es' : ''} encontrada{historialItems.length > 1 ? 's' : ''}
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {historialItems.map(item => {
-                    const estadoStyle: Record<string, { bg: string; text: string; icon: string }> = {
-                      pendiente:  { bg: '#fef3c7', text: '#92400e', icon: '⏳' },
-                      aprobado:   { bg: '#d1fae5', text: '#065f46', icon: '✅' },
-                      rechazado:  { bg: '#fee2e2', text: '#991b1b', icon: '❌' },
-                    }
-                    const st = estadoStyle[item.estado] ?? estadoStyle.pendiente
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Nombre completo <span style={{ color: PINK }}>*</span></label>
+                  <input style={inputStyle} value={perfil.nombre}
+                    onChange={e => { setPerfil(p => ({ ...p, nombre: e.target.value })); setPerfilGuardado(false) }}
+                    placeholder="Tu nombre completo" onFocus={focus} onBlur={blur} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Empresa / Marca</label>
+                  <input style={inputStyle} value={perfil.empresa}
+                    onChange={e => { setPerfil(p => ({ ...p, empresa: e.target.value })); setPerfilGuardado(false) }}
+                    placeholder="Nombre de tu empresa (opcional)" onFocus={focus} onBlur={blur} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Email de contacto <span style={{ color: PINK }}>*</span></label>
+                  <input type="email" style={inputStyle} value={perfil.email}
+                    onChange={e => { setPerfil(p => ({ ...p, email: e.target.value })); setPerfilGuardado(false) }}
+                    placeholder="proveedor@email.com" onFocus={focus} onBlur={blur} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Teléfono</label>
+                  <input type="tel" style={inputStyle} value={perfil.telefono}
+                    onChange={e => { setPerfil(p => ({ ...p, telefono: e.target.value })); setPerfilGuardado(false) }}
+                    placeholder="+52 55 0000 0000 (opcional)" onFocus={focus} onBlur={blur} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                disabled={!perfil.nombre.trim() || !perfil.email.trim()}
+                onClick={() => {
+                  try { localStorage.setItem(PERFIL_KEY, JSON.stringify(perfil)) } catch {}
+                  try { localStorage.setItem(EMAIL_KEY, perfil.email.trim().toLowerCase()) } catch {}
+                  setSavedEmail(perfil.email.trim().toLowerCase())
+                  setProveedor(perfil)
+                  setPerfilGuardado(true)
+                  setTimeout(() => setPerfilGuardado(false), 3000)
+                }}
+                style={{
+                  flex: 1, background: (!perfil.nombre.trim() || !perfil.email.trim()) ? '#f3f4f6' : NAVY,
+                  color: (!perfil.nombre.trim() || !perfil.email.trim()) ? '#9ca3af' : '#fff',
+                  border: 'none', padding: '13px 0', borderRadius: 12, fontWeight: 800, fontSize: 15,
+                  cursor: (!perfil.nombre.trim() || !perfil.email.trim()) ? 'not-allowed' : 'pointer',
+                }}>
+                Guardar datos
+              </button>
+              {perfil.nombre && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPerfil({ nombre: '', empresa: '', email: '', telefono: '' })
+                    try { localStorage.removeItem(PERFIL_KEY) } catch {}
+                    try { localStorage.removeItem(EMAIL_KEY) } catch {}
+                    setSavedEmail('')
+                    setProveedor({ nombre: '', empresa: '', email: '', telefono: '' })
+                    setPerfilGuardado(false)
+                  }}
+                  style={{ padding: '13px 20px', borderRadius: 12, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  Limpiar
+                </button>
+              )}
+            </div>
+
+            <p style={{ fontSize: 11, color: '#d1d5db', textAlign: 'center', marginTop: 16 }}>
+              💾 Los datos se almacenan solo en este navegador
+            </p>
+          </div>
+        )}
+
+        {/* ---- Tab: Mis solicitudes ---- */}
+        {tab === 'historial' && (
+        <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+
+          {/* Sin datos aún */}
+          {!historialItems && !loadingHistorial && (
+            <div style={{ padding: '48px', textAlign: 'center' }}>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Configura tu email en Ajustes para ver tus solicitudes</p>
+            </div>
+          )}
+
+          {/* Cargando */}
+          {loadingHistorial && (
+            <div style={{ padding: '48px', textAlign: 'center' }}>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Cargando solicitudes...</p>
+            </div>
+          )}
+
+          {/* Lista con resultados */}
+          {historialItems && historialItems.length > 0 && (() => {
+            const aprobados  = historialItems.filter(i => i.estado === 'aprobado')
+            const pendientes = historialItems.filter(i => i.estado === 'pendiente')
+            const rechazados = historialItems.filter(i => i.estado === 'rechazado')
+            const estadoMap: Record<string, { bg: string; text: string; label: string; borderColor: string }> = {
+              pendiente: { bg: '#fffbeb', text: '#92400e', label: '⏳ En revisión', borderColor: '#fde68a' },
+              aprobado:  { bg: '#f0fdf4', text: '#065f46', label: '✅ Aprobado',    borderColor: '#86efac' },
+              rechazado: { bg: '#fef2f2', text: '#991b1b', label: '❌ Rechazado',   borderColor: '#fca5a5' },
+            }
+            return (
+              <>
+                {/* Header con resumen */}
+                <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: NAVY, margin: '0 0 4px' }}>Mis solicitudes</p>
+                    <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>{historialItems.length} producto{historialItems.length !== 1 ? 's' : ''} enviado{historialItems.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {aprobados.length > 0 && (
+                      <span style={{ background: '#d1fae5', color: '#065f46', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 20 }}>
+                        ✅ {aprobados.length} aprobado{aprobados.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {pendientes.length > 0 && (
+                      <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 20 }}>
+                        ⏳ {pendientes.length} en revisión
+                      </span>
+                    )}
+                    {rechazados.length > 0 && (
+                      <span style={{ background: '#fee2e2', color: '#991b1b', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 20 }}>
+                        ❌ {rechazados.length} rechazado{rechazados.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filas de solicitudes */}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {historialItems.map((item, i) => {
+                    const st = estadoMap[item.estado] ?? estadoMap.pendiente
                     return (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#f9fafb', borderRadius: 10, padding: '12px 16px', border: '1px solid #e5e7eb' }}>
-                        <span style={{ fontSize: 20, flexShrink: 0 }}>{st.icon}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
-                          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</p>
+                      <div key={item.id} style={{
+                        display: 'grid', gridTemplateColumns: '1fr auto',
+                        gap: 16, alignItems: 'center', padding: '14px 28px',
+                        borderBottom: i < historialItems.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        background: i % 2 === 0 ? '#fff' : '#fafafa',
+                        borderLeft: `3px solid ${st.borderColor}`,
+                      }}>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
+                          <div style={{ display: 'flex', gap: 10, marginTop: 3, alignItems: 'center' }}>
+                            <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</span>
+                            <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
+                            <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                              {new Date(item.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
                         </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <span style={{ display: 'inline-block', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20, textTransform: 'capitalize' }}>
-                            {item.estado}
-                          </span>
-                          <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
-                            {new Date(item.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </p>
-                        </div>
+                        <span style={{ display: 'inline-flex', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '5px 14px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {st.label}
+                        </span>
                       </div>
                     )
                   })}
                 </div>
-              </div>
-            )}
-          </div>
+
+                {/* Footer */}
+                <div style={{ padding: '12px 28px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" onClick={() => savedEmail && cargarHistorial(savedEmail)}
+                    style={{ background: 'none', border: 'none', fontSize: 12, color: '#9ca3af', cursor: 'pointer', fontWeight: 600 }}>
+                    🔄 Actualizar
+                  </button>
+                </div>
+              </>
+            )
+          })()}
         </div>
         )}
         </main>

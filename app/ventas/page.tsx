@@ -177,9 +177,6 @@ export default function VentasPage() {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Ventas</h1>
-          <button onClick={() => setShowModal(true)} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-            + Nueva venta
-          </button>
         </div>
 
         {/* Resumen */}

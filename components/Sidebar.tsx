@@ -27,8 +27,7 @@ const ALL_SECTIONS: NavSection[] = [
   {
     label: 'CANALES',
     items: [
-      { href: '/tienda-en-linea', label: 'Tienda en línea', icon: 'store'      },
-      { href: '/punto-de-venta',  label: 'Punto de Venta',  icon: 'creditcard' },
+      { href: '/tienda-en-linea', label: 'Tienda en línea', icon: 'store' },
     ],
   },
 ]

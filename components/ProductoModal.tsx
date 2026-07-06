@@ -145,11 +145,6 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <label style={labelStyle}>Imagen del producto</label>
-              {!camaraActiva && !form.imagenPreview && (
-                <button onClick={abrirCamara} style={{ background: '#f3f4f6', border: 'none', padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  📷 Usar cámara
-                </button>
-              )}
             </div>
 
             {camaraActiva && (

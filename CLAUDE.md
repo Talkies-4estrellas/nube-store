@@ -124,9 +124,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | `venta_items` | venta_id, producto_id, nombre, precio, cantidad, subtotal (generado) |
 | `envios` | venta_id, paqueteria, numero_guia, estado_envio, costo_envio |
 | `user_roles` | user_id (FK auth.users), role, nombre — tabla de roles del panel |
-| `solicitudes_productos` | solicitudes de proveedores: datos proveedor + producto + imagen_url + estado (pendiente/aprobado/rechazado) |
+| `solicitudes_productos` | solicitudes de proveedores: datos proveedor + producto + imagen_url + estado (pendiente/aprobado/rechazado) + updated_at + detalles (jsonb opcional: colores, tallas, variantes, peso_g, dimensiones, imagenes_extra) |
 | `registros` | cuentas de clientes de la tienda: email, nombre, password_hash, token |
-| `solicitudes_productos` | solicitudes de proveedores: datos proveedor + producto + imagen_url + estado (pendiente/aprobado/rechazado) + updated_at |
 | `config_storefront` | fila única (id=1): nombre_tienda, hero_titulo, hero_subtitulo, hero_cta, color_acento, whatsapp, email_contacto, instagram, telefono, facebook — RLS habilitado |
 | `config_metodos_pago` | fila única (id=1): efectivo, transferencia, tarjeta (bool) |
 | `config_notificaciones` | por user_id: ventas_nuevas, stock_bajo, solicitudes_proveedor (bool) |
@@ -246,6 +245,7 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] Ejecutar en Supabase: `ALTER TABLE solicitudes_productos ADD COLUMN IF NOT EXISTS detalles jsonb DEFAULT NULL;`
 - [ ] Ejecutar `database/auth.sql` en Supabase SQL Editor (Step 1 del setup auth)
 - [ ] Crear usuario admin en Supabase Authentication y hacer INSERT en user_roles (Steps 2-3)
 - [ ] Ejecutar política anon para `solicitudes/` en Storage (ver schema.sql)
@@ -268,6 +268,14 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Dashboard, Envíos y Tienda en línea auditados — todos leen datos reales de Supabase sin problemas
 - [x] Portal proveedores: tab "Mis enviados" independiente — muestra todas las solicitudes (pendiente/aprobado/rechazado) filtradas por email del proveedor; input de email cuando no hay sesión guardada
 - [x] Dashboard administrativo: sección "Solicitudes de proveedores" con aprobación/rechazo individual y botón "Aprobar todos (N)" para bulk; al aprobar inserta producto en catálogo automáticamente; toast de confirmación
+
+## Completado (06/07/2026)
+- [x] Portal proveedores: flujo solicitudes end-to-end sin email manual — `savedEmail` como única fuente de verdad, Realtime Supabase actualiza estado automáticamente cuando admin aprueba/rechaza
+- [x] Portal proveedores: tab "Mis solicitudes" con resumen de conteos y borde de color por estado; sin input de email
+- [x] Portal proveedores: formulario de producto ampliado con sección colapsable "Datos adicionales" — colores (chips), tallas (chips), variantes con stock por combinación, peso, dimensiones, hasta 4 fotos extra; todo guarda en columna `detalles` jsonb
+- [x] Ventas: eliminado botón "+ Nueva venta" del header
+- [x] ProductoModal: eliminado botón "📷 Usar cámara" (innecesario en contexto de escritorio)
+- [x] Punto de Venta eliminado del Sidebar (CANALES)
 
 ---
 
