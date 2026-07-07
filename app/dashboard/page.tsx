@@ -231,6 +231,8 @@ export default function DashboardPage() {
           imagen_url: sol.imagen_url,
           categoria_id: sol.categoria_id,
           activo: true,
+          origen: 'proveedor',
+          proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
         })
       }
     }
@@ -433,6 +435,8 @@ export default function DashboardPage() {
                         nombre: sol.producto_nombre, sku: sol.producto_sku,
                         precio: sol.producto_precio, stock: sol.producto_stock,
                         imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
+                        origen: 'proveedor',
+                        proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
                       })
                       await supabase.from('solicitudes_productos').update({ estado: 'aprobado' }).eq('id', sol.id)
                     }

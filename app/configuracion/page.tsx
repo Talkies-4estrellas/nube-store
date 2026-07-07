@@ -103,13 +103,15 @@ export default function ConfiguracionPage() {
       if (solicitud) {
         // Crear el producto en el catálogo al aprobar
         await supabase.from('productos').insert({
-          nombre:       solicitud.producto_nombre,
-          sku:          solicitud.producto_sku,
-          precio:       solicitud.producto_precio,
-          stock:        solicitud.producto_stock,
-          imagen_url:   solicitud.imagen_url,
-          categoria_id: solicitud.categoria_id,
-          activo:       true,
+          nombre:           solicitud.producto_nombre,
+          sku:              solicitud.producto_sku,
+          precio:           solicitud.producto_precio,
+          stock:            solicitud.producto_stock,
+          imagen_url:       solicitud.imagen_url,
+          categoria_id:     solicitud.categoria_id,
+          activo:           true,
+          origen:           'proveedor',
+          proveedor_nombre: solicitud.proveedor_empresa || solicitud.proveedor_nombre,
         })
       }
     }

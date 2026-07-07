@@ -277,6 +277,14 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] ProductoModal: eliminado botón "📷 Usar cámara" (innecesario en contexto de escritorio)
 - [x] Punto de Venta eliminado del Sidebar (CANALES)
 
+## Completado (07/07/2026)
+- [x] Productos: distinción admin vs proveedor — columnas `origen TEXT DEFAULT 'admin'` y `proveedor_nombre TEXT` en tabla `productos`; VIEW `productos_con_estado` recreada con DROP+CREATE
+- [x] Productos: filtro desplegable por proveedor (`<select>`) en la misma fila de filtros (junto a categoría y ordenamiento); solo aparece cuando hay productos de proveedores
+- [x] Productos: panel "Solicitudes" colapsable con aprobación/rechazo individual y "Aprobar todos"; badge rosa con conteo en el botón; toast de confirmación
+- [x] Productos: badge púrpura `📦 {proveedor_nombre}` en tarjetas de productos de proveedor
+- [x] Dashboard + Configuración: INSERT a `productos` al aprobar solicitud ahora incluye `origen: 'proveedor'` y `proveedor_nombre`
+- [x] Tienda en línea: botón "Ver otros temas ▼" expande 6 temas extra inline en la galería de temas
+
 ---
 
 ## Pasos para configurar auth en Supabase (primera vez)

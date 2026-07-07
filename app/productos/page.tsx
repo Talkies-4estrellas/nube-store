@@ -9,6 +9,22 @@ import Icon from '@/components/Icon'
 import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
 
 const PAGE_SIZE = 12
+const NAVY = '#252855'
+const PINK  = '#e7226d'
+const BLUE  = '#0049ff'
+
+type Solicitud = {
+  id: string
+  proveedor_nombre: string
+  proveedor_empresa: string | null
+  producto_nombre: string
+  producto_sku: string
+  producto_precio: number
+  producto_stock: number
+  categoria_id: number | null
+  imagen_url: string | null
+  created_at: string
+}
 
 type Product = {
   id: string
@@ -19,6 +35,8 @@ type Product = {
   estado: string
   sku: string
   imagen_url?: string | null
+  origen?: string | null
+  proveedor_nombre?: string | null
 }
 
 const estadoStyle: Record<string, { bg: string; text: string }> = {
@@ -48,6 +66,67 @@ export default function ProductosPage() {
   const [page, setPage] = useState(1)
   const [sortBy, setSortBy] = useState<'nombre' | 'precio' | 'stock'>('nombre')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [proveedorFiltro, setProveedorFiltro] = useState<string | null>(null)
+  const [showSolicitudes, setShowSolicitudes] = useState(false)
+  const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
+  const [loadingSol, setLoadingSol] = useState(false)
+  const [procesando, setProcesando] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
+
+  async function fetchSolicitudes() {
+    setLoadingSol(true)
+    const { data } = await supabase
+      .from('solicitudes_productos')
+      .select('id, proveedor_nombre, proveedor_empresa, producto_nombre, producto_sku, producto_precio, producto_stock, categoria_id, imagen_url, created_at')
+      .eq('estado', 'pendiente')
+      .order('created_at', { ascending: false })
+    setSolicitudes(data ?? [])
+    setLoadingSol(false)
+  }
+
+  async function cambiarEstadoSol(id: string, estado: 'aprobado' | 'rechazado') {
+    setProcesando(id)
+    if (estado === 'aprobado') {
+      const sol = solicitudes.find(s => s.id === id)
+      if (sol) {
+        await supabase.from('productos').insert({
+          nombre: sol.producto_nombre, sku: sol.producto_sku,
+          precio: sol.producto_precio, stock: sol.producto_stock,
+          imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
+          origen: 'proveedor',
+          proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
+        })
+      }
+    }
+    await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
+    setSolicitudes(prev => prev.filter(s => s.id !== id))
+    setProcesando(null)
+    const msg = estado === 'aprobado' ? 'Producto aprobado y publicado' : 'Solicitud rechazada'
+    const color = estado === 'aprobado' ? '#059669' : '#dc2626'
+    setToast({ msg, color })
+    setTimeout(() => setToast(null), 3000)
+    if (estado === 'aprobado') fetchProducts()
+  }
+
+  async function aprobarTodos() {
+    setProcesando('all')
+    for (const sol of solicitudes) {
+      await supabase.from('productos').insert({
+        nombre: sol.producto_nombre, sku: sol.producto_sku,
+        precio: sol.producto_precio, stock: sol.producto_stock,
+        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
+        origen: 'proveedor',
+        proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
+      })
+      await supabase.from('solicitudes_productos').update({ estado: 'aprobado' }).eq('id', sol.id)
+    }
+    const n = solicitudes.length
+    setSolicitudes([])
+    setProcesando(null)
+    setToast({ msg: `${n} productos aprobados y publicados`, color: '#059669' })
+    setTimeout(() => setToast(null), 3000)
+    fetchProducts()
+  }
 
   async function fetchCategorias() {
     const { data } = await supabase.from('categorias').select('nombre').order('nombre')
@@ -150,12 +229,17 @@ export default function ProductosPage() {
     setPage(1)
   }
 
+  const proveedores = [...new Set(
+    products.filter(p => p.origen === 'proveedor' && p.proveedor_nombre).map(p => p.proveedor_nombre!)
+  )]
+
   const filtered = products
     .filter(p => {
       const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase()) ||
         p.sku.toLowerCase().includes(search.toLowerCase())
       const matchCat = categoria === 'Todas' || p.categoria === categoria
-      return matchSearch && matchCat
+      const matchProv = !proveedorFiltro || p.proveedor_nombre === proveedorFiltro
+      return matchSearch && matchCat && matchProv
     })
     .sort((a, b) => {
       const mul = sortDir === 'asc' ? 1 : -1
@@ -176,10 +260,87 @@ export default function ProductosPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Productos</h1>
-        <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-          + Agregar producto
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button onClick={() => { if (!showSolicitudes) fetchSolicitudes(); setShowSolicitudes(v => !v) }}
+            style={{ position: 'relative', background: showSolicitudes ? NAVY : '#f3f4f6', color: showSolicitudes ? '#fff' : '#374151', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            Solicitudes
+            {solicitudes.length > 0 && (
+              <span style={{ position: 'absolute', top: -6, right: -6, background: PINK, color: '#fff', fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                {solicitudes.length}
+              </span>
+            )}
+          </button>
+          <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: BLUE, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            + Agregar producto
+          </button>
+        </div>
       </div>
+
+      {/* Panel solicitudes */}
+      {showSolicitudes && (
+        <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111', margin: 0 }}>Solicitudes de proveedores</h2>
+              {solicitudes.length > 0 && (
+                <span style={{ background: PINK, color: '#fff', fontSize: 11, fontWeight: 800, padding: '2px 10px', borderRadius: 20 }}>
+                  {solicitudes.length} pendiente{solicitudes.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            {solicitudes.length > 1 && (
+              <button onClick={aprobarTodos} disabled={procesando !== null}
+                style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: procesando !== null ? '#9ca3af' : '#059669', color: '#fff', fontSize: 13, fontWeight: 700, cursor: procesando !== null ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                {procesando === 'all' ? 'Aprobando...' : `Aprobar todos (${solicitudes.length})`}
+              </button>
+            )}
+          </div>
+
+          {loadingSol ? (
+            <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Cargando...</p>
+          ) : solicitudes.length === 0 ? (
+            <p style={{ color: '#9ca3af', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>No hay solicitudes pendientes</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {solicitudes.map(sol => (
+                <div key={sol.id} style={{ display: 'grid', gridTemplateColumns: '56px 1fr auto', gap: 16, alignItems: 'center', background: '#f9fafb', borderRadius: 12, padding: '14px 18px', border: '1px solid #f3f4f6' }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 10, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                    {sol.imagen_url ? <img src={sol.imagen_url} alt={sol.producto_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📦'}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111' }}>{sol.producto_nombre}</p>
+                      <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{sol.producto_sku}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#059669' }}>${Number(sol.producto_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                      {sol.producto_stock > 0 && <span style={{ fontSize: 11, color: '#6b7280' }}>{sol.producto_stock} uds</span>}
+                    </div>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                      {sol.proveedor_nombre}{sol.proveedor_empresa ? ` · ${sol.proveedor_empresa}` : ''} · {new Date(sol.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button onClick={() => cambiarEstadoSol(sol.id, 'rechazado')} disabled={procesando === sol.id}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer', opacity: procesando === sol.id ? 0.5 : 1 }}>
+                      Rechazar
+                    </button>
+                    <button onClick={() => cambiarEstadoSol(sol.id, 'aprobado')} disabled={procesando === sol.id}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: procesando === sol.id ? '#9ca3af' : '#059669', color: '#fff', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer' }}>
+                      {procesando === sol.id ? '...' : 'Aprobar y publicar'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: '#fff', border: `1px solid ${toast.color}30`, borderLeft: `4px solid ${toast.color}`, borderRadius: 10, padding: '12px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', fontSize: 13, fontWeight: 600, color: '#111', zIndex: 999 }}>
+          {toast.msg}
+        </div>
+      )}
 
       {/* Resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
@@ -211,6 +372,15 @@ export default function ProductosPage() {
             style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 160 }}>
             {categoriasConTodas.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          {proveedores.length > 0 && (
+            <select
+              value={proveedorFiltro ?? ''}
+              onChange={e => { setProveedorFiltro(e.target.value || null); setPage(1) }}
+              style={{ padding: '9px 14px', border: `1px solid ${proveedorFiltro ? NAVY : '#e5e7eb'}`, borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: proveedorFiltro ? NAVY : '#374151', cursor: 'pointer', minWidth: 180, fontWeight: proveedorFiltro ? 700 : 400 }}>
+              <option value="">📦 Proveedores</option>
+              {proveedores.map(p => <option key={p} value={p}>📦 {p}</option>)}
+            </select>
+          )}
           {view === 'grid' && (
             <select value={`${sortBy}-${sortDir}`} onChange={e => {
               const [col, dir] = e.target.value.split('-')
@@ -235,6 +405,7 @@ export default function ProductosPage() {
           </div>
         </div>
 
+
         {/* Vista Grid */}
         {loading && view === 'grid' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
@@ -258,6 +429,11 @@ export default function ProductosPage() {
                       {p.estado}
                     </span>
                   </div>
+                  {p.origen === 'proveedor' && p.proveedor_nombre && (
+                    <p style={{ fontSize: 10, fontWeight: 700, color: '#7c3aed', background: '#ede9fe', display: 'inline-block', padding: '2px 8px', borderRadius: 20, marginBottom: 4 }}>
+                      📦 {p.proveedor_nombre}
+                    </p>
+                  )}
                   <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>SKU: {p.sku}</p>
                   <span style={{ display: 'inline-block', background: colorCategoria(p.categoria, categorias) + '22', color: colorCategoria(p.categoria, categorias), fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, marginBottom: 8 }}>
                     {p.categoria}
