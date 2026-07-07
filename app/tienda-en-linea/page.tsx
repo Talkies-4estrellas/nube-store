@@ -17,6 +17,9 @@ const subNav = [
 const temasThumbs = ['Moda oscuro', 'Cosmética', 'Deportes', 'Minimalista', 'Cali', 'Uyuni', 'Toluca', 'Colorido']
 const thumbColors = ['#6366f1','#14b8a6','#ec4899','#64748b','#eab308','#db2777','#f97316','#22c55e']
 
+const temasExtra = ['Nocturno', 'Vintage', 'Pastel', 'Corporativo', 'Oceáno', 'Bosque']
+const thumbColorsExtra = ['#1e1b4b','#92400e','#f9a8d4','#1e3a5f','#0284c7','#166534']
+
 type Config = {
   nombre_tienda: string
   hero_titulo: string
@@ -51,6 +54,7 @@ export default function TiendaEnLineaPage() {
   const [config, setConfig] = useState<Config>(DEFAULTS)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [mostrarMasTemas, setMostrarMasTemas] = useState(false)
 
   useEffect(() => {
     supabase.from('config_storefront').select('*').eq('id', 1).single()
@@ -211,10 +215,23 @@ export default function TiendaEnLineaPage() {
               </div>
             ))}
           </div>
+
+          {/* Temas extra (colapsables) */}
+          {mostrarMasTemas && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, padding: '0 2px 2px' }}>
+              {temasExtra.map((t, i) => (
+                <div key={t} style={{ height: 80, background: thumbColorsExtra[i], borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{t}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f3f4f6' }}>
             <span style={{ fontWeight: 700, fontSize: 15 }}>Más temas disponibles</span>
-            <button style={{ background: '#fff', color: '#374151', border: '1px solid #d1d5db', padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-              Ver otros temas
+            <button onClick={() => setMostrarMasTemas(v => !v)}
+              style={{ background: '#fff', color: '#374151', border: '1px solid #d1d5db', padding: '8px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+              {mostrarMasTemas ? 'Ocultar temas ▲' : 'Ver otros temas ▼'}
             </button>
           </div>
         </div>
