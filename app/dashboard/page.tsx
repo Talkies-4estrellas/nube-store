@@ -278,7 +278,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Métricas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {metrics.map(m => (
           <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>
             <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.15s' }}>
@@ -294,7 +294,7 @@ export default function DashboardPage() {
 
       {/* Top métricas: producto, categoría, cliente */}
       {topMetrics.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${topMetrics.length}, 1fr)`, gap: 16, marginBottom: 24 }}>
+        <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${topMetrics.length}, 1fr)`, gap: 16, marginBottom: 24 }}>
           {topMetrics.map(m => (
             <div key={m.label} style={{ background: '#fff', borderRadius: 12, padding: '18px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: m.color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
@@ -337,7 +337,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
+      <div className="dashboard-bottom" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
         {/* Pedidos recientes */}
         <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -458,7 +458,7 @@ export default function DashboardPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {solicitudes.map(sol => (
-                <div key={sol.id} style={{ display: 'grid', gridTemplateColumns: '56px 1fr auto', gap: 16, alignItems: 'center', background: '#f9fafb', borderRadius: 12, padding: '14px 18px', border: '1px solid #f3f4f6' }}>
+                <div key={sol.id} className="sol-card" style={{ display: 'grid', gridTemplateColumns: '56px 1fr auto', gap: 16, alignItems: 'center', background: '#f9fafb', borderRadius: 12, padding: '14px 18px', border: '1px solid #f3f4f6' }}>
                   {/* Imagen */}
                   <div style={{ width: 56, height: 56, borderRadius: 10, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid #e5e7eb', flexShrink: 0 }}>
                     {sol.imagen_url
@@ -492,7 +492,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Acciones */}
-                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <div className="sol-card-actions" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                     <button
                       onClick={() => cambiarEstado(sol.id, 'rechazado')}
                       disabled={procesando === sol.id}

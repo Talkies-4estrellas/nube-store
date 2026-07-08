@@ -44,6 +44,27 @@ body {
 
 /* ── Responsive helpers ───────────────────────── */
 
+/* Dashboard: grilla inferior 1fr+300px → 1 col en mobile */
+@media (max-width: 768px) {
+  .dashboard-bottom { grid-template-columns: 1fr !important; }
+}
+
+/* Solicitud cards: 56px 1fr auto → baja botones en mobile */
+@media (max-width: 640px) {
+  .sol-card { grid-template-columns: 56px 1fr !important; }
+  .sol-card-actions { grid-column: 1 / -1 !important; justify-content: flex-end; }
+}
+
+/* Proveedores portal: formulario principal (campos | imagen) */
+@media (max-width: 680px) {
+  .prov-main-grid { grid-template-columns: 1fr !important; }
+  .prov-main-grid > div:last-child { border-left: none !important; border-top: 1px solid #f3f4f6; }
+  .prov-2col { grid-template-columns: 1fr !important; }
+  .prov-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+
+
 /* Grids de stats (4 cols → 2 cols en tablet → 1 col en móvil) */
 .stat-grid {
   display: grid !important;

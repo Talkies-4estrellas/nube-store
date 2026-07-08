@@ -67,6 +67,8 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 
 export default function ProveedoresPage() {
   const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'ajustes'>('registro')
+  const [isMobile, setIsMobile] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [savedEmail, setSavedEmail] = useState('')
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -203,6 +205,13 @@ export default function ProveedoresPage() {
   // Cámara
   const [camaraActiva, setCamaraActiva] = useState(false)
   const [camaraError, setCamaraError] = useState('')
+
+  useEffect(() => {
+    function checkMobile() { setIsMobile(window.innerWidth < 768) }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
@@ -510,8 +519,20 @@ export default function ProveedoresPage() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
-      {/* ---- Sidebar (igual al admin) ---- */}
-      <aside style={{ width: 240, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, zIndex: 100, padding: '20px 14px 16px' }}>
+      {/* Overlay mobile */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99 }} />
+      )}
+
+      {/* ---- Sidebar ---- */}
+      <aside style={{
+        width: 240, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
+        display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, zIndex: 100,
+        padding: '20px 14px 16px',
+        transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+        transition: 'transform 0.25s',
+      }}>
 
         {/* Logo */}
         <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', padding: '0 8px', marginBottom: 16 }}>
@@ -553,11 +574,17 @@ export default function ProveedoresPage() {
       </aside>
 
       {/* ---- Área principal ---- */}
-      <div style={{ marginLeft: 240, flex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginLeft: isMobile ? 0 : 240, flex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
 
         {/* Topbar */}
-        <header style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
+        <header style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0 16px' : '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(o => !o)}
+              style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: NAVY, padding: '0 8px 0 0', lineHeight: 1, flexShrink: 0 }}>
+              ☰
+            </button>
+          )}
+          <h1 style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
             {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis enviados' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
@@ -577,8 +604,25 @@ export default function ProveedoresPage() {
           )}
         </header>
 
+        {/* Barra de tabs mobile */}
+        {isMobile && (
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 16px', background: '#fff', borderBottom: '1px solid #f3f4f6', WebkitOverflowScrolling: 'touch' as any, flexShrink: 0 }}>
+            {([
+              { id: 'registro',    label: '📦 Registrar' },
+              { id: 'historial',   label: '🔍 Solicitudes' },
+              { id: 'misEnviados', label: '📋 Enviados' },
+              { id: 'ajustes',     label: '⚙️ Ajustes' },
+            ] as const).map(item => (
+              <button key={item.id} onClick={() => setTab(item.id)}
+                style={{ padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, border: 'none', whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0, background: tab === item.id ? NAVY : '#f3f4f6', color: tab === item.id ? '#fff' : '#374151' }}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Contenido */}
-        <main style={{ flex: 1, padding: '28px 32px 48px' }}>
+        <main style={{ flex: 1, padding: isMobile ? '16px' : '28px 32px 48px' }}>
 
         {tab === 'registro' && formState === 'success' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -672,15 +716,16 @@ export default function ProveedoresPage() {
                   </span>
                 </div>
 
-                {/* Encabezados de tabla */}
-                <div style={{ display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 40px', gap: 0, padding: '8px 20px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                {/* Encabezados de tabla + filas: scroll horizontal en mobile */}
+                <div className="prov-table-scroll">
+                <div style={{ display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 40px', gap: 0, padding: '8px 20px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', minWidth: 520 }}>
                   {['#', '', 'Producto / SKU', 'Precio', 'Stock', 'Categoría', ''].map((h, i) => (
                     <span key={i} style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 6px' }}>{h}</span>
                   ))}
                 </div>
 
                 {/* Filas */}
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 520 }}>
                   {productos.map((p, i) => (
                     <div key={i} style={{
                       display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 40px', gap: 0,
@@ -750,6 +795,7 @@ export default function ProveedoresPage() {
                     </div>
                   ))}
                 </div>
+                </div>{/* /prov-table-scroll */}
 
                 {/* Footer: resumen total */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: `${NAVY}06`, borderTop: '1px solid #e5e7eb' }}>
@@ -805,7 +851,7 @@ export default function ProveedoresPage() {
               )}
 
               {/* Layout 2 columnas: formulario | preview */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 0 }}>
+              <div className="prov-main-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 0 }}>
 
                 {/* Columna izquierda: campos */}
                 <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -820,7 +866,7 @@ export default function ProveedoresPage() {
                   </div>
 
                   {/* SKU + Categoría en fila */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
                       <label style={labelStyle}>
                         SKU / Código <span style={{ color: PINK }}>*</span>
@@ -866,7 +912,7 @@ export default function ProveedoresPage() {
                   </div>
 
                   {/* Precio + Stock en fila */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
                       <label style={labelStyle}>Precio (MXN) <span style={{ color: PINK }}>*</span></label>
                       <div style={{ position: 'relative' }}>
