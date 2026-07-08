@@ -125,6 +125,8 @@ export default function VentasPage() {
   const [loadingItems, setLoadingItems] = useState(false)
   const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
 
   async function fetchVentas() {
     setLoading(true)
@@ -163,7 +165,10 @@ export default function VentasPage() {
     const matchSearch = nombre.toLowerCase().includes(search.toLowerCase()) ||
       String(v.numero).includes(search)
     const matchStatus = statusFilter === 'Todos' || v.estado === statusFilter
-    return matchSearch && matchStatus
+    const desde = fechaDesde ? new Date(fechaDesde) : null
+    const hasta = fechaHasta ? new Date(fechaHasta + 'T23:59:59') : null
+    const matchFecha = (!desde || new Date(v.created_at) >= desde) && (!hasta || new Date(v.created_at) <= hasta)
+    return matchSearch && matchStatus && matchFecha
   })
 
   const total = filtered.reduce((sum, v) => sum + Number(v.total), 0)
@@ -171,7 +176,7 @@ export default function VentasPage() {
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
-    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+    <div className="panel-layout" style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
 
       {/* Columna principal */}
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -180,7 +185,7 @@ export default function VentasPage() {
         </div>
 
         {/* Resumen */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
           {[
             { label: 'Total pedidos', value: ventas.length },
             { label: 'Pagados', value: ventas.filter(v => v.estado === 'Pagado').length },
@@ -195,25 +200,38 @@ export default function VentasPage() {
         </div>
 
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div className="filter-row" style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="Buscar por cliente o número..."
               style={{ flex: 1, minWidth: 220, padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none' }}
             />
-            <div style={{ display: 'flex', gap: 6 }}>
-              {statuses.map(s => (
-                <button key={s} onClick={() => setStatusFilter(s)} style={{
-                  padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  background: statusFilter === s ? '#0049ff' : '#f3f4f6',
-                  color: statusFilter === s ? '#fff' : '#374151', border: 'none',
-                }}>{s}</button>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>Del</span>
+              <input type="date" value={fechaDesde} onChange={e => { setFechaDesde(e.target.value); setPage(1) }}
+                style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none', color: fechaDesde ? '#111' : '#9ca3af', cursor: 'pointer' }} />
+              <span style={{ fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>al</span>
+              <input type="date" value={fechaHasta} onChange={e => { setFechaHasta(e.target.value); setPage(1) }}
+                style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none', color: fechaHasta ? '#111' : '#9ca3af', cursor: 'pointer' }} />
+              {(fechaDesde || fechaHasta) && (
+                <button onClick={() => { setFechaDesde(''); setFechaHasta(''); setPage(1) }}
+                  style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}>×</button>
+              )}
             </div>
           </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+            {statuses.map(s => (
+              <button key={s} onClick={() => { setStatusFilter(s); setPage(1) }} style={{
+                padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: statusFilter === s ? '#0049ff' : '#f3f4f6',
+                color: statusFilter === s ? '#fff' : '#374151', border: 'none',
+              }}>{s}</button>
+            ))}
+          </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="table-wrap">
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
                   {['#', 'Cliente', 'Fecha', 'Total', 'Estado', 'Acciones'].map(h => (
@@ -265,6 +283,8 @@ export default function VentasPage() {
               </tbody>
             </table>
 
+          </div>
+
           {!loading && filtered.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
               <Icon name="search" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
@@ -300,7 +320,7 @@ export default function VentasPage() {
 
       {/* Panel detalle lateral */}
       {detalle && (
-        <div style={{ width: 320, flexShrink: 0, background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden', position: 'sticky', top: 80 }}>
+        <div className="panel-aside" style={{ width: 320, flexShrink: 0, background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden', position: 'sticky', top: 80 }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <p style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>Venta #{detalle.numero}</p>

@@ -285,6 +285,13 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Dashboard + Configuración: INSERT a `productos` al aprobar solicitud ahora incluye `origen: 'proveedor'` y `proveedor_nombre`
 - [x] Tienda en línea: botón "Ver otros temas ▼" expande 6 temas extra inline en la galería de temas
 
+## Completado (08/07/2026)
+- [x] Ventas: filtro de rango de fechas (Del / Al) con botón × para limpiar; filtro aplicado sobre `created_at`
+- [x] Productos: modal detalle de solicitud — muestra imagen, precio/stock, colores, tallas, variantes con stock, peso, dimensiones y fotos extra del jsonb `detalles`; botón "Ver" en cada fila del panel
+- [x] Productos: notificación por email al proveedor al aprobar/rechazar — Edge Function `notify-proveedor` (Deno + Resend); `tsconfig.json` excluye `supabase/functions`
+- [x] Sidebar: badge ámbar en Productos con conteo de productos con stock ≤ 5; actualizado en tiempo real vía canal `sidebar-stock-realtime`
+- [x] Diseño responsivo completo: `SidebarContext` con detección mobile; sidebar como drawer deslizante; topbar con hamburguesa y ancho completo en mobile; overlay al abrir sidebar; CSS responsivo (`stat-grid`, `grid-3`, `table-wrap`, `panel-layout`, `filter-row`) aplicado en ventas y productos
+
 ---
 
 ## Pasos para configurar auth en Supabase (primera vez)

@@ -6,6 +6,7 @@ import { CSSProperties, useEffect, useState } from 'react'
 import Icon from '@/components/Icon'
 import { useAuth, ROLE_ROUTES, type Role } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
+import { useSidebar } from '@/lib/sidebar-context'
 
 type NavItem = { href: string; label: string; icon: string; badge?: string }
 type NavSection = { label: string; items: NavItem[] }
@@ -73,28 +74,29 @@ function NavLink({ href, label, icon, badge, active }: NavItem & { active: boole
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
+  const { isMobile, open } = useSidebar()
   const [solicitudesPendientes, setSolicitudesPendientes] = useState(0)
+  const [stockBajoCount, setStockBajoCount] = useState(0)
 
   useEffect(() => {
-    // Carga inicial
-    supabase
-      .from('solicitudes_productos')
-      .select('id', { count: 'exact', head: true })
-      .eq('estado', 'pendiente')
-      .then(({ count }) => setSolicitudesPendientes(count ?? 0))
+    function cargarSolicitudes() {
+      supabase.from('solicitudes_productos').select('id', { count: 'exact', head: true })
+        .eq('estado', 'pendiente').then(({ count }) => setSolicitudesPendientes(count ?? 0))
+    }
+    function cargarStock() {
+      supabase.from('productos').select('id', { count: 'exact', head: true })
+        .lte('stock', 5).then(({ count }) => setStockBajoCount(count ?? 0))
+    }
+    cargarSolicitudes()
+    cargarStock()
 
-    // Realtime: nueva solicitud o cambio de estado → actualiza badge
-    const channel = supabase
-      .channel('sidebar-solicitudes-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_productos' }, () => {
-        supabase
-          .from('solicitudes_productos')
-          .select('id', { count: 'exact', head: true })
-          .eq('estado', 'pendiente')
-          .then(({ count }) => setSolicitudesPendientes(count ?? 0))
-      })
+    const chSol = supabase.channel('sidebar-solicitudes-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_productos' }, cargarSolicitudes)
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const chStock = supabase.channel('sidebar-stock-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productos' }, cargarStock)
+      .subscribe()
+    return () => { supabase.removeChannel(chSol); supabase.removeChannel(chStock) }
   }, [])
 
   const allowed = user ? new Set(ROLE_ROUTES[user.role]) : null
@@ -105,8 +107,18 @@ export default function Sidebar() {
   const showConfig = !user || user.role === 'admin'
   const badge = user ? ROLE_BADGE[user.role] : null
 
+  const sidebarStyle: CSSProperties = isMobile
+    ? {
+        ...s.sidebar,
+        transform: open ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.25s ease',
+        zIndex: 200,
+        boxShadow: open ? '4px 0 24px rgba(0,0,0,0.18)' : 'none',
+      }
+    : s.sidebar
+
   return (
-    <aside style={s.sidebar}>
+    <aside style={sidebarStyle}>
       <div style={s.logo}>
         <span style={{ color: '#1b1f4b' }}>Order</span>
         <span style={{ color: PINK }}>Express</span>
@@ -117,7 +129,18 @@ export default function Sidebar() {
           <div key={section.label}>
             <span style={s.label}>{section.label}</span>
             {section.items.map(item => (
-              <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
+              item.href === '/productos' ? (
+                <div key={item.href} style={{ position: 'relative' }}>
+                  <NavLink {...item} active={pathname.startsWith(item.href)} />
+                  {stockBajoCount > 0 && (
+                    <span style={{ position: 'absolute', top: 8, right: 10, background: '#d97706', color: '#fff', fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', pointerEvents: 'none' }}>
+                      {stockBajoCount > 99 ? '99+' : stockBajoCount}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <NavLink key={item.href} {...item} active={pathname.startsWith(item.href)} />
+              )
             ))}
           </div>
         ))}

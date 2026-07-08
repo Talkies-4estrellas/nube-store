@@ -41,3 +41,57 @@ body {
 .admin-logout:hover {
   background: rgba(231, 34, 109, 0.16) !important;
 }
+
+/* ── Responsive helpers ───────────────────────── */
+
+/* Grids de stats (4 cols → 2 cols en tablet → 1 col en móvil) */
+.stat-grid {
+  display: grid !important;
+}
+@media (max-width: 900px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 480px) {
+  .stat-grid { grid-template-columns: 1fr !important; }
+}
+
+/* Grid de 3 columnas (productos) → 2 → 1 */
+.grid-3 {
+  display: grid !important;
+}
+@media (max-width: 900px) {
+  .grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 540px) {
+  .grid-3 { grid-template-columns: 1fr !important; }
+}
+
+/* Tablas que desbordan en móvil */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Paneles laterales (detalle de venta, etc.): se apilan en móvil */
+@media (max-width: 768px) {
+  .panel-layout {
+    flex-direction: column !important;
+  }
+  .panel-aside {
+    width: 100% !important;
+    position: static !important;
+  }
+}
+
+/* Filas de filtros: wrap en móvil */
+@media (max-width: 640px) {
+  .filter-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .filter-row input,
+  .filter-row select {
+    width: 100% !important;
+    min-width: unset !important;
+  }
+}

@@ -13,9 +13,19 @@ const NAVY = '#252855'
 const PINK  = '#e7226d'
 const BLUE  = '#0049ff'
 
+type DetallesSolicitud = {
+  colores?: string[]
+  tallas?: string[]
+  variantes?: Array<{ color: string; talla: string; stock: number }>
+  peso_g?: number
+  dimensiones?: { largo: number; ancho: number; alto: number }
+  imagenes_extra?: string[]
+}
+
 type Solicitud = {
   id: string
   proveedor_nombre: string
+  proveedor_email: string
   proveedor_empresa: string | null
   producto_nombre: string
   producto_sku: string
@@ -24,6 +34,7 @@ type Solicitud = {
   categoria_id: number | null
   imagen_url: string | null
   created_at: string
+  detalles?: DetallesSolicitud | null
 }
 
 type Product = {
@@ -72,33 +83,46 @@ export default function ProductosPage() {
   const [loadingSol, setLoadingSol] = useState(false)
   const [procesando, setProcesando] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
+  const [solicitudDetalle, setSolicitudDetalle] = useState<Solicitud | null>(null)
 
   async function fetchSolicitudes() {
     setLoadingSol(true)
     const { data } = await supabase
       .from('solicitudes_productos')
-      .select('id, proveedor_nombre, proveedor_empresa, producto_nombre, producto_sku, producto_precio, producto_stock, categoria_id, imagen_url, created_at')
+      .select('id, proveedor_nombre, proveedor_email, proveedor_empresa, producto_nombre, producto_sku, producto_precio, producto_stock, categoria_id, imagen_url, created_at, detalles')
       .eq('estado', 'pendiente')
       .order('created_at', { ascending: false })
     setSolicitudes(data ?? [])
     setLoadingSol(false)
   }
 
+  async function notificarProveedor(sol: Solicitud, estado: 'aprobado' | 'rechazado') {
+    try {
+      await supabase.functions.invoke('notify-proveedor', {
+        body: {
+          proveedor_email: sol.proveedor_email,
+          proveedor_nombre: sol.proveedor_nombre,
+          producto_nombre: sol.producto_nombre,
+          estado,
+        }
+      })
+    } catch {}
+  }
+
   async function cambiarEstadoSol(id: string, estado: 'aprobado' | 'rechazado') {
     setProcesando(id)
-    if (estado === 'aprobado') {
-      const sol = solicitudes.find(s => s.id === id)
-      if (sol) {
-        await supabase.from('productos').insert({
-          nombre: sol.producto_nombre, sku: sol.producto_sku,
-          precio: sol.producto_precio, stock: sol.producto_stock,
-          imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
-          origen: 'proveedor',
-          proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
-        })
-      }
+    const sol = solicitudes.find(s => s.id === id)
+    if (estado === 'aprobado' && sol) {
+      await supabase.from('productos').insert({
+        nombre: sol.producto_nombre, sku: sol.producto_sku,
+        precio: sol.producto_precio, stock: sol.producto_stock,
+        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
+        origen: 'proveedor',
+        proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
+      })
     }
     await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
+    if (sol) notificarProveedor(sol, estado)
     setSolicitudes(prev => prev.filter(s => s.id !== id))
     setProcesando(null)
     const msg = estado === 'aprobado' ? 'Producto aprobado y publicado' : 'Solicitud rechazada'
@@ -319,6 +343,10 @@ export default function ProductosPage() {
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button onClick={() => setSolicitudDetalle(sol)}
+                      style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Ver
+                    </button>
                     <button onClick={() => cambiarEstadoSol(sol.id, 'rechazado')} disabled={procesando === sol.id}
                       style={{ padding: '8px 16px', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer', opacity: procesando === sol.id ? 0.5 : 1 }}>
                       Rechazar
@@ -343,7 +371,7 @@ export default function ProductosPage() {
       )}
 
       {/* Resumen */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
         {[
           { label: 'Total productos', value: products.length, color: '#111' },
           { label: 'Activos', value: products.filter(p => p.estado === 'Activo').length, color: '#059669' },
@@ -359,7 +387,7 @@ export default function ProductosPage() {
 
       <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         {/* Filtros */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="filter-row" style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -413,7 +441,7 @@ export default function ProductosPage() {
           </div>
         )}
         {!loading && view === 'grid' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {paginated.map(p => (
               <div key={p.id} style={{ border: '1px solid #f3f4f6', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ height: 140, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -459,12 +487,15 @@ export default function ProductosPage() {
 
         {/* Vista Lista */}
         {loading && view === 'list' && (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="table-wrap">
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
             <tbody><SkeletonTableBody rows={8} cols={['50px','160px','80px','70px','70px','80px','100px']} /></tbody>
           </table>
+          </div>
         )}
         {!loading && view === 'list' && (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="table-wrap">
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
                 {['SKU', 'Producto', 'Categoría'].map(h => (
@@ -521,6 +552,7 @@ export default function ProductosPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
 
         {!loading && filtered.length === 0 && (
@@ -555,6 +587,130 @@ export default function ProductosPage() {
           </div>
         )}
       </div>
+
+      {/* Modal detalle de solicitud */}
+      {solicitudDetalle && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={() => setSolicitudDetalle(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '88vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111' }}>{solicitudDetalle.producto_nombre}</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>
+                  SKU: <span style={{ fontFamily: 'monospace' }}>{solicitudDetalle.producto_sku}</span>
+                  {' · '}{solicitudDetalle.proveedor_nombre}{solicitudDetalle.proveedor_empresa ? ` (${solicitudDetalle.proveedor_empresa})` : ''}
+                </p>
+              </div>
+              <button onClick={() => setSolicitudDetalle(null)}
+                style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af', lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Imagen principal + precio/stock */}
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                <div style={{ width: 100, height: 100, borderRadius: 10, background: '#f3f4f6', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, border: '1px solid #e5e7eb' }}>
+                  {solicitudDetalle.imagen_url
+                    ? <img src={solicitudDetalle.imagen_url} alt={solicitudDetalle.producto_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : '📦'}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: BLUE, margin: '0 0 6px' }}>${Number(solicitudDetalle.producto_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                  <p style={{ fontSize: 13, color: '#374151', margin: '0 0 4px' }}>Stock: <strong>{solicitudDetalle.producto_stock}</strong> unidades</p>
+                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>{new Date(solicitudDetalle.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                </div>
+              </div>
+
+              {/* Colores */}
+              {solicitudDetalle.detalles?.colores && solicitudDetalle.detalles.colores.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Colores disponibles</p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {solicitudDetalle.detalles.colores.map(c => (
+                      <span key={c} style={{ padding: '4px 12px', borderRadius: 20, background: '#f3f4f6', fontSize: 13, fontWeight: 600, color: '#374151' }}>{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tallas */}
+              {solicitudDetalle.detalles?.tallas && solicitudDetalle.detalles.tallas.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Tallas / Tamaños</p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {solicitudDetalle.detalles.tallas.map(t => (
+                      <span key={t} style={{ padding: '4px 14px', borderRadius: 6, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 13, fontWeight: 700, color: BLUE }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Variantes */}
+              {solicitudDetalle.detalles?.variantes && solicitudDetalle.detalles.variantes.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Stock por variante</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+                    {solicitudDetalle.detalles.variantes.map((v, i) => (
+                      <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px', border: '1px solid #f3f4f6' }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', margin: '0 0 2px' }}>{v.color} / {v.talla}</p>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: '#059669', margin: 0 }}>{v.stock} uds</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Peso y dimensiones */}
+              {(solicitudDetalle.detalles?.peso_g || solicitudDetalle.detalles?.dimensiones) && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Envío</p>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {solicitudDetalle.detalles.peso_g && (
+                      <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 14px', border: '1px solid #f3f4f6' }}>
+                        <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Peso</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#374151', margin: 0 }}>{solicitudDetalle.detalles.peso_g} g</p>
+                      </div>
+                    )}
+                    {solicitudDetalle.detalles.dimensiones && (
+                      <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 14px', border: '1px solid #f3f4f6' }}>
+                        <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dimensiones</p>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#374151', margin: 0 }}>
+                          {solicitudDetalle.detalles.dimensiones.largo} × {solicitudDetalle.detalles.dimensiones.ancho} × {solicitudDetalle.detalles.dimensiones.alto} cm
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Imágenes extra */}
+              {solicitudDetalle.detalles?.imagenes_extra && solicitudDetalle.detalles.imagenes_extra.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Fotos adicionales</p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {solicitudDetalle.detalles.imagenes_extra.map((url, i) => (
+                      <img key={i} src={url} alt={`Extra ${i + 1}`} style={{ width: 90, height: 90, borderRadius: 8, objectFit: 'cover', border: '1px solid #e5e7eb' }} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Acciones */}
+              <div style={{ display: 'flex', gap: 10, paddingTop: 4, borderTop: '1px solid #f3f4f6' }}>
+                <button onClick={() => { cambiarEstadoSol(solicitudDetalle.id, 'rechazado'); setSolicitudDetalle(null) }}
+                  style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  Rechazar
+                </button>
+                <button onClick={() => { cambiarEstadoSol(solicitudDetalle.id, 'aprobado'); setSolicitudDetalle(null) }}
+                  style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: '#059669', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                  Aprobar y publicar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDelete && (
         <ConfirmDialog
