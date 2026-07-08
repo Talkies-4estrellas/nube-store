@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Icon from '@/components/Icon'
 import { useAuth } from '@/lib/auth-context'
+import { useSidebar } from '@/lib/sidebar-context'
 
 type SearchResult = {
   tipo: 'producto' | 'cliente' | 'venta'
@@ -35,6 +36,7 @@ export default function Topbar() {
   const notifRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const { user } = useAuth()
+  const { isMobile, toggle, open } = useSidebar()
 
   // Realtime: nueva venta → badge + dropdown
   useEffect(() => {
@@ -99,7 +101,7 @@ export default function Topbar() {
     <header style={{
       position: 'fixed',
       top: 0,
-      left: 240,
+      left: isMobile ? 0 : 240,
       right: 0,
       height: 56,
       background: '#fff',
@@ -107,10 +109,22 @@ export default function Topbar() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'flex-end',
-      padding: '0 24px',
-      zIndex: 99,
-      gap: 12,
+      padding: isMobile ? '0 12px' : '0 24px',
+      zIndex: 100,
+      gap: isMobile ? 8 : 12,
+      transition: 'left 0.25s ease',
     }}>
+      {/* Botón hamburguesa (solo mobile) */}
+      {isMobile && (
+        <button onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 'auto' }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={open ? '#e7226d' : '#252855'} strokeWidth="2.5" strokeLinecap="round">
+            {open
+              ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+              : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+            }
+          </svg>
+        </button>
+      )}
 
       {/* Campana de notificaciones */}
       <div ref={notifRef} style={{ position: 'relative' }}>
@@ -205,16 +219,20 @@ export default function Topbar() {
         </button>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Image src="/imagenes/logo-oe_1-png-300x49.avif" alt="Order Express" width={110} height={18} style={{ objectFit: 'contain' }} priority />
+        {!isMobile && (
+          <Image src="/imagenes/logo-oe_1-png-300x49.avif" alt="Order Express" width={110} height={18} style={{ objectFit: 'contain' }} priority />
+        )}
         {user && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 12, borderLeft: '1px solid #e5e7eb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: isMobile ? 0 : 12, borderLeft: isMobile ? 'none' : '1px solid #e5e7eb' }}>
             <div title={user.nombre} style={{ width: 30, height: 30, background: '#252855', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
               {user.nombre.charAt(0).toUpperCase()}
             </div>
-            <div style={{ lineHeight: 1.2 }}>
-              <p style={{ fontSize: 12, fontWeight: 700, color: '#111', margin: 0 }}>{user.nombre}</p>
-              <p style={{ fontSize: 10, color: '#9ca3af', margin: 0, textTransform: 'capitalize' }}>{user.role}</p>
-            </div>
+            {!isMobile && (
+              <div style={{ lineHeight: 1.2 }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#111', margin: 0 }}>{user.nombre}</p>
+                <p style={{ fontSize: 10, color: '#9ca3af', margin: 0, textTransform: 'capitalize' }}>{user.role}</p>
+              </div>
+            )}
           </div>
         )}
       </div>

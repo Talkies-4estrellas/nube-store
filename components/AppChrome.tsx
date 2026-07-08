@@ -5,6 +5,7 @@ import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
 import GlobalSearch from '@/components/GlobalSearch'
 import { useAuth, canAccess } from '@/lib/auth-context'
+import { useSidebar } from '@/lib/sidebar-context'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -14,6 +15,7 @@ const PUBLIC_PATHS = ['/', '/login', '/proveedores']
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { user, loading } = useAuth()
+  const { isMobile, open, close } = useSidebar()
 
   if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>
 
@@ -29,28 +31,28 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!user) {
-    return (
-      <>
-        <Sidebar />
-        <Topbar />
-        <GlobalSearch />
-        <main style={{ marginLeft: 240, marginTop: 56, padding: '32px', minHeight: 'calc(100vh - 56px)', background: '#f9fafb' }}>
-          {children}
-        </main>
-      </>
-    )
+  const mainStyle = {
+    marginLeft: isMobile ? 0 : 240,
+    marginTop: 56,
+    padding: isMobile ? '16px' : '32px',
+    minHeight: 'calc(100vh - 56px)',
+    background: '#f9fafb',
+    transition: 'margin-left 0.25s ease',
   }
 
-  const hasAccess = canAccess(user.role, pathname)
+  const hasAccess = !user || canAccess(user.role, pathname)
 
   return (
     <>
       <Sidebar />
       <Topbar />
       <GlobalSearch />
-      <main style={{ marginLeft: 240, marginTop: 56, padding: '32px', minHeight: 'calc(100vh - 56px)', background: '#f9fafb' }}>
-        {hasAccess ? children : <AccessDenied role={user.role} />}
+      {/* Overlay móvil */}
+      {isMobile && open && (
+        <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99, backdropFilter: 'blur(1px)' }} />
+      )}
+      <main style={mainStyle}>
+        {hasAccess ? children : <AccessDenied role={user!.role} />}
       </main>
     </>
   )
