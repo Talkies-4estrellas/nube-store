@@ -465,10 +465,13 @@ export default function ProveedoresPage() {
     const { error } = await supabase.from('solicitudes_productos').insert(rows)
 
     if (error) {
+      console.error('Error inserting solicitud:', error)
       if (error.code === '23505') {
         setErrorMsg('Uno o más SKUs ya existen en el sistema. Revisa los códigos.')
+      } else if (error.code === 'PGRST204' || error.message?.includes('detalles')) {
+        setErrorMsg('Error de base de datos: falta ejecutar la migración SQL. Contacta al administrador.')
       } else {
-        setErrorMsg('Error al enviar la solicitud. Intenta de nuevo.')
+        setErrorMsg(`Error al enviar la solicitud: ${error.message || error.code || 'desconocido'}`)
       }
       setFormState('error')
       return
