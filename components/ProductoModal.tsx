@@ -21,9 +21,10 @@ type Props = {
   onSave: (p: Producto) => void
   inicial?: Partial<Producto> & { id?: string }
   categoriasDisponibles: string[]
+  onNuevaCategoria?: (nombre: string) => Promise<void>
 }
 
-export default function ProductoModal({ onClose, onSave, inicial, categoriasDisponibles }: Props) {
+export default function ProductoModal({ onClose, onSave, inicial, categoriasDisponibles, onNuevaCategoria }: Props) {
   const [form, setForm] = useState<Producto>({ ...empty, ...inicial })
   const [errors, setErrors] = useState<Partial<Record<keyof Producto, string>>>({})
   const [dragging, setDragging] = useState(false)
@@ -253,11 +254,28 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
                   autoFocus
                   value={catQuery}
                   onChange={e => { setCatQuery(e.target.value); setForm(f => ({ ...f, categoria: e.target.value })) }}
-                  onKeyDown={e => { if (e.key === 'Enter' && catQuery.trim()) { seleccionarCategoria(catQuery.trim()); setNuevaCatMode(false) } if (e.key === 'Escape') setNuevaCatMode(false) }}
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter' && catQuery.trim()) {
+                      const nombre = catQuery.trim()
+                      if (onNuevaCategoria) await onNuevaCategoria(nombre)
+                      seleccionarCategoria(nombre)
+                      setNuevaCatMode(false)
+                      setCatQuery('')
+                    }
+                    if (e.key === 'Escape') setNuevaCatMode(false)
+                  }}
                   placeholder="Nombre de la nueva categoría..."
                   style={{ ...inputStyle(!!errors.categoria), flex: 1 }}
                 />
-                <button onClick={() => { if (catQuery.trim()) { seleccionarCategoria(catQuery.trim()) } setNuevaCatMode(false) }}
+                <button onClick={async () => {
+                  const nombre = catQuery.trim()
+                  if (nombre) {
+                    if (onNuevaCategoria) await onNuevaCategoria(nombre)
+                    seleccionarCategoria(nombre)
+                  }
+                  setNuevaCatMode(false)
+                  setCatQuery('')
+                }}
                   style={{ padding: '9px 14px', border: 'none', borderRadius: 8, background: '#0049ff', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                   Guardar
                 </button>

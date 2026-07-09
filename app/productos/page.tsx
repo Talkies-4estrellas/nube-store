@@ -727,6 +727,14 @@ export default function ProductosPage() {
           categoriasDisponibles={categorias}
           onClose={() => { setShowModal(false); setEditando(null) }}
           onSave={handleSave}
+          onNuevaCategoria={async (nombre) => {
+            // Insertar solo si no existe ya
+            const { data: existe } = await supabase.from('categorias').select('id').eq('nombre', nombre).maybeSingle()
+            if (!existe) {
+              await supabase.from('categorias').insert({ nombre })
+            }
+            await fetchCategorias()
+          }}
           inicial={editando ? {
             id: editando.id,
             nombre: editando.nombre,
