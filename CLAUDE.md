@@ -292,6 +292,15 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Sidebar: badge ámbar en Productos con conteo de productos con stock ≤ 5; actualizado en tiempo real vía canal `sidebar-stock-realtime`
 - [x] Diseño responsivo completo: `SidebarContext` con detección mobile; sidebar como drawer deslizante; topbar con hamburguesa y ancho completo en mobile; overlay al abrir sidebar; CSS responsivo (`stat-grid`, `grid-3`, `table-wrap`, `panel-layout`, `filter-row`) aplicado en ventas y productos
 
+## Completado (09/07/2026)
+- [x] Dashboard: `className="stat-grid"` en grids de métricas; `className="dashboard-bottom"` en grid inferior `1fr 300px`; `className="sol-card"` + `className="sol-card-actions"` en cards de solicitudes — colapsables en mobile
+- [x] Portal proveedores: layout mobile completo — drawer `72vw` con botón × de cierre y `box-shadow`, overlay, hamburguesa ☰, barra de tabs horizontal scrollable, `marginLeft: 0` en mobile
+- [x] Portal proveedores: formulario responsive — `.prov-main-grid` (2col→1col), `.prov-2col` (SKU+Cat, Precio+Stock), `.prov-table-scroll` (tabla productos con minWidth 520 + scroll-x)
+- [x] `globals.css`: 6 nuevas clases responsivas: `.dashboard-bottom`, `.sol-card`, `.sol-card-actions`, `.prov-main-grid`, `.prov-2col`, `.prov-table-scroll`
+- [x] ProductoModal: fix categorías nuevas — prop `onNuevaCategoria` inserta en Supabase inmediatamente y refresca lista del padre; la opción aparece seleccionada en el `<select>` al instante
+- [x] ProductoModal: eliminada toda la lógica de cámara (estados, refs, funciones, `<video>`, botones, import) — solo drag&drop + selector de archivo
+- [x] Portal proveedores: error de submit ahora muestra mensaje exacto de Supabase; detecta caso columna `detalles` faltante
+
 ---
 
 ## Pasos para configurar auth en Supabase (primera vez)

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, DragEvent, ChangeEvent } from 'react'
-import { convertToWebp, captureFrameAsWebp } from '@/lib/uploadWebp'
+import { useState, useRef, DragEvent, ChangeEvent } from 'react'
+import { convertToWebp } from '@/lib/uploadWebp'
 
 type Producto = {
   nombre: string
@@ -28,19 +28,11 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
   const [form, setForm] = useState<Producto>({ ...empty, ...inicial })
   const [errors, setErrors] = useState<Partial<Record<keyof Producto, string>>>({})
   const [dragging, setDragging] = useState(false)
-  const [camaraActiva, setCamaraActiva] = useState(false)
-  const [camaraError, setCamaraError] = useState('')
   const [convirtiendo, setConvirtiendo] = useState(false)
   const [catQuery, setCatQuery] = useState('')
   const [nuevaCatMode, setNuevaCatMode] = useState(false)
 
   const fileRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-
-  useEffect(() => {
-    return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
-  }, [])
 
   function seleccionarCategoria(cat: string) {
     setForm(f => ({ ...f, categoria: cat }))
@@ -77,41 +69,6 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
     if (file) handleFile(file)
   }
 
-  async function abrirCamara() {
-    setCamaraError('')
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
-      streamRef.current = stream
-      setCamaraActiva(true)
-      setTimeout(() => {
-        if (videoRef.current) videoRef.current.srcObject = stream
-      }, 50)
-    } catch {
-      setCamaraError('No se pudo acceder a la cámara. Verifica los permisos del navegador.')
-    }
-  }
-
-  function cerrarCamara() {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-    setCamaraActiva(false)
-    setCamaraError('')
-  }
-
-  async function tomarFoto() {
-    if (!videoRef.current) return
-    setConvirtiendo(true)
-    try {
-      const webp = await captureFrameAsWebp(videoRef.current)
-      const url = URL.createObjectURL(webp)
-      setForm(f => ({ ...f, imagen: webp, imagenPreview: url }))
-      setErrors(e => ({ ...e, imagen: '' }))
-      cerrarCamara()
-    } finally {
-      setConvirtiendo(false)
-    }
-  }
-
   function validate() {
     const errs: typeof errors = {}
     if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido'
@@ -144,39 +101,14 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
 
           {/* Imagen */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <label style={labelStyle}>Imagen del producto</label>
-            </div>
+            <label style={labelStyle}>Imagen del producto</label>
 
-            {camaraActiva && (
-              <div style={{ borderRadius: 10, overflow: 'hidden', border: '2px solid #0049ff', position: 'relative', background: '#000' }}>
-                <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }} />
-                <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 12 }}>
-                  <button onClick={cerrarCamara} style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                    Cancelar
-                  </button>
-                  <button onClick={tomarFoto} disabled={convirtiendo} style={{ background: '#fff', color: '#111', border: 'none', padding: '8px 24px', borderRadius: 20, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-                    {convirtiendo ? '⏳ Procesando...' : '📸 Tomar foto'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {camaraError && (
-              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: 8 }}>
-                <p style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>⚠️ {camaraError}</p>
-              </div>
-            )}
-
-            {!camaraActiva && form.imagenPreview && (
-              <div style={{ position: 'relative' }}>
+            {form.imagenPreview ? (
+              <div style={{ position: 'relative', marginTop: 8 }}>
                 <img src={form.imagenPreview} alt="preview" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 10, border: '1px solid #e5e7eb', display: 'block' }} />
                 <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
-                  <button onClick={abrirCamara} style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>
-                    📷 Cámara
-                  </button>
                   <button onClick={() => fileRef.current?.click()} style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>
-                    🖼️ Archivo
+                    🖼️ Cambiar
                   </button>
                   <button onClick={() => setForm(f => ({ ...f, imagen: null, imagenPreview: null }))} style={{ background: 'rgba(220,38,38,0.85)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     ×
@@ -188,15 +120,14 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
                   </div>
                 )}
               </div>
-            )}
-
-            {!camaraActiva && !form.imagenPreview && (
+            ) : (
               <div
                 onDragOver={e => { e.preventDefault(); setDragging(true) }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
                 onClick={() => fileRef.current?.click()}
                 style={{
+                  marginTop: 8,
                   border: `2px dashed ${dragging ? '#0049ff' : errors.imagen ? '#dc2626' : '#d1d5db'}`,
                   borderRadius: 10, padding: '32px 20px', textAlign: 'center', cursor: 'pointer',
                   background: dragging ? '#eff6ff' : '#fafafa', transition: 'all 0.2s',
@@ -219,7 +150,7 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
               </div>
             )}
 
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onFileChange} />
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
           </div>
 
           {/* Nombre y SKU */}

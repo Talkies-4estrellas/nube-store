@@ -530,17 +530,26 @@ export default function ProveedoresPage() {
 
       {/* ---- Sidebar ---- */}
       <aside style={{
-        width: 240, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
+        width: isMobile ? '72vw' : 240, maxWidth: 280, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
         display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, zIndex: 100,
-        padding: '20px 14px 16px',
+        padding: '16px 12px 16px',
         transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
         transition: 'transform 0.25s',
+        boxShadow: isMobile && sidebarOpen ? '4px 0 24px rgba(0,0,0,0.18)' : 'none',
       }}>
 
-        {/* Logo */}
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', padding: '0 8px', marginBottom: 16 }}>
-          <span style={{ color: '#1b1f4b' }}>Order</span>
-          <span style={{ color: PINK }}>Express</span>
+        {/* Logo + botón cerrar en mobile */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', marginBottom: 16 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em' }}>
+            <span style={{ color: '#1b1f4b' }}>Order</span>
+            <span style={{ color: PINK }}>Express</span>
+          </div>
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(false)}
+              style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', flexShrink: 0 }}>
+              ×
+            </button>
+          )}
         </div>
 
         {/* Nav */}
