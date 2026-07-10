@@ -105,6 +105,7 @@ export default function ProveedoresPage() {
       .from('solicitudes_productos')
       .select('id, producto_nombre, producto_sku, producto_precio, estado, created_at, imagen_url')
       .eq('proveedor_email', email)
+      .eq('estado', 'aprobado')
       .order('created_at', { ascending: false })
     setMisProductos(data ?? [])
     setLoadingMisProductos(false)
@@ -117,6 +118,7 @@ export default function ProveedoresPage() {
       .from('solicitudes_productos')
       .select('id, producto_nombre, producto_sku, estado, created_at')
       .eq('proveedor_email', email)
+      .neq('estado', 'aprobado')
       .order('created_at', { ascending: false })
     setHistorialItems(data ?? [])
     setLoadingHistorial(false)
@@ -1257,9 +1259,9 @@ export default function ProveedoresPage() {
               </div>
             ) : misProductos.length === 0 ? (
               <div style={{ padding: '48px', textAlign: 'center' }}>
-                <p style={{ fontSize: 40, margin: '0 0 12px' }}>📭</p>
-                <p style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>No encontramos productos con ese email</p>
-                <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Verifica el email con el que registraste tus solicitudes.</p>
+                <p style={{ fontSize: 40, margin: '0 0 12px' }}>⏳</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>Aún no tienes productos aprobados</p>
+                <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Cuando el equipo apruebe tus solicitudes, aparecerán aquí.</p>
               </div>
             ) : (
               <>
