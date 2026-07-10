@@ -65,6 +65,31 @@ body {
 
 
 
+/* ── Portal proveedores: drawer sidebar mobile (CSS garantiza el comportamiento) ── */
+@media (max-width: 767px) {
+  /* Sidebar oculto por defecto en mobile */
+  .prov-sidebar {
+    transform: translateX(-100%) !important;
+    width: 72vw !important;
+    max-width: 280px !important;
+    z-index: 200 !important;
+    box-shadow: none !important;
+  }
+  /* Sidebar visible cuando tiene clase .open */
+  .prov-sidebar.open {
+    transform: translateX(0) !important;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.18) !important;
+  }
+  /* Contenido sin margen izquierdo en mobile */
+  .prov-main {
+    margin-left: 0 !important;
+  }
+  /* Hamburguesa visible solo en mobile */
+  .prov-hamburger {
+    display: flex !important;
+  }
+}
+
 /* Grids de stats (4 cols → 2 cols en tablet/mobile) */
 .stat-grid {
   display: grid !important;

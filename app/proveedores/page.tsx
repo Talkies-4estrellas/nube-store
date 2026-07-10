@@ -516,21 +516,17 @@ export default function ProveedoresPage() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
-      {/* Overlay mobile */}
-      {isMobile && sidebarOpen && (
+      {/* Overlay mobile — se muestra cuando el drawer está abierto, independiente de JS isMobile */}
+      {sidebarOpen && (
         <div onClick={() => setSidebarOpen(false)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99 }} />
       )}
 
       {/* ---- Sidebar ---- */}
-      <aside style={{
-        width: isMobile ? '72vw' : 240, maxWidth: 280, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
+      <aside className={`prov-sidebar${sidebarOpen ? ' open' : ''}`} style={{
+        width: 240, maxWidth: 280, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
         display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0,
-        zIndex: isMobile ? 200 : 100,
-        padding: '16px 12px 16px',
-        transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
-        transition: 'transform 0.25s ease',
-        boxShadow: isMobile && sidebarOpen ? '4px 0 24px rgba(0,0,0,0.18)' : 'none',
+        zIndex: 100, padding: '16px 12px 16px', transition: 'transform 0.25s ease, box-shadow 0.25s ease',
       }}>
 
         {/* Logo + botón cerrar en mobile */}
@@ -581,21 +577,19 @@ export default function ProveedoresPage() {
       </aside>
 
       {/* ---- Área principal ---- */}
-      <div style={{ marginLeft: isMobile ? 0 : 240, flex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="prov-main" style={{ marginLeft: 240, flex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
 
         {/* Topbar */}
         <header style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0 16px' : '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
-          {isMobile && (
-            <button onClick={() => setSidebarOpen(o => !o)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 8, flexShrink: 0 }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={sidebarOpen ? PINK : NAVY} strokeWidth="2.5" strokeLinecap="round">
-                {sidebarOpen
-                  ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
-                  : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
-                }
-              </svg>
-            </button>
-          )}
+          <button className="prov-hamburger" onClick={() => setSidebarOpen(o => !o)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'none', alignItems: 'center', justifyContent: 'center', marginRight: 8, flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={sidebarOpen ? PINK : NAVY} strokeWidth="2.5" strokeLinecap="round">
+              {sidebarOpen
+                ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+                : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+              }
+            </svg>
+          </button>
           <h1 style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
             {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis enviados' : 'Ajustes'}
           </h1>
