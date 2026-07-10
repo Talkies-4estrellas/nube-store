@@ -52,7 +52,9 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
         <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99, backdropFilter: 'blur(1px)' }} />
       )}
       <main style={mainStyle}>
-        {hasAccess ? children : <AccessDenied role={user!.role} />}
+        <div style={{ maxWidth: 1600, margin: '0 auto' }}>
+          {hasAccess ? children : <AccessDenied role={user!.role} />}
+        </div>
       </main>
     </>
   )

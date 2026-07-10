@@ -126,6 +126,16 @@ body {
   }
 }
 
+/* ── Pantallas grandes: panel admin (1600px+) ──── */
+/* El maxWidth del wrapper en AppChrome ya acota el contenido a 1600px.   */
+/* Aquí reforzamos grids que usan inline styles y necesitan más columnas. */
+@media (min-width: 1600px) {
+  /* Stat-grid vuelve a 4 columnas si alguien usó 2 en escritorio */
+  .stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
+  /* Grid de 3 columnas puede mostrar 4 en pantallas muy anchas */
+  .grid-3    { grid-template-columns: repeat(4, 1fr) !important; }
+}
+
 /* Filas de filtros: wrap en móvil */
 @media (max-width: 640px) {
   .filter-row {

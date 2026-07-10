@@ -625,25 +625,46 @@ export default function Storefront() {
 
     return (
       <>
+        {/* Panel de filtros lateral */}
         <aside className="filter-panel">
           <h3>Filtros</h3>
-          <button
-            className={`category${activeCat === 'Todo' ? ' active' : ''}`}
-            type="button"
-            onClick={() => setActiveCat('Todo')}
-          >
-            <Ic n="grid-2x2" /><span>Todo</span><b>{dbProducts.length}</b>
-          </button>
-          {categorias.map(cat => (
-            <button
-              key={cat}
-              className={`category${activeCat === cat ? ' active' : ''}`}
-              type="button"
-              onClick={() => setActiveCat(cat)}
-            >
-              <Ic n="shopping-bag" /><span>{cat}</span><b>{catCounts[cat] ?? 0}</b>
-            </button>
-          ))}
+
+          {/* Categoría como desplegable */}
+          <div style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Categoría</span>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={activeCat}
+                onChange={e => setActiveCat(e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 36px 10px 14px', borderRadius: 10,
+                  border: '1.5px solid #e3e8f0', fontSize: 14, fontWeight: 700,
+                  color: '#202763', background: '#fff', cursor: 'pointer',
+                  outline: 'none', appearance: 'none', WebkitAppearance: 'none',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <option value="Todo">Todo ({dbProducts.length})</option>
+                {categorias.map(cat => (
+                  <option key={cat} value={cat}>{cat} ({catCounts[cat] ?? 0})</option>
+                ))}
+              </select>
+              {/* Ícono flecha */}
+              <svg style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', width: 16, height: 16 }}
+                viewBox="0 0 24 24" fill="none" stroke="#202763" strokeWidth="2.5" strokeLinecap="round">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+            {/* Chip de categoría activa */}
+            {activeCat !== 'Todo' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, background: 'var(--pink)', color: '#fff', fontSize: 12, fontWeight: 800 }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeCat}</span>
+                <button type="button" onClick={() => setActiveCat('Todo')}
+                  style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', lineHeight: 1, fontSize: 16, padding: 0, flexShrink: 0 }}>×</button>
+              </div>
+            )}
+          </div>
+
           <div className="range-card">
             <span>Rango de precio</span>
             <strong>
@@ -654,28 +675,34 @@ export default function Storefront() {
             <div></div>
           </div>
         </aside>
+
         <div className="store-grid">
-          {/* Chips de categoría encima del grid */}
-          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', paddingBottom: 4 }}>
+          {/* Chips de categoría — fila única con scroll horizontal */}
+          <div style={{
+            gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'nowrap',
+            overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none',
+          }}>
             {['Todo', ...categorias].map(cat => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setActiveCat(cat)}
                 style={{
-                  padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
+                  padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', border: 'none', flexShrink: 0,
                   background: activeCat === cat ? '#252855' : '#f3f4f6',
                   color: activeCat === cat ? '#fff' : '#374151',
                   transition: 'all 0.15s',
                 }}
               >
                 {cat}
-                <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 11 }}>
-                  {cat === 'Todo' ? dbProducts.length : dbProducts.filter(p => p[4] === cat).length}
+                <span style={{ marginLeft: 5, opacity: 0.6, fontSize: 11 }}>
+                  {cat === 'Todo' ? dbProducts.length : catCounts[cat] ?? 0}
                 </span>
               </button>
             ))}
           </div>
+
           {loadingProducts ? (
             <article className="empty-state">
               <p>Cargando productos...</p>

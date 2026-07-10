@@ -839,15 +839,20 @@
 .oe-store .filter-panel {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 16px;
   padding: 22px;
 }
 
 .oe-store .filter-panel h3 {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   color: #202763;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 950;
+}
+
+/* Ocultar scrollbar en el row de chips (webkit) */
+.oe-store .store-grid > div:first-child::-webkit-scrollbar {
+  display: none;
 }
 
 .oe-store .filter-panel .category {
@@ -915,7 +920,9 @@
 .oe-store .store-product-media img {
   width: 100%;
   height: 170px;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
+  object-position: center;
 }
 
 .oe-store .store-product-media .icon-button {
@@ -1721,6 +1728,111 @@
 
 .oe-store .category b {
   color: var(--pink);
+}
+
+/* ── Pantallas grandes: laptop 1400px+, monitor 1920px+, TV 2560px+ ── */
+
+/* 1400px – 1799px: 5 columnas en el grid de productos */
+@media (min-width: 1400px) {
+  .oe-store .page-shell {
+    max-width: 1680px;
+  }
+
+  .oe-store .store-grid {
+    grid-template-columns: repeat(5, minmax(160px, 1fr));
+  }
+
+  .oe-store .shop-layout {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .oe-store .support-layout {
+    grid-template-columns: repeat(4, minmax(200px, 1fr));
+  }
+}
+
+/* 1800px+: 6 columnas, hero grid más proporcional */
+@media (min-width: 1800px) {
+  .oe-store .page-shell {
+    max-width: 1920px;
+  }
+
+  .oe-store .store-grid {
+    grid-template-columns: repeat(6, minmax(160px, 1fr));
+  }
+
+  .oe-store .hero-grid {
+    grid-template-columns: minmax(0, 2.2fr) minmax(340px, 1fr);
+  }
+
+  .oe-store .drop-layout,
+  .oe-store .deals-layout {
+    grid-template-columns: 1.4fr repeat(4, 1fr);
+  }
+}
+
+/* 2200px+: cap definitivo — centrado dentro del sidebar fijo */
+@media (min-width: 2200px) {
+  .oe-store .page-shell {
+    max-width: 2100px;
+  }
+}
+
+/* ── Topbar compacto en vistas distintas a inicio ──────────────────── */
+
+/* Ocultar el bloque título (eyebrow + h1) en vistas secundarias */
+.oe-store:not([data-view="inicio"]) .topbar > div:first-child {
+  display: none;
+}
+
+/* top-actions se alinean a la izquierda cuando no hay título al lado */
+.oe-store:not([data-view="inicio"]) .top-actions {
+  width: 100%;
+}
+
+/* Botones más bajos en vistas secundarias */
+.oe-store:not([data-view="inicio"]) .period-button,
+.oe-store:not([data-view="inicio"]) .icon-button {
+  height: 42px;
+}
+
+.oe-store:not([data-view="inicio"]) .icon-button {
+  width: 46px;
+}
+
+.oe-store:not([data-view="inicio"]) .search-box {
+  min-height: 42px;
+}
+
+.oe-store:not([data-view="inicio"]) .search-box button {
+  width: 32px;
+  height: 32px;
+}
+
+/* view-preview compacto en vistas secundarias */
+.oe-store:not([data-view="inicio"]) .view-preview {
+  padding: 14px 20px;
+  margin-bottom: 10px;
+}
+
+.oe-store:not([data-view="inicio"]) .view-preview h2 {
+  font-size: clamp(17px, 2vw, 22px);
+  margin-bottom: 2px;
+}
+
+.oe-store:not([data-view="inicio"]) .view-preview p {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.oe-store:not([data-view="inicio"]) .preview-chips span {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.oe-store:not([data-view="inicio"]) .topbar {
+  margin-bottom: 14px;
 }
 
 @media (max-width: 1180px) {
