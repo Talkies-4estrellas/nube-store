@@ -156,6 +156,17 @@ export default function Sidebar() {
         )}
       </nav>
 
+      {/* Acceso rápido a la tienda */}
+      <a href="/tienda-en-linea" style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+        margin: '10px 0 0', borderRadius: 999, textDecoration: 'none',
+        background: 'rgba(0,73,255,0.07)', color: '#0049ff',
+        fontSize: 13, fontWeight: 700, flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 16 }}>🏪</span>
+        Ver tienda
+      </a>
+
       {/* Perfil del usuario */}
       {user && (
         <div style={{ padding: '12px 8px 0', borderTop: '1px solid #f3f4f6', marginTop: 10 }}>

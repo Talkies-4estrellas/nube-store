@@ -724,7 +724,7 @@ export default function ProveedoresPage() {
 
                 {/* Encabezados de tabla + filas: scroll horizontal en mobile */}
                 <div className="prov-table-scroll">
-                <div style={{ display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 40px', gap: 0, padding: '8px 20px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', minWidth: 520 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 70px', gap: 0, padding: '8px 20px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb', minWidth: 520 }}>
                   {['#', '', 'Producto / SKU', 'Precio', 'Stock', 'Categoría', ''].map((h, i) => (
                     <span key={i} style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '0 6px' }}>{h}</span>
                   ))}
@@ -734,7 +734,7 @@ export default function ProveedoresPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 520 }}>
                   {productos.map((p, i) => (
                     <div key={i} style={{
-                      display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 40px', gap: 0,
+                      display: 'grid', gridTemplateColumns: '32px 52px 1fr 90px 60px 120px 70px', gap: 0,
                       alignItems: 'center', padding: '10px 20px',
                       borderBottom: i < productos.length - 1 ? '1px solid #f3f4f6' : 'none',
                       background: i % 2 === 0 ? '#fff' : '#fafafa',
@@ -788,8 +788,20 @@ export default function ProveedoresPage() {
                         )}
                       </div>
 
-                      {/* Eliminar */}
-                      <div style={{ padding: '0 4px', display: 'flex', justifyContent: 'center' }}>
+                      {/* Editar / Eliminar */}
+                      <div style={{ padding: '0 4px', display: 'flex', justifyContent: 'center', gap: 2 }}>
+                        <button type="button"
+                          title="Editar producto"
+                          onClick={() => {
+                            setProd(productos[i])
+                            eliminarProducto(i)
+                            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+                          }}
+                          style={{ background: 'transparent', color: '#d1d5db', border: 'none', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#eff6ff'; (e.currentTarget as HTMLButtonElement).style.color = '#0049ff' }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#d1d5db' }}>
+                          ✏️
+                        </button>
                         <button type="button" onClick={() => eliminarProducto(i)}
                           title="Eliminar producto"
                           style={{ background: 'transparent', color: '#d1d5db', border: 'none', width: 28, height: 28, borderRadius: 6, fontWeight: 900, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
