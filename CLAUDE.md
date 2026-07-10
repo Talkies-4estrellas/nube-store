@@ -292,6 +292,17 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Sidebar: badge ámbar en Productos con conteo de productos con stock ≤ 5; actualizado en tiempo real vía canal `sidebar-stock-realtime`
 - [x] Diseño responsivo completo: `SidebarContext` con detección mobile; sidebar como drawer deslizante; topbar con hamburguesa y ancho completo en mobile; overlay al abrir sidebar; CSS responsivo (`stat-grid`, `grid-3`, `table-wrap`, `panel-layout`, `filter-row`) aplicado en ventas y productos
 
+## Completado (10/07/2026)
+- [x] AppChrome: `maxWidth: 1600` + `margin: 0 auto` en `<main>` para acotar el panel admin en pantallas anchas (laptop/escritorio/TV)
+- [x] globals.css: `@media (min-width: 1600px)` → `.stat-grid` y `.grid-3` pasan a 4 columnas en pantallas muy anchas
+- [x] Storefront: breakpoints `1400px / 1800px / 2200px` en `storefront.css` para `.page-shell` max-width progresivo
+- [x] Storefront: topbar compacto en vistas no-inicio — CSS `:not([data-view="inicio"])` oculta el bloque h1 y reduce botones
+- [x] Storefront catálogo: panel de filtros reducido a 210px; clase `.cat-sm` para botones de categoría compactos; `<select>` de salto rápido encima del botón "Todo"; eliminados chips encima del grid de productos
+- [x] Storefront: imágenes de producto con `aspect-ratio: 4/3` + `object-fit: cover` sin `height` fijo; tarjetas con `overflow: hidden`
+- [x] Storefront: `.store-grid` con `auto-fill minmax(200px, 1fr)` — elimina overflow en cualquier tamaño de pantalla
+- [x] Portal proveedores: "Mis enviados" → solo `estado='aprobado'` (`.eq('estado', 'aprobado')`); mensaje vacío actualizado
+- [x] Portal proveedores: "Mis solicitudes" → `estado!='aprobado'` (`.neq('estado', 'aprobado')`) — muestra pendientes y rechazados
+
 ## Completado (09/07/2026)
 - [x] Dashboard: `className="stat-grid"` en grids de métricas; `className="dashboard-bottom"` en grid inferior `1fr 300px`; `className="sol-card"` + `className="sol-card-actions"` en cards de solicitudes — colapsables en mobile
 - [x] Portal proveedores: layout mobile completo — drawer `72vw` con botón × de cierre y `box-shadow`, overlay, hamburguesa ☰, barra de tabs horizontal scrollable, `marginLeft: 0` en mobile
