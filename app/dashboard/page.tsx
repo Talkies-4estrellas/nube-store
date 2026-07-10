@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import Icon from '@/components/Icon'
+import { useSidebar } from '@/lib/sidebar-context'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
 type VentaGrafica = { total: number; estado: string; created_at: string }
@@ -113,6 +114,7 @@ function GraficaBarras({ data }: { data: { label: string; total: number }[] }) {
 }
 
 export default function DashboardPage() {
+  const { isMobile } = useSidebar()
   const [ventas, setVentas]             = useState<Venta[]>([])
   const [ventasPeriodo, setVentasPeriodo] = useState<VentaGrafica[]>([])
   const [stockBajo, setStockBajo]       = useState<ProductoBajo[]>([])
@@ -260,17 +262,19 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Dashboard</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12, color: '#9ca3af' }}>
-            <kbd style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 4, padding: '2px 6px', fontSize: 11 }}>Ctrl+K</kbd> Búsqueda global
-          </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <h1 style={{ fontSize: isMobile ? 22 : 26, fontWeight: 700, color: '#111', margin: 0 }}>Dashboard</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!isMobile && (
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>
+              <kbd style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 4, padding: '2px 6px', fontSize: 11 }}>Ctrl+K</kbd> Búsqueda global
+            </span>
+          )}
           <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', padding: 4, borderRadius: 10 }}>
             {(['hoy', 'semana', 'mes'] as Periodo[]).map(p => (
               <button key={p} onClick={() => setPeriodo(p)}
-                style={{ padding: '6px 14px', borderRadius: 7, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: periodo === p ? '#fff' : 'transparent', color: periodo === p ? '#111' : '#6b7280', boxShadow: periodo === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s' }}>
-                {periodoLabel[p]}
+                style={{ padding: isMobile ? '6px 10px' : '6px 14px', borderRadius: 7, border: 'none', fontSize: isMobile ? 12 : 13, fontWeight: 600, cursor: 'pointer', background: periodo === p ? '#fff' : 'transparent', color: periodo === p ? '#111' : '#6b7280', boxShadow: periodo === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+                {isMobile ? { hoy: 'Hoy', semana: 'Semana', mes: 'Mes' }[p] : periodoLabel[p]}
               </button>
             ))}
           </div>
@@ -278,15 +282,17 @@ export default function DashboardPage() {
       </div>
 
       {/* Métricas */}
-      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: isMobile ? 10 : 16, marginBottom: 20 }}>
         {metrics.map(m => (
           <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.15s' }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: m.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-                <Icon name={m.icon} size={22} color={m.color} />
+            <div style={{ background: '#fff', borderRadius: 12, padding: isMobile ? '14px 16px' : 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.15s', display: isMobile ? 'flex' : 'block', alignItems: 'center', gap: isMobile ? 12 : 0 }}>
+              <div style={{ width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, borderRadius: 10, background: m.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: isMobile ? 0 : 14, flexShrink: 0 }}>
+                <Icon name={m.icon} size={isMobile ? 18 : 22} color={m.color} />
               </div>
-              <p style={{ fontSize: 28, fontWeight: 700, color: '#111', marginBottom: 4 }}>{loading ? '—' : m.value}</p>
-              <p style={{ fontSize: 13, color: '#6b7280' }}>{m.label}</p>
+              <div>
+                <p style={{ fontSize: isMobile ? 20 : 28, fontWeight: 700, color: '#111', marginBottom: 2 }}>{loading ? '—' : m.value}</p>
+                <p style={{ fontSize: isMobile ? 11 : 13, color: '#6b7280', margin: 0 }}>{m.label}</p>
+              </div>
             </div>
           </Link>
         ))}

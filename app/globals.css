@@ -65,15 +65,12 @@ body {
 
 
 
-/* Grids de stats (4 cols → 2 cols en tablet → 1 col en móvil) */
+/* Grids de stats (4 cols → 2 cols en tablet/mobile) */
 .stat-grid {
   display: grid !important;
 }
 @media (max-width: 900px) {
   .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
-}
-@media (max-width: 480px) {
-  .stat-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Grid de 3 columnas (productos) → 2 → 1 */
