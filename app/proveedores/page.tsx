@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, DragEvent, ChangeEvent } from 'react'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp, captureFrameAsWebp, uploadToSupabase } from '@/lib/uploadWebp'
+import { useSidebar } from '@/lib/sidebar-context'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -67,7 +68,7 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 
 export default function ProveedoresPage() {
   const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'ajustes'>('registro')
-  const [isMobile, setIsMobile] = useState(false)
+  const { isMobile } = useSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [savedEmail, setSavedEmail] = useState('')
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -205,13 +206,6 @@ export default function ProveedoresPage() {
   // Cámara
   const [camaraActiva, setCamaraActiva] = useState(false)
   const [camaraError, setCamaraError] = useState('')
-
-  useEffect(() => {
-    function checkMobile() { setIsMobile(window.innerWidth < 768) }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()) }
