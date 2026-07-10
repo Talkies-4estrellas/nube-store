@@ -525,10 +525,11 @@ export default function ProveedoresPage() {
       {/* ---- Sidebar ---- */}
       <aside style={{
         width: isMobile ? '72vw' : 240, maxWidth: 280, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
-        display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, zIndex: 100,
+        display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0,
+        zIndex: isMobile ? 200 : 100,
         padding: '16px 12px 16px',
         transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
-        transition: 'transform 0.25s',
+        transition: 'transform 0.25s ease',
         boxShadow: isMobile && sidebarOpen ? '4px 0 24px rgba(0,0,0,0.18)' : 'none',
       }}>
 
@@ -586,8 +587,13 @@ export default function ProveedoresPage() {
         <header style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0 16px' : '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
           {isMobile && (
             <button onClick={() => setSidebarOpen(o => !o)}
-              style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: NAVY, padding: '0 8px 0 0', lineHeight: 1, flexShrink: 0 }}>
-              ☰
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 8, flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={sidebarOpen ? PINK : NAVY} strokeWidth="2.5" strokeLinecap="round">
+                {sidebarOpen
+                  ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+                  : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+                }
+              </svg>
             </button>
           )}
           <h1 style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
