@@ -113,15 +113,24 @@ export default function ProductosPage() {
     setProcesando(id)
     const sol = solicitudes.find(s => s.id === id)
     if (estado === 'aprobado' && sol) {
-      await supabase.from('productos').insert({
+      const { error: errIns } = await supabase.from('productos').upsert({
         nombre: sol.producto_nombre, sku: sol.producto_sku,
         precio: sol.producto_precio, stock: sol.producto_stock,
-        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
+        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id,
         origen: 'proveedor',
         proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
-      })
+      }, { onConflict: 'sku', ignoreDuplicates: true })
+      if (errIns) console.error('Error al publicar producto:', errIns)
     }
-    await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
+    const { error: errUpd } = await supabase
+      .from('solicitudes_productos').update({ estado }).eq('id', id)
+    if (errUpd) {
+      console.error('Error al actualizar estado:', errUpd)
+      setToast({ msg: `Error: ${errUpd.message}`, color: '#dc2626' })
+      setTimeout(() => setToast(null), 4000)
+      setProcesando(null)
+      return
+    }
     if (sol) notificarProveedor(sol, estado)
     setSolicitudes(prev => prev.filter(s => s.id !== id))
     setProcesando(null)
