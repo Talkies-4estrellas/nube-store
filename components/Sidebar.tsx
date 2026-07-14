@@ -144,6 +144,17 @@ export default function Sidebar() {
             ))}
           </div>
         ))}
+        {/* Ver tienda — abre la tienda pública en nueva pestaña */}
+        <a href="/" style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px',
+          color: NAVY, textDecoration: 'none', fontSize: 14, fontWeight: 700,
+          borderRadius: 999, background: 'transparent', border: '2px solid transparent', marginTop: 4,
+        }}>
+          <Icon name="store" size={18} color={NAVY} />
+          <span style={{ flex: 1 }}>Ver tienda</span>
+          <span style={{ fontSize: 12, opacity: 0.8 }}>↗</span>
+        </a>
+
         {showConfig && (
           <div style={{ marginTop: 4, position: 'relative' }}>
             <NavLink href="/configuracion" label="Configuración" icon="settings" active={pathname === '/configuracion'} />
@@ -155,17 +166,6 @@ export default function Sidebar() {
           </div>
         )}
       </nav>
-
-      {/* Acceso rápido a la tienda */}
-      <a href="/tienda-en-linea" style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-        margin: '10px 0 0', borderRadius: 999, textDecoration: 'none',
-        background: 'rgba(0,73,255,0.07)', color: '#0049ff',
-        fontSize: 13, fontWeight: 700, flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 16 }}>🏪</span>
-        Ver tienda
-      </a>
 
       {/* Perfil del usuario */}
       {user && (

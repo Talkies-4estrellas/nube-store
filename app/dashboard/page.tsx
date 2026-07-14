@@ -277,6 +277,7 @@ export default function DashboardPage() {
                 {isMobile ? { hoy: 'Hoy', semana: 'Semana', mes: 'Mes' }[p] : periodoLabel[p]}
               </button>
             ))}
+
           </div>
         </div>
       </div>
