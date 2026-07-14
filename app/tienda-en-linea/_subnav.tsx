@@ -9,6 +9,7 @@ const items = [
   { href: '/tienda-en-linea/menus',           label: 'Menús' },
   { href: '/tienda-en-linea/filtros',         label: 'Filtros' },
   { href: '/tienda-en-linea/redes-sociales',  label: 'Redes sociales' },
+  { href: '/tienda-en-linea/legal',           label: 'Legal / Envíos' },
 ]
 
 export default function SubNav() {

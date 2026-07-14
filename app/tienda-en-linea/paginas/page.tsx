@@ -12,21 +12,17 @@ const inp: React.CSSProperties = {
 const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }
 
 type Fields = {
-  hero_titulo: string
-  hero_subtitulo: string
-  hero_cta: string
-  hero_tag1: string
-  hero_tag2: string
-  hero_tag3: string
+  hero_titulo: string; hero_subtitulo: string; hero_cta: string
+  hero_tag1: string; hero_tag2: string; hero_tag3: string
+  meta_titulo: string; meta_descripcion: string; og_imagen: string
 }
 
 const DEFAULTS: Fields = {
   hero_titulo: 'Compra tech con estilo express.',
   hero_subtitulo: 'Los mejores accesorios, periféricos y gadgets.',
   hero_cta: 'Ver productos',
-  hero_tag1: 'Entrega rápida',
-  hero_tag2: 'Stock limitado',
-  hero_tag3: 'Garantía incluida',
+  hero_tag1: 'Entrega rápida', hero_tag2: 'Stock limitado', hero_tag3: 'Garantía incluida',
+  meta_titulo: '', meta_descripcion: '', og_imagen: '',
 }
 
 export default function PaginasPage() {
@@ -35,7 +31,9 @@ export default function PaginasPage() {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    supabase.from('config_storefront').select('hero_titulo,hero_subtitulo,hero_cta,hero_tag1,hero_tag2,hero_tag3').eq('id', 1).single()
+    supabase.from('config_storefront')
+      .select('hero_titulo,hero_subtitulo,hero_cta,hero_tag1,hero_tag2,hero_tag3,meta_titulo,meta_descripcion,og_imagen')
+      .eq('id', 1).single()
       .then(({ data }) => { if (data) setF({ ...DEFAULTS, ...data }) })
   }, [])
 
@@ -58,8 +56,6 @@ export default function PaginasPage() {
         {/* Banner principal */}
         <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Banner principal</p>
-
-          {/* Preview mini */}
           <div style={{ background: '#78716c', borderRadius: 10, height: 90, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '12px 16px', marginBottom: 20, position: 'relative', overflow: 'hidden' }}>
             <p style={{ color: '#ffffffcc', fontSize: 10, fontWeight: 700, margin: '0 0 2px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>INICIO</p>
             <p style={{ color: '#fff', fontSize: 14, fontWeight: 800, margin: '0 0 3px', lineHeight: 1.2 }}>{f.hero_titulo || '—'}</p>
@@ -70,7 +66,6 @@ export default function PaginasPage() {
               ))}
             </div>
           </div>
-
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <label style={lbl}>Título principal</label>
@@ -98,6 +93,48 @@ export default function PaginasPage() {
                 <input style={inp} value={f[key]} onChange={e => set(key, e.target.value)} placeholder={DEFAULTS[key]} />
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* SEO */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>SEO y redes sociales</p>
+          <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>Metadatos que aparecen en buscadores y al compartir en redes.</p>
+
+          {/* Preview Google */}
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 20, background: '#fafafa' }}>
+            <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 6px', fontWeight: 600 }}>Vista previa en Google</p>
+            <p style={{ fontSize: 14, color: '#1a0dab', fontWeight: 600, margin: '0 0 2px' }}>
+              {f.meta_titulo || f.nombre_tienda || 'Order Express'}
+            </p>
+            <p style={{ fontSize: 12, color: '#006621', margin: '0 0 4px' }}>localhost:3001</p>
+            <p style={{ fontSize: 12, color: '#545454', margin: 0 }}>
+              {f.meta_descripcion || f.hero_subtitulo || 'Los mejores accesorios, periféricos y gadgets.'}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={lbl}>Título SEO <span style={{ fontWeight: 400, color: '#9ca3af' }}>(aparece en la pestaña del navegador)</span></label>
+              <input style={inp} value={f.meta_titulo} onChange={e => set('meta_titulo', e.target.value)} placeholder="Order Express — Tecnología y accesorios" />
+              <p style={{ fontSize: 11, color: f.meta_titulo.length > 60 ? '#dc2626' : '#9ca3af', marginTop: 4 }}>
+                {f.meta_titulo.length}/60 caracteres recomendados
+              </p>
+            </div>
+            <div>
+              <label style={lbl}>Meta descripción</label>
+              <textarea style={{ ...inp, height: 72, resize: 'vertical' }} value={f.meta_descripcion} onChange={e => set('meta_descripcion', e.target.value)} placeholder="Los mejores accesorios tech con entrega rápida y garantía incluida." />
+              <p style={{ fontSize: 11, color: f.meta_descripcion.length > 155 ? '#dc2626' : '#9ca3af', marginTop: 4 }}>
+                {f.meta_descripcion.length}/155 caracteres recomendados
+              </p>
+            </div>
+            <div>
+              <label style={lbl}>Imagen Open Graph <span style={{ fontWeight: 400, color: '#9ca3af' }}>(URL — se muestra al compartir en redes)</span></label>
+              <input style={inp} value={f.og_imagen} onChange={e => set('og_imagen', e.target.value)} placeholder="https://... (1200×630 px recomendado)" />
+              {f.og_imagen && (
+                <img src={f.og_imagen} alt="OG preview" style={{ marginTop: 8, width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+              )}
+            </div>
           </div>
         </div>
 

@@ -1,13 +1,29 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import SubNav from './_subnav'
 
-const temasThumbs = ['Moda oscuro', 'Cosmética', 'Deportes', 'Minimalista', 'Cali', 'Uyuni', 'Toluca', 'Colorido']
-const thumbColors = ['#6366f1','#14b8a6','#ec4899','#64748b','#eab308','#db2777','#f97316','#22c55e']
-const temasExtra = ['Nocturno', 'Vintage', 'Pastel', 'Corporativo', 'Océano', 'Bosque']
-const thumbColorsExtra = ['#1e1b4b','#92400e','#f9a8d4','#1e3a5f','#0284c7','#166534']
+type Tema = { nombre: string; color: string; acento: string }
+const temas: Tema[] = [
+  { nombre: 'Order Express', color: '#e7226d', acento: '#e7226d' },
+  { nombre: 'Moda oscuro',   color: '#6366f1', acento: '#6366f1' },
+  { nombre: 'Cosmética',     color: '#14b8a6', acento: '#14b8a6' },
+  { nombre: 'Deportes',      color: '#ec4899', acento: '#ec4899' },
+  { nombre: 'Minimalista',   color: '#64748b', acento: '#64748b' },
+  { nombre: 'Cali',          color: '#eab308', acento: '#eab308' },
+  { nombre: 'Uyuni',         color: '#db2777', acento: '#db2777' },
+  { nombre: 'Toluca',        color: '#f97316', acento: '#f97316' },
+]
+const temasExtra: Tema[] = [
+  { nombre: 'Colorido',      color: '#22c55e', acento: '#22c55e' },
+  { nombre: 'Nocturno',      color: '#1e1b4b', acento: '#818cf8' },
+  { nombre: 'Vintage',       color: '#92400e', acento: '#d97706' },
+  { nombre: 'Pastel',        color: '#f9a8d4', acento: '#ec4899' },
+  { nombre: 'Corporativo',   color: '#1e3a5f', acento: '#3b82f6' },
+  { nombre: 'Océano',        color: '#0284c7', acento: '#0ea5e9' },
+  { nombre: 'Bosque',        color: '#166534', acento: '#22c55e' },
+]
 
 const inp: React.CSSProperties = {
   width: '100%', padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8,
@@ -15,8 +31,8 @@ const inp: React.CSSProperties = {
 }
 const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }
 
-type Fields = { nombre_tienda: string; color_acento: string; hero_titulo: string; hero_subtitulo: string; hero_cta: string }
-const DEFAULTS: Fields = { nombre_tienda: 'Order Express', color_acento: '#e7226d', hero_titulo: 'Compra tech con estilo express.', hero_subtitulo: 'Los mejores accesorios, periféricos y gadgets.', hero_cta: 'Ver productos' }
+type Fields = { nombre_tienda: string; color_acento: string }
+const DEFAULTS: Fields = { nombre_tienda: 'Order Express', color_acento: '#e7226d' }
 
 export default function TiendaEnLineaPage() {
   const [f, setF] = useState<Fields>(DEFAULTS)
@@ -24,9 +40,10 @@ export default function TiendaEnLineaPage() {
   const [saved, setSaved] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [mostrarMasTemas, setMostrarMasTemas] = useState(false)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
-    supabase.from('config_storefront').select('nombre_tienda,color_acento,hero_titulo,hero_subtitulo,hero_cta').eq('id', 1).single()
+    supabase.from('config_storefront').select('nombre_tienda,color_acento').eq('id', 1).single()
       .then(({ data }) => { if (data) setF({ ...DEFAULTS, ...data }) })
   }, [])
 
@@ -37,6 +54,13 @@ export default function TiendaEnLineaPage() {
     await supabase.from('config_storefront').upsert({ id: 1, ...f, updated_at: new Date().toISOString() })
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2500)
+    iframeRef.current?.contentWindow?.location.reload()
+  }
+
+  async function aplicarTema(tema: Tema) {
+    set('color_acento', tema.acento)
+    await supabase.from('config_storefront').upsert({ id: 1, color_acento: tema.acento, updated_at: new Date().toISOString() })
+    setTimeout(() => iframeRef.current?.contentWindow?.location.reload(), 300)
   }
 
   return (
@@ -58,10 +82,10 @@ export default function TiendaEnLineaPage() {
               </div>
             </div>
             <div style={{ background: '#78716c', borderRadius: '0 0 6px 6px', height: 100, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '10px 14px', position: 'relative' }}>
-              <p style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{f.hero_titulo}</p>
-              <p style={{ color: '#ffffff80', fontSize: 9 }}>{f.hero_subtitulo}</p>
+              <p style={{ color: '#fff', fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Compra tech con estilo express.</p>
+              <p style={{ color: '#ffffff80', fontSize: 9 }}>Los mejores accesorios, periféricos y gadgets.</p>
               <span style={{ position: 'absolute', bottom: 10, right: 10, background: f.color_acento, color: '#fff', fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 4 }}>
-                {f.hero_cta}
+                Ver productos
               </span>
             </div>
           </div>
@@ -107,22 +131,40 @@ export default function TiendaEnLineaPage() {
           </div>
         )}
 
-        {/* Galería de temas */}
+        {/* Galería de temas — ahora funcionales */}
         <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <div style={{ padding: '14px 20px 10px', borderBottom: '1px solid #f3f4f6' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Temas de color</p>
+            <p style={{ fontSize: 12, color: '#9ca3af', margin: '2px 0 0' }}>Haz clic en un tema para aplicarlo al instante.</p>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, padding: 2 }}>
-            {temasThumbs.map((t, i) => (
-              <div key={t} style={{ height: 80, background: thumbColors[i], borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{t}</span>
-              </div>
-            ))}
+            {temas.map(t => {
+              const activo = f.color_acento === t.acento
+              return (
+                <button key={t.nombre} onClick={() => aplicarTema(t)} style={{
+                  height: 80, background: t.color, borderRadius: 4, border: activo ? '3px solid #111' : '3px solid transparent',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer',
+                }}>
+                  <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{t.nombre}</span>
+                  {activo && <span style={{ fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.35)', padding: '1px 6px', borderRadius: 10 }}>Activo</span>}
+                </button>
+              )
+            })}
           </div>
           {mostrarMasTemas && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, padding: '0 2px 2px' }}>
-              {temasExtra.map((t, i) => (
-                <div key={t} style={{ height: 80, background: thumbColorsExtra[i], borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{t}</span>
-                </div>
-              ))}
+              {temasExtra.map(t => {
+                const activo = f.color_acento === t.acento
+                return (
+                  <button key={t.nombre} onClick={() => aplicarTema(t)} style={{
+                    height: 80, background: t.color, borderRadius: 4, border: activo ? '3px solid #111' : '3px solid transparent',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, cursor: 'pointer',
+                  }}>
+                    <span style={{ fontSize: 11, color: '#fff', fontWeight: 700 }}>{t.nombre}</span>
+                    {activo && <span style={{ fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.35)', padding: '1px 6px', borderRadius: 10 }}>Activo</span>}
+                  </button>
+                )
+              })}
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderTop: '1px solid #f3f4f6' }}>
@@ -135,29 +177,24 @@ export default function TiendaEnLineaPage() {
         </div>
       </div>
 
-      {/* Panel derecho */}
-      <div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Vista previa en vivo</h3>
-          <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5, marginBottom: 12 }}>Los cambios se reflejan en la tienda al guardar.</p>
-          <a href="/" target="_blank" rel="noopener noreferrer"
-            style={{ display: 'block', background: '#eff6ff', color: '#0049ff', border: '1px solid #bfdbfe', padding: '9px 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', textAlign: 'center', textDecoration: 'none' }}>
-            Abrir tienda ↗
-          </a>
-        </div>
-        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-            <div style={{ width: 40, height: 40, background: f.color_acento, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, flexShrink: 0, fontSize: 18 }}>🎨</div>
-            <div>
-              <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Color de acento</p>
-              <p style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>Afecta botones, badges y elementos destacados.</p>
-            </div>
+      {/* Panel derecho — iframe de vista previa */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #f3f4f6' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Vista previa</p>
+            <button onClick={() => iframeRef.current?.contentWindow?.location.reload()}
+              style={{ background: 'none', border: 'none', fontSize: 12, color: '#0049ff', fontWeight: 600, cursor: 'pointer' }}>
+              ↺ Recargar
+            </button>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-            {['#e7226d','#0049ff','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#374151'].map(c => (
-              <button key={c} onClick={() => set('color_acento', c)}
-                style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: f.color_acento === c ? '3px solid #111' : '3px solid transparent', cursor: 'pointer' }} />
-            ))}
+          <div style={{ position: 'relative', height: 480, background: '#f3f4f6' }}>
+            <iframe ref={iframeRef} src="/" style={{ width: '100%', height: '100%', border: 'none', transformOrigin: 'top left', transform: 'scale(0.55)', width: '182%', height: '182%' }} />
+          </div>
+          <div style={{ padding: '10px 16px' }}>
+            <a href="/" target="_blank" rel="noopener noreferrer"
+              style={{ display: 'block', background: '#eff6ff', color: '#0049ff', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>
+              Abrir en pestaña nueva ↗
+            </a>
           </div>
         </div>
       </div>

@@ -292,6 +292,18 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Sidebar: badge ámbar en Productos con conteo de productos con stock ≤ 5; actualizado en tiempo real vía canal `sidebar-stock-realtime`
 - [x] Diseño responsivo completo: `SidebarContext` con detección mobile; sidebar como drawer deslizante; topbar con hamburguesa y ancho completo en mobile; overlay al abrir sidebar; CSS responsivo (`stat-grid`, `grid-3`, `table-wrap`, `panel-layout`, `filter-row`) aplicado en ventas y productos
 
+## Completado (14/07/2026)
+- [x] ProductoModal: sección "Datos adicionales" colapsable — colores chips, tallas chips, variantes con stock (grid auto color×talla), peso, dimensiones, 4 slots fotos extra; guarda en `detalles JSONB`
+- [x] `productos/page.tsx`: `handleSave` sube imágenes extra a Storage y construye payload `detalles` JSONB
+- [x] Sidebar: botón "Ver tienda ↗" dentro del nav, arriba de Configuración, navega a `/` en misma pestaña
+- [x] Tienda en línea / Diseño: temas de color funcionales — click aplica y guarda `color_acento` en DB al instante
+- [x] Tienda en línea / Diseño: iframe de vista previa embebido en panel derecho (escala 55%) con botón "↺ Recargar"
+- [x] Tienda en línea / Carrusel: subida de imagen directa por slide (`uploadToSupabase` de `@/lib/uploadWebp`); URL manual sigue disponible
+- [x] Tienda en línea / Páginas: sección SEO — meta título (contador 60 chars), meta descripción (contador 155 chars), imagen OG con preview, mini-preview estilo Google
+- [x] Tienda en línea / Legal: nueva sub-pestaña con política de envíos, devoluciones y términos; indicador OK/Vacío
+- [x] Storefront: suscripción Realtime a `config_storefront` — cambios se reflejan sin recargar página; aplica `document.title` desde `meta_titulo`
+- [x] Migraciones nuevas: `migration_productos_detalles.sql` + `migration_seo_legal.sql` (pendientes de ejecutar en Supabase)
+
 ## Completado (10/07/2026)
 - [x] AppChrome: `maxWidth: 1600` + `margin: 0 auto` en `<main>` para acotar el panel admin en pantallas anchas (laptop/escritorio/TV)
 - [x] globals.css: `@media (min-width: 1600px)` → `.stat-grid` y `.grid-3` pasan a 4 columnas en pantallas muy anchas

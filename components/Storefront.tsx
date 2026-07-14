@@ -199,14 +199,24 @@ export default function Storefront() {
     try { localStorage.setItem(CART_KEY, JSON.stringify(cart)) } catch {}
   }, [cart])
 
-  /* ---- Cargar config de tienda desde Supabase ---- */
+  /* ---- Cargar config de tienda desde Supabase + realtime ---- */
   useEffect(() => {
-    supabase
-      .from('config_storefront')
-      .select('*')
-      .eq('id', 1)
-      .single()
-      .then(({ data }) => { if (data) setStoreConfig(prev => ({ ...prev, ...data })) })
+    supabase.from('config_storefront').select('*').eq('id', 1).single()
+      .then(({ data }) => {
+        if (data) {
+          setStoreConfig(prev => ({ ...prev, ...data }))
+          if (data.meta_titulo) document.title = data.meta_titulo
+        }
+      })
+
+    const ch = supabase.channel('storefront-config-realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'config_storefront', filter: 'id=eq.1' }, ({ new: data }) => {
+        setStoreConfig(prev => ({ ...prev, ...data }))
+        if (data.meta_titulo) document.title = data.meta_titulo
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(ch) }
   }, [])
 
   /* ---- Cargar productos y categorías desde Supabase ---- */

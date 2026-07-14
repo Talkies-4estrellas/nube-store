@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import SubNav from '../_subnav'
+import { uploadToSupabase } from '@/lib/uploadWebp'
 
 const NAVY = '#252855'
 const inp: React.CSSProperties = {
@@ -23,6 +24,8 @@ export default function BlogPage() {
   const [slides, setSlides] = useState<Slide[]>(DEFAULT_SLIDES)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [uploading, setUploading] = useState<number | null>(null)
+  const fileRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
 
   useEffect(() => {
     supabase.from('config_storefront').select('carrusel').eq('id', 1).single()
@@ -33,6 +36,19 @@ export default function BlogPage() {
 
   function setSlide(i: number, field: keyof Slide, val: string) {
     setSlides(prev => { const s = [...prev]; s[i] = { ...s[i], [field]: val }; return s })
+  }
+
+  async function handleImgUpload(i: number, file: File) {
+    setUploading(i)
+    try {
+      const path = `carrusel/slide-${i + 1}-${Date.now()}.webp`
+      const url = await uploadToSupabase(file, supabase, 'productos', path)
+      setSlide(i, 'img', url)
+    } catch (e) {
+      console.error('Error subiendo imagen:', e)
+    } finally {
+      setUploading(null)
+    }
   }
 
   async function guardar() {
@@ -48,12 +64,12 @@ export default function BlogPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Carrusel de imágenes</h1>
-        <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Las 3 diapositivas del banner principal. Pega la URL directa de cada imagen (Supabase Storage o cualquier imagen pública).</p>
+        <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Las 3 diapositivas del banner principal. Sube una imagen o pega una URL pública.</p>
 
         {slides.map((slide, i) => (
           <div key={i} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
             {/* Preview */}
-            <div style={{ height: 120, background: '#e5e7eb', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ height: 140, background: '#e5e7eb', position: 'relative', overflow: 'hidden' }}>
               {slide.img && (
                 <img src={slide.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               )}
@@ -61,6 +77,13 @@ export default function BlogPage() {
               <span style={{ position: 'absolute', top: 10, left: 12, background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20 }}>
                 Slide {i + 1}
               </span>
+              {/* Botón subir sobre la imagen */}
+              <button onClick={() => fileRefs[i].current?.click()}
+                style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                {uploading === i ? 'Subiendo…' : '📁 Subir imagen'}
+              </button>
+              <input ref={fileRefs[i]} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { if (e.target.files?.[0]) handleImgUpload(i, e.target.files[0]) }} />
               {slide.title && (
                 <div style={{ position: 'absolute', bottom: 10, left: 14, right: 14 }}>
                   {slide.kicker && <p style={{ color: '#ffffffaa', fontSize: 10, fontWeight: 700, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{slide.kicker}</p>}
@@ -72,7 +95,7 @@ export default function BlogPage() {
             {/* Fields */}
             <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={lbl}>URL de imagen</label>
+                <label style={lbl}>URL de imagen (o sube una arriba)</label>
                 <input style={inp} value={slide.img} onChange={e => setSlide(i, 'img', e.target.value)} placeholder="https://..." />
               </div>
               <div>
@@ -109,7 +132,7 @@ export default function BlogPage() {
         </div>
         <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 16 }}>
           <p style={{ fontSize: 12, color: '#92400e', fontWeight: 600, margin: 0, lineHeight: 1.5 }}>
-            💡 Puedes usar imágenes de Supabase Storage o cualquier URL pública. Tamaño recomendado: <strong>1400 × 700 px</strong>.
+            💡 Tamaño recomendado: <strong>1400 × 700 px</strong>. Puedes subir JPG, PNG o WebP directamente.
           </p>
         </div>
       </div>
