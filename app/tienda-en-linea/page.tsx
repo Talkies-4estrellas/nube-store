@@ -188,7 +188,7 @@ export default function TiendaEnLineaPage() {
             </button>
           </div>
           <div style={{ position: 'relative', height: 480, background: '#f3f4f6' }}>
-            <iframe ref={iframeRef} src="/" style={{ width: '100%', height: '100%', border: 'none', transformOrigin: 'top left', transform: 'scale(0.55)', width: '182%', height: '182%' }} />
+            <iframe ref={iframeRef} src="/" style={{ width: '182%', height: '182%', border: 'none', transformOrigin: 'top left', transform: 'scale(0.55)' }} />
           </div>
           <div style={{ padding: '10px 16px' }}>
             <a href="/" target="_blank" rel="noopener noreferrer"
