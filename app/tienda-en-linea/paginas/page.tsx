@@ -105,7 +105,7 @@ export default function PaginasPage() {
           <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', marginBottom: 20, background: '#fafafa' }}>
             <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 6px', fontWeight: 600 }}>Vista previa en Google</p>
             <p style={{ fontSize: 14, color: '#1a0dab', fontWeight: 600, margin: '0 0 2px' }}>
-              {f.meta_titulo || f.nombre_tienda || 'Order Express'}
+              {f.meta_titulo || 'Order Express'}
             </p>
             <p style={{ fontSize: 12, color: '#006621', margin: '0 0 4px' }}>localhost:3001</p>
             <p style={{ fontSize: 12, color: '#545454', margin: 0 }}>
