@@ -185,6 +185,13 @@ export default function Storefront() {
     whatsapp: '',
     email_contacto: '',
     instagram: '',
+    hero_tag1: 'Entrega rapida',
+    hero_tag2: 'Stock limitado',
+    hero_tag3: 'Garantia incluida',
+    nav_ocultar: '',
+    topbar_btn1: 'Nuevo',
+    topbar_btn2: 'Ofertas',
+    carrusel: null as { img: string; kicker: string; title: string }[] | null,
   })
 
   /* ---- Persistir carrito en localStorage ---- */
@@ -231,11 +238,22 @@ export default function Storefront() {
     fetchData()
   }, [])
 
+  /* ---- Slides activos: config DB o fallback hardcoded ---- */
+  const activeSlides = (storeConfig.carrusel && storeConfig.carrusel.length > 0)
+    ? storeConfig.carrusel.map(s => ({ ...s, alt: s.kicker }))
+    : slides
+
+  /* ---- Nav items filtrados según nav_ocultar ---- */
+  const hiddenViews = new Set(
+    (storeConfig.nav_ocultar || '').split(',').map(s => s.trim()).filter(Boolean)
+  )
+  const activeNavItems = navItems.filter(item => item.view === 'inicio' || !hiddenViews.has(item.view))
+
   /* ---- Carrusel con autoplay (5200ms) ---- */
   const startCarousel = () => {
     if (slideTimer.current) clearInterval(slideTimer.current)
     slideTimer.current = setInterval(() => {
-      setCurrentSlide((s) => (s + 1) % slides.length)
+      setCurrentSlide((s) => (s + 1) % activeSlides.length)
     }, 5200)
   }
   useEffect(() => {
@@ -244,7 +262,7 @@ export default function Storefront() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const moveCarousel = (index: number) => {
-    setCurrentSlide(((index % slides.length) + slides.length) % slides.length)
+    setCurrentSlide(((index % activeSlides.length) + activeSlides.length) % activeSlides.length)
     startCarousel()
   }
 
@@ -493,7 +511,7 @@ export default function Storefront() {
         kicker: 'Inicio',
         title: 'Seleccion curada para tu setup.',
         text: storeConfig.hero_subtitulo || 'Los mejores accesorios, periféricos y gadgets.',
-        chips: ['Entrega rapida', 'Stock limitado', 'Garantia incluida'],
+        chips: [storeConfig.hero_tag1, storeConfig.hero_tag2, storeConfig.hero_tag3].filter(Boolean),
       }
     }
     if (view === 'producto') {
@@ -750,7 +768,7 @@ export default function Storefront() {
             <h3>DESCUENTOS ESPECIALES.</h3>
             <p>Productos seleccionados con precio especial por tiempo limitado.</p>
           </div>
-          <img src={hero?.[3] ?? slides[0].img} alt="Promo" />
+          <img src={hero?.[3] ?? activeSlides[0].img} alt="Promo" />
         </article>
         {dealProds.map(([title, , price, image]) => {
           const original = Math.round(priceValue(price) * 1.22)
@@ -1049,7 +1067,7 @@ export default function Storefront() {
         </div>
 
         <nav className="nav-list">
-          {navItems.map((item) => (
+          {activeNavItems.map((item) => (
             <a
               key={item.view}
               className={`nav-item${view === item.view ? ' active' : ''}`}
@@ -1079,8 +1097,8 @@ export default function Storefront() {
             </div>
 
             <div className="top-actions" aria-label="Acciones superiores">
-              <button className={`period-button${topPeriod === 'nuevo' ? ' active' : ''}`} type="button" onClick={() => goView('novedades')}>Nuevo</button>
-              <button className={`period-button${topPeriod === 'ofertas' ? ' active' : ''}`} type="button" onClick={() => goView('ofertas')}>Ofertas</button>
+              <button className={`period-button${topPeriod === 'nuevo' ? ' active' : ''}`} type="button" onClick={() => goView('novedades')}>{storeConfig.topbar_btn1 || 'Nuevo'}</button>
+              <button className={`period-button${topPeriod === 'ofertas' ? ' active' : ''}`} type="button" onClick={() => goView('ofertas')}>{storeConfig.topbar_btn2 || 'Ofertas'}</button>
               <div style={{ position: 'relative' }}>
                 <form className="search-box" onSubmit={onSearchSubmit} role="search">
                   <Ic n="search" />
@@ -1157,9 +1175,9 @@ export default function Storefront() {
 
           <section className="photo-carousel" aria-label="Carrusel de productos destacados">
             <div className="carousel-track">
-              {slides.map((slide, i) => (
+              {activeSlides.map((slide, i) => (
                 <article key={i} className={`carousel-slide${i === currentSlide ? ' active' : ''}`}>
-                  <img src={slide.img} alt={slide.alt} />
+                  <img src={slide.img} alt={slide.alt ?? slide.kicker} />
                   <div className="carousel-caption">
                     <span>{slide.kicker}</span>
                     <h2>{slide.title}</h2>
@@ -1170,7 +1188,7 @@ export default function Storefront() {
 
             <div className="carousel-controls">
               <div className="carousel-dots" aria-label="Seleccionar foto">
-                {slides.map((_, i) => (
+                {activeSlides.map((_, i) => (
                   <button key={i} className={i === currentSlide ? 'active' : ''} type="button" aria-label={`Ver foto ${i + 1}`} onClick={() => moveCarousel(i)} />
                 ))}
               </div>

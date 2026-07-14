@@ -184,6 +184,9 @@ export default function ProductosPage() {
   async function handleSave(form: {
     nombre: string; sku: string; categoria: string; precio: string
     stock: string; descripcion: string; imagen: File | null; imagenPreview: string | null
+    colores: string[]; tallas: string[]; variantes: Array<{ color: string; talla: string; stock: string }>
+    peso: string; largo: string; ancho: string; alto: string
+    imagenesExtra: Array<{ file: File | null; preview: string | null }>
   }) {
     let imagen_url: string | null = null
 
@@ -195,6 +198,17 @@ export default function ProductosPage() {
       } catch (e) {
         console.error('Error subiendo imagen:', e)
       }
+    }
+
+    // Subir imágenes adicionales
+    const urlsExtra: string[] = []
+    for (const extra of form.imagenesExtra) {
+      if (!extra.file) continue
+      try {
+        const path = `extra-${Date.now()}-${Math.random().toString(36).slice(2)}.webp`
+        const url = await uploadToSupabase(extra.file, supabase, 'productos', path)
+        urlsExtra.push(url)
+      } catch (e) { console.error('Error subiendo imagen extra:', e) }
     }
 
     // Obtener o crear categoría
@@ -219,6 +233,16 @@ export default function ProductosPage() {
       }
     }
 
+    const tieneDetalles = form.colores.length > 0 || form.tallas.length > 0 || form.variantes.length > 0 || form.peso || form.largo || urlsExtra.length > 0
+    const detalles = tieneDetalles ? {
+      colores: form.colores,
+      tallas: form.tallas,
+      variantes: form.variantes.map(v => ({ ...v, stock: parseInt(v.stock) || 0 })),
+      peso_g: form.peso ? parseInt(form.peso) : null,
+      dimensiones: (form.largo || form.ancho || form.alto) ? { largo: form.largo, ancho: form.ancho, alto: form.alto } : null,
+      imagenes_extra: urlsExtra,
+    } : null
+
     const payload = {
       nombre: form.nombre,
       sku: form.sku,
@@ -227,6 +251,7 @@ export default function ProductosPage() {
       stock: parseInt(form.stock),
       categoria_id,
       ...(imagen_url ? { imagen_url } : {}),
+      detalles,
     }
 
     const { error } = editando
