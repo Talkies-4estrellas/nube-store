@@ -304,6 +304,11 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Storefront: suscripción Realtime a `config_storefront` — cambios se reflejan sin recargar página; aplica `document.title` desde `meta_titulo`
 - [x] Migraciones nuevas: `migration_productos_detalles.sql` + `migration_seo_legal.sql` (pendientes de ejecutar en Supabase)
 
+## Completado (16/07/2026)
+- [x] ProductoModal: rediseño "Datos adicionales" — paleta visual 12 colores con swatches, chips rosas para tallas (sin grupos predefinidos), variantes en tabla con botones −/+ y totalizador, peso con etiqueta "g" flotante, fotos ilimitadas con zona drag-and-drop y selección múltiple, badge resumen en toggle colapsable
+- [x] Portal proveedores: "Datos adicionales" replicado con el mismo diseño que el modal admin (paleta colores, tallas input libre, variantes tabla, fotos drag-and-drop ilimitadas)
+- [x] globals.css: spinners nativos eliminados en todos los `input[type=number]` del proyecto (Chrome/Firefox/Safari)
+
 ## Completado (10/07/2026)
 - [x] AppChrome: `maxWidth: 1600` + `margin: 0 auto` en `<main>` para acotar el panel admin en pantallas anchas (laptop/escritorio/TV)
 - [x] globals.css: `@media (min-width: 1600px)` → `.stat-grid` y `.grid-3` pasan a 4 columnas en pantallas muy anchas
