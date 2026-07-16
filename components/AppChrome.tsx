@@ -17,7 +17,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const { isMobile, open, close } = useSidebar()
 
-  if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>
+  if (PUBLIC_PATHS.includes(pathname) || pathname.startsWith('/tienda')) return <>{children}</>
 
   if (loading) {
     return (

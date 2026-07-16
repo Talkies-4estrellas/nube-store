@@ -155,7 +155,7 @@ export default function Sidebar() {
           <span style={{ fontSize: 12, opacity: 0.8 }}>↗</span>
         </a>
 
-        {showConfig && (
+          {showConfig && (
           <div style={{ marginTop: 4, position: 'relative' }}>
             <NavLink href="/configuracion" label="Configuración" icon="settings" active={pathname === '/configuracion'} />
             {solicitudesPendientes > 0 && (

@@ -611,7 +611,7 @@ export default function Storefront() {
     }
     return featured.map(([title, text, price, image, category], index) => (
       <article
-        key={title}
+        key={`${title}-${index}`}
         className={`product-card ${index === 1 ? 'wide' : index === 2 ? 'compact' : 'tall'}`}
         data-detail-title={title}
         onClick={(e) => onCardClick(e, title)}
