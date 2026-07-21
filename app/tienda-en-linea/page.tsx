@@ -48,7 +48,13 @@ export default function TiendaEnLineaPage() {
   // móvil la rejilla se apila y el panel pasa a ocupar el ancho disponible.
   // Sin medirlo, la escala quedaría fija y el iframe se vería recortado.
   const [PREVIEW_W, setPreviewW] = useState(520)
-  const PREVIEW_H = 640
+
+  // Alto del marco: en PC es un rectángulo acostado (como un monitor,
+  // ~16:10) para que no se vea un recuadro alto y angosto. En Móvil se
+  // mantiene igual que antes (recuadro alto, forma de teléfono).
+  const PREVIEW_H = vista === 'pc'
+    ? Math.max(260, Math.min(420, Math.round(PREVIEW_W * 0.62)))
+    : 640
 
   useEffect(() => {
     const box = previewBoxRef.current
