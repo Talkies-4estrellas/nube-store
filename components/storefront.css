@@ -89,6 +89,39 @@
   transition: width var(--nav-dur) var(--nav-ease), padding var(--nav-dur) var(--nav-ease);
 }
 
+/* Botón hamburguesa — solo visible en móvil/tablet */
+.oe-store .nav-burger {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  background: #f1f2f6;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.oe-store .nav-burger span {
+  display: block;
+  width: 22px;
+  height: 2.5px;
+  border-radius: 3px;
+  background: #28295f;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.oe-store .sidebar.mobile-open .nav-burger span:nth-child(1) {
+  transform: translateY(7.5px) rotate(45deg);
+}
+.oe-store .sidebar.mobile-open .nav-burger span:nth-child(2) {
+  opacity: 0;
+}
+.oe-store .sidebar.mobile-open .nav-burger span:nth-child(3) {
+  transform: translateY(-7.5px) rotate(-45deg);
+}
+
 .oe-store .brand-logo {
   grid-area: 1 / 1;
   max-width: 100%;
@@ -1849,20 +1882,47 @@
     height: auto;
     padding: 0 18px 18px;
     border-radius: 0 0 28px 28px;
+    transition: transform 0.32s ease;
+    will-change: transform;
+  }
+
+  /* Al bajar: la barra se oculta hacia arriba; al subir vuelve a bajar */
+  .oe-store .sidebar.nav-hidden {
+    transform: translateY(-105%);
   }
 
   .oe-store .sidebar-head {
+    position: relative;
+    justify-content: center;
     margin: 0 -18px;
     border-radius: 0;
+    padding: 0 64px;
   }
 
   .oe-store .brand {
+    width: auto;
     margin-bottom: 0;
   }
 
+  /* Hamburguesa a la izquierda, logo centrado */
+  .oe-store .nav-burger {
+    display: flex;
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
   .oe-store .nav-list {
-    grid-template-columns: repeat(7, max-content);
-    overflow-x: auto;
+    display: none;
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
+
+  .oe-store .sidebar.mobile-open .nav-list {
+    display: grid;
+    gap: 6px;
+    padding: 12px 0 4px;
   }
 
   .oe-store .profile-card {

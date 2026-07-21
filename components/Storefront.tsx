@@ -130,6 +130,8 @@ export default function Storefront() {
   const router = useRouter()
   const [view, setView] = useState('inicio')
   const [navCollapsed, setNavCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [headerHidden, setHeaderHidden] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [topPeriod, setTopPeriod] = useState<'nuevo' | 'ofertas'>('nuevo')
   const [searchValue, setSearchValue] = useState('')
@@ -288,9 +290,25 @@ export default function Storefront() {
 
   const goView = (next: string) => {
     setView(next)
+    setMobileNavOpen(false)
     if (next === 'novedades') setTopPeriod('nuevo')
     if (next === 'ofertas') setTopPeriod('ofertas')
   }
+
+  // Ocultar la barra móvil al bajar y mostrarla al subir
+  useEffect(() => {
+    let lastY = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      if (mobileNavOpen) { lastY = y; return }
+      if (y < 80) setHeaderHidden(false)          // cerca del tope: siempre visible
+      else if (y > lastY + 6) setHeaderHidden(true)   // bajando: ocultar hacia arriba
+      else if (y < lastY - 6) setHeaderHidden(false)  // subiendo: mostrar
+      lastY = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [mobileNavOpen])
 
   const addToCart = (title: string) => {
     const product = findProduct(title)
@@ -1068,12 +1086,21 @@ export default function Storefront() {
 
   return (
     <div className={`oe-store${navCollapsed ? ' nav-collapsed' : ''}`} data-view={view}>
-      <aside className="sidebar" aria-label="Navegacion principal">
+      <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}${headerHidden ? ' nav-hidden' : ''}`} aria-label="Navegacion principal">
         <div className="sidebar-head">
           <a className="brand" href="#" aria-label={navCollapsed ? 'Desplegar navegacion' : 'Contraer navegacion'} aria-expanded={!navCollapsed} onClick={toggleBrand}>
             <img className="brand-logo full" src="/storefront/logo.svg" alt="OrderExpress" />
             <img className="brand-logo mark" src="/storefront/monograma.svg" alt="OrderExpress" />
           </a>
+          <button
+            type="button"
+            className="nav-burger"
+            aria-label={mobileNavOpen ? 'Cerrar menu' : 'Abrir menu'}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((o) => !o)}
+          >
+            <span /><span /><span />
+          </button>
         </div>
 
         <nav className="nav-list">

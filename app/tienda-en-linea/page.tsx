@@ -43,10 +43,14 @@ export default function TiendaEnLineaPage() {
   const [vista, setVista] = useState<'pc' | 'movil'>('pc')
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
-  // Viewport simulado para la vista previa: PC (1280px) o Móvil (430px)
-  const PREVIEW_W = 420
-  const vp = vista === 'pc' ? 1280 : 430
-  const previewScale = PREVIEW_W / vp
+  // Viewport simulado para la vista previa: PC (escritorio) o Móvil (teléfono centrado)
+  const PREVIEW_W = 520
+  const PREVIEW_H = 640
+  const conf = vista === 'pc'
+    ? { vp: 1180, scale: PREVIEW_W / 1180 }   // escritorio: llena el ancho del panel
+    : { vp: 430,  scale: 0.98 }               // móvil: tamaño casi real, centrado
+  const renderedW = conf.vp * conf.scale
+  const previewLeft = Math.max(0, (PREVIEW_W - renderedW) / 2)
 
   useEffect(() => {
     supabase.from('config_storefront').select('nombre_tienda,color_acento').eq('id', 1).single()
@@ -70,7 +74,7 @@ export default function TiendaEnLineaPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 24, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 520px', gap: 24, alignItems: 'start' }}>
 
       {/* Contenido */}
       <div>
@@ -209,8 +213,8 @@ export default function TiendaEnLineaPage() {
               </button>
             </div>
           </div>
-          <div style={{ position: 'relative', height: 640, background: '#f3f4f6', overflow: 'hidden' }}>
-            <iframe ref={iframeRef} src="/" style={{ width: vp, height: 640 / previewScale, border: 'none', transformOrigin: 'top left', transform: `scale(${previewScale})` }} />
+          <div style={{ position: 'relative', height: PREVIEW_H, background: '#eef0f4', overflow: 'hidden' }}>
+            <iframe ref={iframeRef} src="/" style={{ position: 'absolute', top: 0, left: previewLeft, width: conf.vp, height: PREVIEW_H / conf.scale, border: 'none', transformOrigin: 'top left', transform: `scale(${conf.scale})`, boxShadow: vista === 'movil' ? '0 0 0 1px #e5e7eb' : 'none' }} />
           </div>
           <div style={{ padding: '10px 16px' }}>
             <a href="/" target="_blank" rel="noopener noreferrer"

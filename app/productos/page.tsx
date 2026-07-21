@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react'
 import ProductoModal from '@/components/ProductoModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import ImportCSVModal from '@/components/ImportCSVModal'
 import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
+import { toCSV, downloadCSV } from '@/lib/csv'
 import Icon from '@/components/Icon'
 import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
 
@@ -84,6 +86,34 @@ export default function ProductosPage() {
   const [procesando, setProcesando] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
   const [solicitudDetalle, setSolicitudDetalle] = useState<Solicitud | null>(null)
+  const [showImport, setShowImport] = useState(false)
+  const [exportando, setExportando] = useState(false)
+
+  async function exportarCSV() {
+    setExportando(true)
+    const [prodRes, catRes] = await Promise.all([
+      supabase.from('productos').select('sku, nombre, precio, stock, descripcion, imagen_url, detalles, categoria_id').order('nombre'),
+      supabase.from('categorias').select('id, nombre'),
+    ])
+    setExportando(false)
+    if (prodRes.error || !prodRes.data) { setToast({ msg: 'Error al exportar productos', color: PINK }); return }
+
+    const mapaCat = new Map<number, string>((catRes.data ?? []).map(c => [c.id as number, c.nombre as string]))
+    const rows = prodRes.data.map((p: Record<string, unknown>) => ({
+      sku: p.sku ?? '',
+      nombre: p.nombre ?? '',
+      precio: p.precio ?? '',
+      stock: p.stock ?? '',
+      categoria: p.categoria_id != null ? (mapaCat.get(p.categoria_id as number) ?? '') : '',
+      descripcion: p.descripcion ?? '',
+      imagen_url: p.imagen_url ?? '',
+      detalles: p.detalles ? JSON.stringify(p.detalles) : '',
+    }))
+    const cols = ['sku', 'nombre', 'precio', 'stock', 'categoria', 'descripcion', 'imagen_url', 'detalles']
+    const fecha = new Date().toISOString().slice(0, 10)
+    downloadCSV(`productos-${fecha}.csv`, toCSV(rows, cols))
+    setToast({ msg: `${rows.length} productos exportados`, color: BLUE })
+  }
 
   async function fetchSolicitudes() {
     setLoadingSol(true)
@@ -319,6 +349,14 @@ export default function ProductosPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Productos</h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button onClick={exportarCSV} disabled={exportando}
+            style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: exportando ? 'wait' : 'pointer' }}>
+            {exportando ? 'Exportando...' : '⬇ Exportar CSV'}
+          </button>
+          <button onClick={() => setShowImport(true)}
+            style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            ⬆ Importar CSV
+          </button>
           <button onClick={() => { if (!showSolicitudes) fetchSolicitudes(); setShowSolicitudes(v => !v) }}
             style={{ position: 'relative', background: showSolicitudes ? NAVY : '#f3f4f6', color: showSolicitudes ? '#fff' : '#374151', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Solicitudes
@@ -780,6 +818,14 @@ export default function ProductosPage() {
             imagen: null,
             imagenPreview: editando.imagen_url ?? null,
           } : undefined}
+        />
+      )}
+
+      {showImport && (
+        <ImportCSVModal
+          existingSkus={new Set(products.map(p => p.sku))}
+          onClose={() => setShowImport(false)}
+          onDone={fetchProducts}
         />
       )}
     </div>
