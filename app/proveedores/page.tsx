@@ -573,7 +573,7 @@ export default function ProveedoresPage() {
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>PORTAL</span>
           {navItem('registro',  'Registrar producto', '📦')}
           {navItem('historial', 'Mis solicitudes',    '🔍')}
-          {navItem('misEnviados', 'Mis enviados', '📋')}
+          {navItem('misEnviados', 'Mis productos', '📋')}
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '20px 14px 6px', display: 'block' }}>ACCESO</span>
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', color: NAVY, fontSize: 14, fontWeight: 700, borderRadius: 999, border: '2px solid transparent', textDecoration: 'none' }}>
             <span style={{ fontSize: 16 }}>🏠</span> Volver a la tienda
@@ -616,7 +616,7 @@ export default function ProveedoresPage() {
             </svg>
           </button>
           <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis enviados' : 'Ajustes'}
+            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
             <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -635,25 +635,10 @@ export default function ProveedoresPage() {
           )}
         </header>
 
-        {/* Barra de tabs mobile */}
-        {isMobile && (
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 16px', background: '#fff', borderBottom: '1px solid #f3f4f6', WebkitOverflowScrolling: 'touch' as any, flexShrink: 0 }}>
-            {([
-              { id: 'registro',    label: '📦 Registrar' },
-              { id: 'historial',   label: '🔍 Solicitudes' },
-              { id: 'misEnviados', label: '📋 Enviados' },
-              { id: 'ajustes',     label: '⚙️ Ajustes' },
-            ] as const).map(item => (
-              <button key={item.id} onClick={() => setTab(item.id)}
-                style={{ padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, border: 'none', whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0, background: tab === item.id ? NAVY : '#f3f4f6', color: tab === item.id ? '#fff' : '#374151' }}>
-                {item.label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Contenido */}
         <main style={{ flex: 1, padding: isMobile ? '16px' : '28px 32px 48px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
         {tab === 'registro' && formState === 'success' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1333,7 +1318,7 @@ export default function ProveedoresPage() {
           </form>
         ) : null}
 
-        {/* ---- Tab: Mis enviados ---- */}
+        {/* ---- Tab: Mis productos ---- */}
         {tab === 'misEnviados' && (
           <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
 
@@ -1590,6 +1575,7 @@ export default function ProveedoresPage() {
           })()}
         </div>
         )}
+        </div>
         </main>
       </div>
     </div>
