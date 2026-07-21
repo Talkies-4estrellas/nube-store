@@ -1901,7 +1901,32 @@
 
   .oe-store .brand {
     width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 12px 0;
     margin-bottom: 0;
+    overflow: visible;
+  }
+
+  /* El logo lleva alto FIJO en px, no en %.
+     El SVG solo trae viewBox (sin width/height propios) y el contenedor
+     está en width/height auto: un porcentaje no tendría contra qué
+     resolverse y la imagen colapsaría a 0. Con el alto fijo, el ancho
+     se deriva de la proporción del viewBox (658.75 x 126.01 = 5.23:1). */
+  .oe-store .brand-logo.full,
+  .oe-store.nav-collapsed .brand-logo.full {
+    display: block;
+    width: auto;
+    height: 38px;
+    max-width: 220px;
+    max-height: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .oe-store .brand-logo.mark,
+  .oe-store.nav-collapsed .brand-logo.mark {
+    display: none;
   }
 
   /* Hamburguesa a la izquierda, logo centrado */

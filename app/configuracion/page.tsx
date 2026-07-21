@@ -190,7 +190,7 @@ export default function ConfiguracionPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, alignItems: 'start' }}>
+    <div className="config-layout" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, alignItems: 'start' }}>
       {/* Sub-nav */}
       <aside style={{ background: '#fff', borderRadius: 12, padding: '8px 0', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '10px 16px 6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Configuración</p>

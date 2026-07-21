@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Respaldos de base de datos (contienen datos reales de clientes)
+/respaldo/
+*.dump

@@ -619,7 +619,7 @@ export default function ProveedoresPage() {
             {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis enviados' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {[
                 { n: '1', label: 'Llena el formulario' },
                 { n: '2', label: 'Revisamos' },

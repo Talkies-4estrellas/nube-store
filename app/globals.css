@@ -92,33 +92,72 @@ body {
     transform: translateX(0) !important;
     box-shadow: 4px 0 24px rgba(0,0,0,0.18) !important;
   }
-  /* Contenido sin margen izquierdo en mobile */
+  /* Contenido sin margen izquierdo en mobile.
+     min-width:0 es indispensable: al ser flex:1 hereda min-width:auto,
+     que le impide encogerse por debajo del ancho de su contenido. */
   .prov-main {
     margin-left: 0 !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .prov-main main,
+  .prov-main form,
+  .prov-main header {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .prov-main-grid > *,
+  .prov-2col > * {
+    min-width: 0 !important;
+  }
+  .prov-2col {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   /* Hamburguesa visible solo en mobile */
   .prov-hamburger {
     display: flex !important;
   }
+  /* El stepper "1 Llena el formulario → 2 Revisamos → 3 Publicamos"
+     mide 385px y no cabe en la barra de 56px en móvil. */
+  .prov-steps {
+    display: none !important;
+  }
 }
 
-/* Grids de stats (4 cols → 2 cols en tablet/mobile) */
+/* ============================================================
+   IMPORTANTE — por qué se usa minmax(0, 1fr) y no 1fr
+   ------------------------------------------------------------
+   `1fr` equivale a `minmax(auto, 1fr)`. Ese `auto` impide que la
+   columna se encoja por debajo del tamaño de su contenido, así que
+   en móvil las columnas se quedan grandes y desbordan la pantalla.
+   `minmax(0, 1fr)` sí permite encoger.
+   Lo mismo aplica a los hijos: por defecto tienen min-width:auto.
+   ============================================================ */
+
+/* Grids de stats (4 cols → 2 → 1) */
 .stat-grid {
   display: grid !important;
 }
+.stat-grid > * { min-width: 0; }
+
 @media (max-width: 900px) {
-  .stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 480px) {
+  .stat-grid { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* Grid de 3 columnas (productos) → 2 → 1 */
 .grid-3 {
   display: grid !important;
 }
+.grid-3 > * { min-width: 0; }
+
 @media (max-width: 900px) {
-  .grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 @media (max-width: 540px) {
-  .grid-3 { grid-template-columns: 1fr !important; }
+  .grid-3 { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* Tablas que desbordan en móvil */
@@ -131,6 +170,16 @@ body {
 @media (max-width: 768px) {
   .panel-layout {
     flex-direction: column !important;
+    /* Con dirección columna el eje transversal es el horizontal.
+       Si se hereda align-items:flex-start (habitual en el estilo inline
+       para escritorio), los hijos se dimensionan a su CONTENIDO en vez
+       de estirarse al contenedor, y desbordan la pantalla. */
+    align-items: stretch !important;
+  }
+  .panel-layout > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
   }
   .panel-aside {
     width: 100% !important;
@@ -153,10 +202,93 @@ body {
   .filter-row {
     flex-direction: column !important;
     align-items: stretch !important;
+    width: 100% !important;
+  }
+  .filter-row > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
   }
   .filter-row input,
   .filter-row select {
     width: 100% !important;
-    min-width: unset !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Configuración: menú lateral fijo (220px) + contenido.
+   En móvil el menú pasa arriba y ambos ocupan el ancho completo. */
+@media (max-width: 768px) {
+  .config-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .config-layout > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Tienda en línea: contenido + panel lateral (vista previa / ayuda).
+   En móvil se apilan; el panel deja de tener ancho fijo. */
+@media (max-width: 900px) {
+  .te-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .te-layout > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Cabecera de página: título + botones de acción.
+   En móvil los botones bajan y ocupan el ancho completo. */
+@media (max-width: 640px) {
+  .page-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .page-header-actions {
+    width: 100% !important;
+  }
+  .page-header-actions > * {
+    flex: 1 1 calc(50% - 5px) !important;
+    min-width: 0 !important;
+    white-space: nowrap;
+  }
+}
+
+/* ============================================================
+   Red de seguridad para móvil
+   ------------------------------------------------------------
+   No se usa `overflow-x: hidden` a propósito: eso ocultaría el
+   desbordamiento recortando contenido en lugar de resolverlo.
+   Aquí se ataca la causa: permitir que los elementos se encojan.
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Los hijos de flex/grid no se encogen por defecto (min-width:auto) */
+  main [style*="display: flex"] > *,
+  main [style*="display:flex"] > * {
+    min-width: 0;
+  }
+
+  /* Medios y tablas nunca deben exceder el ancho disponible */
+  main img,
+  main video,
+  main canvas,
+  main svg:not([width]) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Cualquier tabla suelta puede hacer scroll dentro de su caja */
+  main table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Textos largos sin espacios (SKU, URLs, emails) que estiran la caja */
+  main h1, main h2, main h3, main p, main span, main td, main a {
+    overflow-wrap: anywhere;
   }
 }

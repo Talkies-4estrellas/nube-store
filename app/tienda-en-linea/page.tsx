@@ -42,13 +42,28 @@ export default function TiendaEnLineaPage() {
   const [mostrarMasTemas, setMostrarMasTemas] = useState(false)
   const [vista, setVista] = useState<'pc' | 'movil'>('pc')
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const previewBoxRef = useRef<HTMLDivElement>(null)
 
-  // Viewport simulado para la vista previa: PC (escritorio) o Móvil (teléfono centrado)
-  const PREVIEW_W = 520
+  // El ancho del panel se mide en vivo: en escritorio son 520px, pero en
+  // móvil la rejilla se apila y el panel pasa a ocupar el ancho disponible.
+  // Sin medirlo, la escala quedaría fija y el iframe se vería recortado.
+  const [PREVIEW_W, setPreviewW] = useState(520)
   const PREVIEW_H = 640
+
+  useEffect(() => {
+    const box = previewBoxRef.current
+    if (!box) return
+    const medir = () => setPreviewW(box.clientWidth || 520)
+    medir()
+    const ro = new ResizeObserver(medir)
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [])
+
+  // Viewport simulado: PC (escritorio) o Móvil (teléfono centrado)
   const conf = vista === 'pc'
-    ? { vp: 1180, scale: PREVIEW_W / 1180 }   // escritorio: llena el ancho del panel
-    : { vp: 430,  scale: 0.98 }               // móvil: tamaño casi real, centrado
+    ? { vp: 1180, scale: PREVIEW_W / 1180 }              // escritorio: llena el panel
+    : { vp: 430,  scale: Math.min(0.98, PREVIEW_W / 430) } // móvil: nunca más ancho que el panel
   const renderedW = conf.vp * conf.scale
   const previewLeft = Math.max(0, (PREVIEW_W - renderedW) / 2)
 
@@ -74,7 +89,7 @@ export default function TiendaEnLineaPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 520px', gap: 24, alignItems: 'start' }}>
+    <div className="te-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 520px', gap: 24, alignItems: 'start' }}>
 
       {/* Contenido */}
       <div>
@@ -213,7 +228,7 @@ export default function TiendaEnLineaPage() {
               </button>
             </div>
           </div>
-          <div style={{ position: 'relative', height: PREVIEW_H, background: '#eef0f4', overflow: 'hidden' }}>
+          <div ref={previewBoxRef} style={{ position: 'relative', height: PREVIEW_H, background: '#eef0f4', overflow: 'hidden' }}>
             <iframe ref={iframeRef} src="/" style={{ position: 'absolute', top: 0, left: previewLeft, width: conf.vp, height: PREVIEW_H / conf.scale, border: 'none', transformOrigin: 'top left', transform: `scale(${conf.scale})`, boxShadow: vista === 'movil' ? '0 0 0 1px #e5e7eb' : 'none' }} />
           </div>
           <div style={{ padding: '10px 16px' }}>
