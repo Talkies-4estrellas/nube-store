@@ -162,6 +162,30 @@ export default function Storefront() {
   const [checkoutError, setCheckoutError] = useState('')
   const [ventaNumero, setVentaNumero] = useState<number | null>(null)
 
+  // Regreso desde el checkout de Mercado Pago (?pago=exito|fallido|pendiente)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const pago = params.get('pago')
+    if (!pago) return
+
+    if (pago === 'exito') {
+      const numero = params.get('venta')
+      if (numero) setVentaNumero(Number(numero))
+      setCart([])
+      try { localStorage.removeItem(CART_KEY) } catch { /* ignorar */ }
+      setCheckoutState('success')
+      setShowCheckout(true)
+    } else {
+      setCheckoutError(pago === 'pendiente'
+        ? 'Tu pago quedó pendiente de confirmación. Te avisaremos en cuanto se acredite.'
+        : 'El pago no se completó. Puedes intentarlo de nuevo.')
+      setCheckoutState('error')
+      setShowCheckout(true)
+    }
+    // Limpiar la query para que no se repita al recargar
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
+
   // Login modal (storefront — sin roles, solo sesión de cliente)
   const [showLogin, setShowLogin] = useState(false)
   const [loginTab, setLoginTab] = useState<'login' | 'register'>('login')
@@ -398,6 +422,26 @@ export default function Storefront() {
       if (itemsErr) { setCheckoutError('Error al guardar productos'); setCheckoutState('error'); return }
     }
 
+    // Iniciar el pago con Mercado Pago (Checkout Pro)
+    try {
+      const res = await fetch('/api/pagos/crear-preferencia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ventaId: venta.id }),
+      })
+      const data = await res.json()
+      if (res.ok && data.url) {
+        setCart([])
+        try { localStorage.removeItem(CART_KEY) } catch {}
+        window.location.href = data.url   // redirige al checkout de Mercado Pago
+        return
+      }
+      console.warn('Pasarela de pago no disponible:', data.error)
+    } catch (e) {
+      console.warn('No se pudo iniciar el pago:', e)
+    }
+
+    // Sin pasarela configurada: el pedido queda registrado como Pendiente
     setVentaNumero(venta.numero)
     setCart([])
     try { localStorage.removeItem(CART_KEY) } catch {}

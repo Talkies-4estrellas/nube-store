@@ -88,28 +88,52 @@ export default function ProductosPage() {
   const [solicitudDetalle, setSolicitudDetalle] = useState<Solicitud | null>(null)
   const [showImport, setShowImport] = useState(false)
   const [exportando, setExportando] = useState(false)
+  const [confirmExport, setConfirmExport] = useState(false)
 
   async function exportarCSV() {
     setExportando(true)
     const [prodRes, catRes] = await Promise.all([
-      supabase.from('productos').select('sku, nombre, precio, stock, descripcion, imagen_url, detalles, categoria_id').order('nombre'),
+      supabase.from('productos').select('*').order('nombre'),
       supabase.from('categorias').select('id, nombre'),
     ])
     setExportando(false)
     if (prodRes.error || !prodRes.data) { setToast({ msg: 'Error al exportar productos', color: PINK }); return }
 
     const mapaCat = new Map<number, string>((catRes.data ?? []).map(c => [c.id as number, c.nombre as string]))
+    const v = (x: unknown) => x ?? ''
     const rows = prodRes.data.map((p: Record<string, unknown>) => ({
-      sku: p.sku ?? '',
-      nombre: p.nombre ?? '',
-      precio: p.precio ?? '',
-      stock: p.stock ?? '',
+      sku: v(p.sku),
+      nombre: v(p.nombre),
+      precio: v(p.precio),
+      precio_promocional: v(p.precio_promocional),
+      costo: v(p.costo),
+      stock: v(p.stock),
       categoria: p.categoria_id != null ? (mapaCat.get(p.categoria_id as number) ?? '') : '',
-      descripcion: p.descripcion ?? '',
-      imagen_url: p.imagen_url ?? '',
+      marca: v(p.marca),
+      codigo_barras: v(p.codigo_barras),
+      mpn: v(p.mpn),
+      descripcion: v(p.descripcion),
+      imagen_url: v(p.imagen_url),
+      slug: v(p.slug),
+      tags: v(p.tags),
+      seo_titulo: v(p.seo_titulo),
+      seo_descripcion: v(p.seo_descripcion),
+      peso_kg: v(p.peso_kg),
+      alto_cm: v(p.alto_cm),
+      ancho_cm: v(p.ancho_cm),
+      profundidad_cm: v(p.profundidad_cm),
+      ubicacion: v(p.ubicacion),
+      proveedor: v(p.proveedor_nombre),
+      activo: p.activo === false ? 'NO' : 'SI',
+      envio_gratis: p.envio_gratis ? 'SI' : 'NO',
       detalles: p.detalles ? JSON.stringify(p.detalles) : '',
     }))
-    const cols = ['sku', 'nombre', 'precio', 'stock', 'categoria', 'descripcion', 'imagen_url', 'detalles']
+    const cols = [
+      'sku', 'nombre', 'precio', 'precio_promocional', 'costo', 'stock', 'categoria',
+      'marca', 'codigo_barras', 'mpn', 'descripcion', 'imagen_url', 'slug', 'tags',
+      'seo_titulo', 'seo_descripcion', 'peso_kg', 'alto_cm', 'ancho_cm', 'profundidad_cm',
+      'ubicacion', 'proveedor', 'activo', 'envio_gratis', 'detalles',
+    ]
     const fecha = new Date().toISOString().slice(0, 10)
     downloadCSV(`productos-${fecha}.csv`, toCSV(rows, cols))
     setToast({ msg: `${rows.length} productos exportados`, color: BLUE })
@@ -349,7 +373,7 @@ export default function ProductosPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Productos</h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button onClick={exportarCSV} disabled={exportando}
+          <button onClick={() => setConfirmExport(true)} disabled={exportando}
             style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: exportando ? 'wait' : 'pointer' }}>
             {exportando ? 'Exportando...' : '⬇ Exportar CSV'}
           </button>
@@ -826,6 +850,17 @@ export default function ProductosPage() {
           existingSkus={new Set(products.map(p => p.sku))}
           onClose={() => setShowImport(false)}
           onDone={fetchProducts}
+        />
+      )}
+
+      {confirmExport && (
+        <ConfirmDialog
+          danger={false}
+          title="Exportar productos a CSV"
+          message={`Se descargará un archivo con los ${products.length} productos del catálogo (SKU, nombre, precio, stock, categoría, descripción, imagen y detalles). Podrás editarlo en Excel y volver a importarlo.`}
+          confirmLabel="Descargar CSV"
+          onCancel={() => setConfirmExport(false)}
+          onConfirm={() => { setConfirmExport(false); exportarCSV() }}
         />
       )}
     </div>

@@ -79,7 +79,37 @@ public/
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://arqoyuxcugpprzjpcytg.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Servidor únicamente — NUNCA exponer al navegador
+SUPABASE_SERVICE_ROLE_KEY=eyJ...    # webhook de pagos + descarga de imágenes CSV
+MP_ACCESS_TOKEN=TEST-...            # Mercado Pago (TEST- en pruebas)
+NEXT_PUBLIC_SITE_URL=https://...    # opcional; si falta se deduce del request
 ```
+
+⚠️ `NEXT_PUBLIC_SUPABASE_URL` es la **Project URL**, sin `/rest/v1/` al final.
+La pantalla *Data API → API URL* del dashboard muestra el endpoint REST (para curl/Postman),
+no el valor que espera el SDK — el cliente le agrega `/rest/v1/` por su cuenta.
+
+---
+
+## Backend (Route Handlers) — agregado 21/07/2026
+
+Hasta esta fecha el proyecto era 100% cliente con la anon key. La pasarela de pagos
+obligó a introducir servidor real:
+
+| Ruta | Función |
+|---|---|
+| `app/api/pagos/crear-preferencia/route.ts` | Crea la preferencia de Mercado Pago. **Recalcula los importes leyendo `venta_items`** — nunca confía en precios del navegador |
+| `app/api/pagos/webhook/route.ts` | Recibe la notificación de MP, **reconsulta el pago** contra su API y marca la venta como `Pagado` |
+| `app/api/productos/importar-imagen/route.ts` | Descarga una imagen de un link externo y la sube al bucket (el navegador no puede por CORS) |
+| `lib/supabase-server.ts` | Cliente con **service role** — ignora RLS. Solo servidor |
+
+**Por qué hace falta la service role key:** el RLS de `ventas` solo permite `UPDATE` a
+`admin`/`vendedor`, y el webhook de Mercado Pago llega sin sesión de usuario.
+
+**Al marcar `estado='Pagado'` se dispara `trg_descontar_stock`** y baja el inventario.
+Por eso, al migrar datos entre bases hay que usar `SET session_replication_role = replica`
+o el stock se descontaría dos veces.
 
 ---
 
@@ -245,6 +275,12 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Ejecutar `Doc/database/migration_productos_ampliado.sql`** (15 columnas nuevas + recrear vista) — sin esto el import CSV no guarda los campos nuevos
+- [ ] **Configurar `MP_ACCESS_TOKEN`** en `.env.local` y Vercel para activar la pasarela de pagos
+- [ ] **Configurar `SUPABASE_SERVICE_ROLE_KEY`** — requerida por el webhook de pagos y la descarga de imágenes del CSV
+- [ ] Validar la firma `x-signature` del webhook de Mercado Pago (antes de producción)
+- [ ] Guardar `payment_id` de MP en `ventas` para conciliación
+- [ ] Script para copiar imágenes del bucket entre proyectos de Supabase (no van en el dump SQL)
 - [ ] Ejecutar en Supabase: `ALTER TABLE solicitudes_productos ADD COLUMN IF NOT EXISTS detalles jsonb DEFAULT NULL;`
 - [ ] Ejecutar `database/auth.sql` en Supabase SQL Editor (Step 1 del setup auth)
 - [ ] Crear usuario admin en Supabase Authentication y hacer INSERT en user_roles (Steps 2-3)
@@ -303,6 +339,19 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea / Legal: nueva sub-pestaña con política de envíos, devoluciones y términos; indicador OK/Vacío
 - [x] Storefront: suscripción Realtime a `config_storefront` — cambios se reflejan sin recargar página; aplica `document.title` desde `meta_titulo`
 - [x] Migraciones nuevas: `migration_productos_detalles.sql` + `migration_seo_legal.sql` (pendientes de ejecutar en Supabase)
+
+## Completado (20-21/07/2026)
+- [x] Tienda en línea: submenú convertido en **hamburguesa** con dropdown flotante; grid a 2 columnas sin espacio muerto; hamburguesa junto al título en las 7 sub-páginas
+- [x] **Fix `AppChrome`**: `startsWith('/tienda')` capturaba también `/tienda-en-linea`, dejando el panel sin sidebar admin. Corregido a `startsWith('/tienda/')`
+- [x] Vista previa de Tienda en línea: switch **PC / Móvil** (viewport simulado 1180px / 430px) y panel ampliado a 520px
+- [x] Storefront móvil: nav horizontal con scroll → **hamburguesa** a la izquierda con logo centrado; la barra se oculta al bajar y reaparece al subir
+- [x] **Exportar productos a CSV** (25 columnas) con diálogo de confirmación previo
+- [x] **Importar productos desde CSV**: upsert por SKU, vista previa con validación, advertencia de filas sin datos requeridos (sku/nombre/precio)
+- [x] Importador tolerante: separador `,` o `;`, codificación Latin-1, precios `$ 139` / `3,500.00`, HTML con entidades, categorías `Padre > Hijo`, sinónimos de encabezados (Tiendanube y control 2023)
+- [x] Rescate de CSV dañados: archivos `;`-delimitados re-guardados en Excel (pasaban de 0 a 147 registros recuperados)
+- [x] Descarga de imágenes por link → se alojan en el bucket propio (`app/api/productos/importar-imagen`)
+- [x] **Pasarela de pagos Mercado Pago** (Checkout Pro): primer backend real del proyecto
+- [x] Esquema consolidado en `Doc/database/schema_completo.sql` (base + 7 migraciones + columnas sin migración)
 
 ## Completado (16/07/2026)
 - [x] ProductoModal: rediseño "Datos adicionales" — paleta visual 12 colores con swatches, chips rosas para tallas (sin grupos predefinidos), variantes en tabla con botones −/+ y totalizador, peso con etiqueta "g" flotante, fotos ilimitadas con zona drag-and-drop y selección múltiple, badge resumen en toggle colapsable

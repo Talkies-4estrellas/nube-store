@@ -164,6 +164,34 @@ Definidas en `.env.local` (local) y en el dashboard de Vercel (producción).
 | `next` | 16.2.9 | Framework principal — App Router + Turbopack |
 | `@supabase/ssr` | latest | Cliente Supabase con soporte de cookies para middleware |
 | `lucide-react` | ^1.22.0 | Iconos — **solo en `Storefront.tsx`**. El panel admin usa `Icon.tsx` propio. |
+| `mercadopago` | ^3.2.0 | SDK de la pasarela de pagos (Checkout Pro). Solo servidor. Requiere Node 18+ |
+
+---
+
+## Archivos agregados el 20-21/07/2026
+
+### Backend (Route Handlers)
+| Archivo | Función |
+|---------|---------|
+| `lib/supabase-server.ts` | Cliente Supabase con service role — **solo servidor**, ignora RLS |
+| `app/api/pagos/crear-preferencia/route.ts` | Crea la preferencia de Mercado Pago |
+| `app/api/pagos/webhook/route.ts` | Confirma el pago y marca la venta como `Pagado` |
+| `app/api/productos/importar-imagen/route.ts` | Descarga imagen de un link y la sube al bucket |
+
+### CSV de productos
+| Archivo | Función |
+|---------|---------|
+| `lib/csv.ts` | `toCSV`, `downloadCSV`, `parseCSV`, `detectDelimiter`, `readFileSmart`, `cleanNumber`, `stripHtml` |
+| `components/ImportCSVModal.tsx` | Modal de importación: vista previa, validación, descarga de imágenes |
+
+### Documentación y base de datos
+| Archivo | Contenido |
+|---------|-----------|
+| `Doc/pagos-mercadopago.md` | Guía de la pasarela: flujo, variables, credenciales de prueba |
+| `Doc/importacion-productos.md` | Formato estándar del CSV y tabla de sinónimos |
+| `Doc/plantilla-importacion-productos.csv` | Plantilla de 25 columnas lista para usar |
+| `Doc/database/schema_completo.sql` | **Esquema consolidado** — base + 7 migraciones. Para replicar en otra cuenta |
+| `Doc/database/migration_productos_ampliado.sql` | 15 columnas nuevas + recreación de la vista |
 
 ---
 
