@@ -122,6 +122,89 @@
   transform: translateY(-7.5px) rotate(-45deg);
 }
 
+/* Acciones de la barra superior (lupa y carrito): solo en móvil */
+.oe-store .head-action {
+  display: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: #f1f2f6;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  color: #28295f;
+}
+.oe-store .head-action svg {
+  width: 20px;
+  height: 20px;
+  stroke: #28295f;
+}
+.oe-store .head-cart {
+  background: #28295f;
+}
+.oe-store .head-cart svg {
+  stroke: #fff;
+}
+.oe-store .head-cart-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--pink, #e7226d);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Buscador desplegado sobre la barra */
+.oe-store .head-search-bar {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: #fff;
+}
+.oe-store .head-search-bar svg {
+  width: 18px;
+  height: 18px;
+  stroke: #6b7280;
+  flex: 0 0 auto;
+}
+.oe-store .head-search-bar input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  font-family: inherit;
+  background: transparent;
+  color: #111;
+}
+.oe-store .head-search-bar > button {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f1f2f6;
+  color: #374151;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .oe-store .brand-logo {
   grid-area: 1 / 1;
   max-width: 100%;
@@ -1891,21 +1974,43 @@
     transform: translateY(-105%);
   }
 
+  /* Barra: [☰] [logo] [🔍] [🛒] — el logo ocupa el espacio sobrante */
   .oe-store .sidebar-head {
     position: relative;
-    justify-content: center;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 8px;
     margin: 0 -18px;
     border-radius: 0;
-    padding: 0 64px;
+    padding: 0 12px;
+    min-height: 64px;
   }
 
   .oe-store .brand {
+    flex: 1 1 auto;
     width: auto;
     height: auto;
+    min-width: 0;
     min-height: 0;
-    padding: 12px 0;
+    padding: 0;
     margin-bottom: 0;
     overflow: visible;
+    justify-items: start;
+  }
+
+  /* Lupa y carrito visibles solo aquí */
+  .oe-store .head-action {
+    display: flex;
+  }
+  .oe-store .head-search-bar {
+    display: flex;
+  }
+
+  /* Se ocultan los duplicados del hero: el buscador y el carrito
+     ya viven en la barra superior en esta resolución. */
+  .oe-store .top-actions .search-box,
+  .oe-store .top-actions .icon-button.dark {
+    display: none !important;
   }
 
   /* El logo lleva alto FIJO en px, no en %.
@@ -1917,8 +2022,8 @@
   .oe-store.nav-collapsed .brand-logo.full {
     display: block;
     width: auto;
-    height: 38px;
-    max-width: 220px;
+    height: 34px;
+    max-width: 100%;
     max-height: none;
     opacity: 1;
     transform: none;
@@ -1929,13 +2034,14 @@
     display: none;
   }
 
-  /* Hamburguesa a la izquierda, logo centrado */
+  /* Hamburguesa: primera en la fila, en flujo normal */
   .oe-store .nav-burger {
     display: flex;
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
+    position: static;
+    transform: none;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
   }
 
   .oe-store .nav-list {

@@ -132,6 +132,7 @@ export default function Storefront() {
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [headerHidden, setHeaderHidden] = useState(false)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [topPeriod, setTopPeriod] = useState<'nuevo' | 'ofertas'>('nuevo')
   const [searchValue, setSearchValue] = useState('')
@@ -1132,10 +1133,6 @@ export default function Storefront() {
     <div className={`oe-store${navCollapsed ? ' nav-collapsed' : ''}`} data-view={view}>
       <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}${headerHidden ? ' nav-hidden' : ''}`} aria-label="Navegacion principal">
         <div className="sidebar-head">
-          <a className="brand" href="#" aria-label={navCollapsed ? 'Desplegar navegacion' : 'Contraer navegacion'} aria-expanded={!navCollapsed} onClick={toggleBrand}>
-            <img className="brand-logo full" src="/storefront/logo.svg" alt="OrderExpress" />
-            <img className="brand-logo mark" src="/storefront/monograma.svg" alt="OrderExpress" />
-          </a>
           <button
             type="button"
             className="nav-burger"
@@ -1145,6 +1142,42 @@ export default function Storefront() {
           >
             <span /><span /><span />
           </button>
+
+          <a className="brand" href="#" aria-label={navCollapsed ? 'Desplegar navegacion' : 'Contraer navegacion'} aria-expanded={!navCollapsed} onClick={toggleBrand}>
+            <img className="brand-logo full" src="/storefront/logo.svg" alt="OrderExpress" />
+            <img className="brand-logo mark" src="/storefront/monograma.svg" alt="OrderExpress" />
+          </a>
+
+          {/* Acciones de la barra — solo visibles en móvil (ver storefront.css).
+              El buscador se colapsa en una lupa para no comerse el logo. */}
+          <button type="button" className="head-action head-search" aria-label="Buscar"
+            onClick={() => setMobileSearchOpen(true)}>
+            <Ic n="search" />
+          </button>
+
+          <button type="button" className="head-action head-cart" aria-label="Carrito" onClick={openCart}>
+            <Ic n="shopping-cart" />
+            {cartCount > 0 && <span className="head-cart-badge">{cartCount}</span>}
+          </button>
+
+          {/* Buscador desplegado: ocupa toda la barra */}
+          {mobileSearchOpen && (
+            <form className="head-search-bar" role="search"
+              onSubmit={(e) => { onSearchSubmit(e); setMobileSearchOpen(false) }}>
+              <Ic n="search" />
+              <input
+                type="search"
+                autoFocus
+                placeholder="Buscar productos"
+                aria-label="Buscar productos"
+                value={searchValue}
+                onChange={(e) => onSearchChange(e.target.value)}
+                autoComplete="off"
+              />
+              <button type="button" aria-label="Cerrar busqueda"
+                onClick={() => { setMobileSearchOpen(false); onSearchChange('') }}>×</button>
+            </form>
+          )}
         </div>
 
         <nav className="nav-list">

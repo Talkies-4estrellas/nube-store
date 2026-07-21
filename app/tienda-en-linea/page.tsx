@@ -60,9 +60,15 @@ export default function TiendaEnLineaPage() {
     return () => ro.disconnect()
   }, [])
 
-  // Viewport simulado: PC (escritorio) o Móvil (teléfono centrado)
+  // Viewport simulado: PC (escritorio) o Móvil (teléfono centrado).
+  //
+  // OJO con el ancho de PC: el storefront cambia a diseño móvil con
+  // `@media (max-width: 1180px)`, y max-width es INCLUSIVO. Simular
+  // exactamente 1180 caía dentro del rango móvil y la vista previa de PC
+  // mostraba la barra con hamburguesa en lugar del sidebar de escritorio.
+  // Debe quedar por encima del breakpoint.
   const conf = vista === 'pc'
-    ? { vp: 1180, scale: PREVIEW_W / 1180 }              // escritorio: llena el panel
+    ? { vp: 1280, scale: PREVIEW_W / 1280 }              // escritorio real (> 1180)
     : { vp: 430,  scale: Math.min(0.98, PREVIEW_W / 430) } // móvil: nunca más ancho que el panel
   const renderedW = conf.vp * conf.scale
   const previewLeft = Math.max(0, (PREVIEW_W - renderedW) / 2)
