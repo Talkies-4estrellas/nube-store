@@ -1974,6 +1974,17 @@
     transform: translateY(-105%);
   }
 
+  /* Con el menú cerrado solo debe verse la cabecera blanca.
+     El fondo azul del sidebar y su relleno inferior asomaban como una
+     franja bajo el logo; se neutralizan hasta que el menú se abre. */
+  .oe-store .sidebar:not(.mobile-open) {
+    padding-bottom: 0;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
   /* Barra: [☰] [logo] [🔍] [🛒] — el logo ocupa el espacio sobrante */
   .oe-store .sidebar-head {
     position: relative;

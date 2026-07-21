@@ -122,6 +122,21 @@ body {
   .prov-steps {
     display: none !important;
   }
+
+  /* Al ocultarse el stepper, el `justify-content: space-between` del header
+     empujaba el título al extremo derecho. Se alinea junto a la hamburguesa. */
+  .prov-header {
+    justify-content: flex-start !important;
+    gap: 4px;
+  }
+  .prov-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 /* ============================================================
