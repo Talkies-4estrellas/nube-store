@@ -33,6 +33,7 @@ const ALL_SECTIONS: NavSection[] = [
   },
 ]
 
+
 const NAVY = '#252855'
 const PINK = '#e7226d'
 

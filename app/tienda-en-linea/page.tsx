@@ -40,7 +40,13 @@ export default function TiendaEnLineaPage() {
   const [saved, setSaved] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [mostrarMasTemas, setMostrarMasTemas] = useState(false)
+  const [vista, setVista] = useState<'pc' | 'movil'>('pc')
   const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // Viewport simulado para la vista previa: PC (1280px) o Móvil (430px)
+  const PREVIEW_W = 420
+  const vp = vista === 'pc' ? 1280 : 430
+  const previewScale = PREVIEW_W / vp
 
   useEffect(() => {
     supabase.from('config_storefront').select('nombre_tienda,color_acento').eq('id', 1).single()
@@ -64,12 +70,14 @@ export default function TiendaEnLineaPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 300px', gap: 24, alignItems: 'start' }}>
-      <SubNav />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 24, alignItems: 'start' }}>
 
       {/* Contenido */}
       <div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#111', marginBottom: 20 }}>Diseño</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+          <SubNav />
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: '#111', margin: 0 }}>Diseño</h1>
+        </div>
 
         {/* Vista previa del tema */}
         <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 16 }}>
@@ -182,13 +190,27 @@ export default function TiendaEnLineaPage() {
         <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #f3f4f6' }}>
             <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>Vista previa</p>
-            <button onClick={() => iframeRef.current?.contentWindow?.location.reload()}
-              style={{ background: 'none', border: 'none', fontSize: 12, color: '#0049ff', fontWeight: 600, cursor: 'pointer' }}>
-              ↺ Recargar
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* Switch PC / Móvil */}
+              <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 8, padding: 2 }}>
+                {([['pc', '🖥️ PC'], ['movil', '📱 Móvil']] as const).map(([v, label]) => (
+                  <button key={v} onClick={() => setVista(v)}
+                    style={{ border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      background: vista === v ? '#fff' : 'transparent',
+                      color: vista === v ? '#111' : '#9ca3af',
+                      boxShadow: vista === v ? '0 1px 2px rgba(0,0,0,0.12)' : 'none' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => iframeRef.current?.contentWindow?.location.reload()}
+                style={{ background: 'none', border: 'none', fontSize: 12, color: '#0049ff', fontWeight: 600, cursor: 'pointer' }}>
+                ↺ Recargar
+              </button>
+            </div>
           </div>
-          <div style={{ position: 'relative', height: 480, background: '#f3f4f6' }}>
-            <iframe ref={iframeRef} src="/" style={{ width: '182%', height: '182%', border: 'none', transformOrigin: 'top left', transform: 'scale(0.55)' }} />
+          <div style={{ position: 'relative', height: 640, background: '#f3f4f6', overflow: 'hidden' }}>
+            <iframe ref={iframeRef} src="/" style={{ width: vp, height: 640 / previewScale, border: 'none', transformOrigin: 'top left', transform: `scale(${previewScale})` }} />
           </div>
           <div style={{ padding: '10px 16px' }}>
             <a href="/" target="_blank" rel="noopener noreferrer"

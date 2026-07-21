@@ -47,11 +47,13 @@ export default function PaginasPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 260px', gap: 24, alignItems: 'start' }}>
-      <SubNav />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 24, alignItems: 'start' }}>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Páginas</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <SubNav />
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Páginas</h1>
+        </div>
 
         {/* Banner principal */}
         <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>

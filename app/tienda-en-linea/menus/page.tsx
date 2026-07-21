@@ -42,11 +42,13 @@ export default function MenusPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 260px', gap: 24, alignItems: 'start' }}>
-      <SubNav />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 24, alignItems: 'start' }}>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Menús</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <SubNav />
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Menús</h1>
+        </div>
         <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Activa o desactiva las secciones del menú lateral de la tienda. <strong>Inicio</strong> siempre es visible.</p>
 
         <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>

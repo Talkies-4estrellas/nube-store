@@ -35,11 +35,13 @@ export default function FiltrosPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 260px', gap: 24, alignItems: 'start' }}>
-      <SubNav />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 24, alignItems: 'start' }}>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Filtros</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <SubNav />
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Filtros</h1>
+        </div>
         <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Los dos botones de acceso rápido que aparecen en el topbar de la tienda junto al buscador.</p>
 
         {/* Preview topbar */}
