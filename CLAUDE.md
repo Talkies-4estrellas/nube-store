@@ -90,6 +90,13 @@ NEXT_PUBLIC_SITE_URL=https://...    # opcional; si falta se deduce del request
 La pantalla *Data API → API URL* del dashboard muestra el endpoint REST (para curl/Postman),
 no el valor que espera el SDK — el cliente le agrega `/rest/v1/` por su cuenta.
 
+**`lib/supabase.ts` valida la URL antes de usarla** (agregado 21/07/2026, tras un
+`Invalid supabaseUrl` que tumbó un build en Vercel por pegar el valor con el
+nombre de la variable incluido). Si `NEXT_PUBLIC_SUPABASE_URL` viene vacía,
+mal formada o sin protocolo http(s), el cliente cae al mock (`supabaseConectado
+= false`, listas vacías) en lugar de romper el build, y deja un `console.error`
+explicando exactamente qué variable falta. Mismo chequeo en `lib/supabase-server.ts`.
+
 ---
 
 ## Backend (Route Handlers) — agregado 21/07/2026
@@ -281,6 +288,7 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Validar la firma `x-signature` del webhook de Mercado Pago (antes de producción)
 - [ ] Guardar `payment_id` de MP en `ventas` para conciliación
 - [ ] Script para copiar imágenes del bucket entre proyectos de Supabase (no van en el dump SQL)
+- [ ] Vista previa de Tienda en línea: el iframe tiene `src="/"` fijo — si se navega dentro (ej. clic en "Soy proveedor"), se queda ahí y el switch PC/Móvil no vuelve sola al inicio. Falta botón "🏠 Inicio" o reset automático al cambiar de tab
 - [ ] Ejecutar en Supabase: `ALTER TABLE solicitudes_productos ADD COLUMN IF NOT EXISTS detalles jsonb DEFAULT NULL;`
 - [ ] Ejecutar `database/auth.sql` en Supabase SQL Editor (Step 1 del setup auth)
 - [ ] Crear usuario admin en Supabase Authentication y hacer INSERT en user_roles (Steps 2-3)
@@ -352,6 +360,18 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Descarga de imágenes por link → se alojan en el bucket propio (`app/api/productos/importar-imagen`)
 - [x] **Pasarela de pagos Mercado Pago** (Checkout Pro): primer backend real del proyecto
 - [x] Esquema consolidado en `Doc/database/schema_completo.sql` (base + 7 migraciones + columnas sin migración)
+
+## Completado (21/07/2026) — auditoría y arreglos responsivos móvil
+- [x] **`lib/supabase.ts` / `lib/supabase-server.ts`**: validación de URL con `new URL()` antes de instanciar el cliente; ya no truena el build de Vercel si la variable viene mal pegada (con comillas o el `NOMBRE=` incluido). Mensajes de `console.error` explícitos indicando qué falta
+- [x] **Auditoría de desbordamiento horizontal en las 12 pantallas del panel** (medido con scripts inyectados que comparan `scrollWidth` vs `clientWidth` a 375px, no a ojo). 5 pantallas rotas encontradas y corregidas: `/ventas`, `/productos`, `/tienda-en-linea`, `/configuracion`, `/proveedores`
+- [x] Causas raíz identificadas y documentadas con comentarios en el CSS: `1fr` no se encoge (usar `minmax(0,1fr)`), `align-items:flex-start` en `flex-direction:column` dimensiona por contenido en vez de estirar, rejillas de ancho fijo sin colapsar en móvil, `min-width:auto` heredado en flex
+- [x] Nuevas clases responsivas: `.te-layout` (tienda en línea), `.config-layout` (configuración), `.page-header`/`.page-header-actions` (botones de header que envuelven en móvil)
+- [x] `Doc/migracion-supabase.md` + `scripts/exportar-datos.ps1`: guía paso a paso y script PowerShell para migrar datos entre cuentas de Supabase (dump de esquema y datos vía CLI, con `session_replication_role=replica` para no duplicar el descuento de stock)
+- [x] Storefront móvil: cabecera rediseñada a `[☰] [logo completo] [🔍 lupa] [🛒 carrito]` — la lupa despliega el buscador a ancho completo con autofoco; se ocultan los duplicados del buscador/carrito que vivían en el hero
+- [x] Storefront móvil: franja azul del sidebar ya no asoma bajo la cabecera cuando el menú está cerrado (fondo/padding se neutralizan con `:not(.mobile-open)`)
+- [x] **Fix breakpoint vista previa**: el simulador PC/Móvil de Tienda en línea usaba `vp: 1180`, exactamente el breakpoint móvil del storefront (`max-width: 1180px`, inclusivo) — la vista "PC" caía en rango móvil. Subido a `1280`
+- [x] Vista previa PC/Móvil con proporciones diferenciadas: PC ahora es un rectángulo horizontal tipo monitor (~16:10, alto = `PREVIEW_W * 0.62` acotado 260–420px) en vez de un recuadro alto y angosto; Móvil sin cambios (520×640)
+- [x] `/proveedores`: eliminada la barra de tabs horizontal duplicada en móvil (ya existía el mismo menú en la hamburguesa); "Mis enviados" renombrado a **"Mis productos"** en menú y título; contenido con `maxWidth: 1100` para no estirarse en pantallas anchas; título del header realineado a la izquierda (antes se iba al extremo derecho al ocultarse el stepper)
 
 ## Completado (16/07/2026)
 - [x] ProductoModal: rediseño "Datos adicionales" — paleta visual 12 colores con swatches, chips rosas para tallas (sin grupos predefinidos), variantes en tabla con botones −/+ y totalizador, peso con etiqueta "g" flotante, fotos ilimitadas con zona drag-and-drop y selección múltiple, badge resumen en toggle colapsable

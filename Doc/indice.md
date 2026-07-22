@@ -192,6 +192,8 @@ Definidas en `.env.local` (local) y en el dashboard de Vercel (producción).
 | `Doc/plantilla-importacion-productos.csv` | Plantilla de 25 columnas lista para usar |
 | `Doc/database/schema_completo.sql` | **Esquema consolidado** — base + 7 migraciones. Para replicar en otra cuenta |
 | `Doc/database/migration_productos_ampliado.sql` | 15 columnas nuevas + recreación de la vista |
+| `Doc/migracion-supabase.md` | Guía paso a paso para migrar de una cuenta de Supabase a otra (datos + esquema + imágenes) |
+| `scripts/exportar-datos.ps1` | Script PowerShell: exporta esquema y datos de un proyecto Supabase vía `supabase db dump` |
 
 ---
 
