@@ -46,6 +46,14 @@ insert into categorias (nombre) values
   ('Keyboards'), ('Gaming'), ('Audio'), ('Smart'), ('Accesorios')
 on conflict do nothing;
 
+-- Lectura publica (storefront la usa para el listado de filtros por
+-- categoria). Existia en produccion sin politica RLS explicita en ningun
+-- archivo del repo -- se detecto al migrar porque el storefront de la
+-- base nueva mostraba "General" en vez del nombre real de categoria.
+alter table categorias enable row level security;
+drop policy if exists "categorias select publico" on categorias;
+create policy "categorias select publico" on categorias for select using (true);
+
 
 -- ============================================================
 --  TABLA: productos  (con TODAS las columnas actuales)
@@ -343,10 +351,16 @@ alter table user_roles  enable row level security;
 drop policy if exists "leer rol propio" on user_roles;
 create policy "leer rol propio" on user_roles for select using (auth.uid() = user_id);
 
+-- OJO: NO uses `exists (select 1 from user_roles where ...)` aqui.
+-- Una politica en user_roles que vuelve a consultar user_roles dispara
+-- "infinite recursion detected in policy for relation user_roles" en
+-- cuanto una fila no coincide con "leer rol propio" (ej. al listar TODOS
+-- los usuarios en Configuracion). get_my_role() es SECURITY DEFINER y
+-- evita la auto-referencia.
 drop policy if exists "admin gestiona roles" on user_roles;
 create policy "admin gestiona roles" on user_roles for all
-  using      (exists (select 1 from user_roles where user_id = auth.uid() and role = 'admin'))
-  with check (exists (select 1 from user_roles where user_id = auth.uid() and role = 'admin'));
+  using      (get_my_role() = 'admin')
+  with check (get_my_role() = 'admin');
 
 -- productos
 drop policy if exists "productos select publico" on productos;
@@ -553,6 +567,11 @@ create table if not exists solicitudes_productos (
 alter table solicitudes_productos add column if not exists imagen_url text;
 alter table solicitudes_productos add column if not exists detalles   jsonb default null;
 alter table solicitudes_productos add column if not exists updated_at timestamptz default now();
+
+-- Notas internas del admin al aprobar/rechazar. Existia en la base de
+-- produccion sin archivo de migracion (agregada a mano); no la usa
+-- ninguna pantalla del panel actual, pero el dato historico si la trae.
+alter table solicitudes_productos add column if not exists notas_admin text;
 
 drop trigger if exists trg_solicitudes_updated_at on solicitudes_productos;
 create trigger trg_solicitudes_updated_at
