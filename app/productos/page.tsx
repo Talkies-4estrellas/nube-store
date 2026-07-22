@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import ProductoModal from '@/components/ProductoModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import ImportCSVModal from '@/components/ImportCSVModal'
+import ImportCSVModal, { type ProductoExistente } from '@/components/ImportCSVModal'
 import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
 import { toCSV, downloadCSV } from '@/lib/csv'
@@ -847,7 +847,7 @@ export default function ProductosPage() {
 
       {showImport && (
         <ImportCSVModal
-          existingSkus={new Set(products.map(p => p.sku))}
+          existingProducts={products as unknown as ProductoExistente[]}
           onClose={() => setShowImport(false)}
           onDone={fetchProducts}
         />

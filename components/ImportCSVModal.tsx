@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, type DragEvent } from 'react'
 import { supabase } from '@/lib/supabase'
 import { parseCSV, readFileSmart, cleanNumber, stripHtml } from '@/lib/csv'
 
@@ -10,10 +10,76 @@ const GREEN = '#059669'
 const RED = '#dc2626'
 const AMBER = '#d97706'
 
+/** Forma mínima de un producto ya guardado, tal como llega de `productos_con_estado`. */
+export type ProductoExistente = {
+  sku: string
+  nombre?: string; descripcion?: string | null; categoria?: string | null
+  precio?: number | string; stock?: number | string
+  precio_promocional?: number | string | null; costo?: number | string | null
+  marca?: string | null; codigo_barras?: string | null; mpn?: string | null
+  slug?: string | null; tags?: string | null; seo_titulo?: string | null; seo_descripcion?: string | null
+  peso_kg?: number | string | null; alto_cm?: number | string | null
+  ancho_cm?: number | string | null; profundidad_cm?: number | string | null
+  ubicacion?: string | null; activo?: boolean; envio_gratis?: boolean
+  detalles?: unknown
+}
+
 type Props = {
   onClose: () => void
   onDone: () => void
-  existingSkus: Set<string>
+  existingProducts: ProductoExistente[]
+}
+
+const numOrNull = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return isNaN(n) ? null : n
+}
+
+/**
+ * Compara una fila del CSV contra el producto ya guardado con el mismo SKU.
+ * Solo considera campos que el CSV realmente escribiría (los opcionales solo
+ * cuentan si vienen no-vacíos, igual que hace el armado del payload). No
+ * compara imagen_url: al descargar la imagen siempre se genera una URL de
+ * Storage nueva, así que compararla siempre marcaría "cambio" aunque la foto
+ * sea la misma.
+ */
+function sinCambiosReales(f: Omit<Fila, 'valido' | 'motivo' | 'accion' | 'sinCambios'>, ex: ProductoExistente): boolean {
+  const numsIguales =
+    numOrNull(f.precio) === numOrNull(ex.precio) &&
+    f.stock === (numOrNull(ex.stock) ?? 0) &&
+    (f.precio_promocional === null || numOrNull(f.precio_promocional) === numOrNull(ex.precio_promocional)) &&
+    (f.costo === null || numOrNull(f.costo) === numOrNull(ex.costo)) &&
+    (f.peso_kg === null || numOrNull(f.peso_kg) === numOrNull(ex.peso_kg)) &&
+    (f.alto_cm === null || numOrNull(f.alto_cm) === numOrNull(ex.alto_cm)) &&
+    (f.ancho_cm === null || numOrNull(f.ancho_cm) === numOrNull(ex.ancho_cm)) &&
+    (f.profundidad_cm === null || numOrNull(f.profundidad_cm) === numOrNull(ex.profundidad_cm))
+
+  const opcionalIgual = (valor: string, existente: string | null | undefined) =>
+    !valor || valor === String(existente ?? '')
+
+  const textosIguales =
+    f.nombre.trim() === String(ex.nombre ?? '').trim() &&
+    f.descripcion.trim() === String(ex.descripcion ?? '').trim() &&
+    f.categoria === String(ex.categoria ?? '') &&
+    opcionalIgual(f.marca, ex.marca) &&
+    opcionalIgual(f.codigo_barras, ex.codigo_barras) &&
+    opcionalIgual(f.mpn, ex.mpn) &&
+    opcionalIgual(f.slug, ex.slug) &&
+    opcionalIgual(f.tags, ex.tags) &&
+    opcionalIgual(f.seo_titulo, ex.seo_titulo) &&
+    opcionalIgual(f.seo_descripcion, ex.seo_descripcion) &&
+    opcionalIgual(f.ubicacion, ex.ubicacion)
+
+  const boolsIguales = f.activo === Boolean(ex.activo ?? true) && f.envio_gratis === Boolean(ex.envio_gratis ?? false)
+
+  let detallesIguales = true
+  if (f.detalles) {
+    try { detallesIguales = JSON.stringify(JSON.parse(f.detalles)) === JSON.stringify(ex.detalles ?? null) }
+    catch { detallesIguales = true } // JSON invalido: no se escribe, no cuenta como cambio
+  }
+
+  return numsIguales && textosIguales && boolsIguales && detallesIguales
 }
 
 /**
@@ -81,32 +147,27 @@ type Fila = {
   peso_kg: number | null; alto_cm: number | null; ancho_cm: number | null; profundidad_cm: number | null
   ubicacion: string; proveedor: string; activo: boolean; envio_gratis: boolean
   detalles: string
-  valido: boolean; motivo: string; accion: 'nuevo' | 'actualizar'
+  valido: boolean; motivo: string; accion: 'nuevo' | 'actualizar'; sinCambios: boolean
 }
 
-export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props) {
+export default function ImportCSVModal({ onClose, onDone, existingProducts }: Props) {
+  const mapaExistente = new Map(existingProducts.map(p => [String(p.sku), p]))
   const [filas, setFilas] = useState<Fila[] | null>(null)
   const [nombreArchivo, setNombreArchivo] = useState('')
   const [bajarImagenes, setBajarImagenes] = useState(true)
   const [importando, setImportando] = useState(false)
   const [progreso, setProgreso] = useState<{ fase: string; hecho: number; total: number } | null>(null)
-  const [resultado, setResultado] = useState<{ creados: number; actualizados: number; errores: number; imgFallidas: number } | null>(null)
+  const [resultado, setResultado] = useState<{ creados: number; actualizados: number; sinCambios: number; errores: number; imgFallidas: number } | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
+  const [arrastrando, setArrastrando] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   function analizar(rows: Record<string, string>[]): Fila[] {
     return rows.map(r => {
-      const sku = pick(r, 'sku')
-      const nombre = pick(r, 'nombre')
-      const precio = cleanNumber(pick(r, 'precio'))
-
-      const faltantes: string[] = []
-      if (!sku) faltantes.push('SKU')
-      if (!nombre) faltantes.push('nombre')
-      if (precio === null || precio < 0) faltantes.push('precio')
-
-      return {
-        sku, nombre, precio,
+      const campos = {
+        sku: pick(r, 'sku'),
+        nombre: pick(r, 'nombre'),
+        precio: cleanNumber(pick(r, 'precio')),
         precio_promocional: cleanNumber(pick(r, 'precio_promocional')),
         costo: cleanNumber(pick(r, 'costo')),
         stock: Math.max(0, Math.round(cleanNumber(pick(r, 'stock')) ?? 0)),
@@ -129,9 +190,22 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
         activo: esVerdadero(pick(r, 'activo'), true),
         envio_gratis: esVerdadero(pick(r, 'envio_gratis'), false),
         detalles: pick(r, 'detalles'),
+      }
+
+      const faltantes: string[] = []
+      if (!campos.sku) faltantes.push('SKU')
+      if (!campos.nombre) faltantes.push('nombre')
+      if (campos.precio === null || campos.precio < 0) faltantes.push('precio')
+
+      const existente = mapaExistente.get(campos.sku)
+      const accion: 'nuevo' | 'actualizar' = existente ? 'actualizar' : 'nuevo'
+      const sinCambios = existente ? sinCambiosReales(campos, existente) : false
+
+      return {
+        ...campos,
         valido: faltantes.length === 0,
         motivo: faltantes.length ? `Falta: ${faltantes.join(', ')}` : '',
-        accion: existingSkus.has(sku) ? 'actualizar' : 'nuevo',
+        accion, sinCambios,
       }
     })
   }
@@ -148,6 +222,18 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
       setErrorMsg('No se pudo leer el archivo. Verifica que sea un CSV válido.')
       setFilas(null)
     }
+  }
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setArrastrando(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    if (!/\.csv$/i.test(file.name) && file.type !== 'text/csv') {
+      setErrorMsg('Arrastra un archivo .csv — ese no lo es.')
+      return
+    }
+    onFile(file)
   }
 
   /** Descarga imágenes por lotes para no saturar el navegador ni el servidor. */
@@ -180,14 +266,18 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
   async function importar() {
     if (!filas) return
     const validas = filas.filter(f => f.valido)
-    if (validas.length === 0) return
+    // Las filas "sin cambios" no se escriben: nada en la fila difiere de
+    // lo que ya está guardado, así que no vale la pena tocar la BD ni
+    // gastar tiempo descargando su imagen otra vez.
+    const aEscribir = validas.filter(f => !f.sinCambios)
+    if (aEscribir.length === 0) return
     setImportando(true)
     setErrorMsg('')
 
     try {
       // 1. Categorías: buscar o crear
       setProgreso({ fase: 'Preparando categorías', hecho: 0, total: 1 })
-      const nombresCat = Array.from(new Set(validas.map(f => f.categoria).filter(Boolean)))
+      const nombresCat = Array.from(new Set(aEscribir.map(f => f.categoria).filter(Boolean)))
       const mapaCat = new Map<string, number>()
       if (nombresCat.length) {
         const { data: existentes } = await supabase.from('categorias').select('id, nombre').in('nombre', nombresCat)
@@ -204,14 +294,14 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
       let mapaImg = new Map<string, string>()
       let imgFallidas = 0
       if (bajarImagenes) {
-        const r = await resolverImagenes(validas)
+        const r = await resolverImagenes(aEscribir)
         mapaImg = r.mapa
         imgFallidas = r.fallidas
       }
 
       // 3. Construir payloads
-      setProgreso({ fase: 'Guardando productos', hecho: 0, total: validas.length })
-      const payloads = validas.map(f => {
+      setProgreso({ fase: 'Guardando productos', hecho: 0, total: aEscribir.length })
+      const payloads = aEscribir.map(f => {
         const p: Record<string, unknown> = {
           sku: f.sku,
           nombre: f.nombre,
@@ -259,10 +349,11 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
         setProgreso({ fase: 'Guardando productos', hecho: Math.min(i + LOTE, payloads.length), total: payloads.length })
       }
 
-      const actualizados = validas.filter(f => f.accion === 'actualizar').length
+      const actualizados = aEscribir.filter(f => f.accion === 'actualizar').length
       setResultado({
-        creados: validas.length - actualizados,
+        creados: aEscribir.length - actualizados,
         actualizados,
+        sinCambios: validas.length - aEscribir.length,
         errores: filas.length - validas.length,
         imgFallidas,
       })
@@ -278,8 +369,10 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
   const validas = filas?.filter(f => f.valido).length ?? 0
   const invalidas = filas ? filas.length - validas : 0
   const nuevos = filas?.filter(f => f.valido && f.accion === 'nuevo').length ?? 0
-  const actualizar = filas?.filter(f => f.valido && f.accion === 'actualizar').length ?? 0
-  const conImagen = filas?.filter(f => f.valido && /^https?:\/\//i.test(f.imagen_url)).length ?? 0
+  const actualizar = filas?.filter(f => f.valido && f.accion === 'actualizar' && !f.sinCambios).length ?? 0
+  const sinCambiosCount = filas?.filter(f => f.valido && f.sinCambios).length ?? 0
+  const aEscribirCount = nuevos + actualizar
+  const conImagen = filas?.filter(f => f.valido && !f.sinCambios && /^https?:\/\//i.test(f.imagen_url)).length ?? 0
 
   return (
     <div onClick={() => !importando && onClose()} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -298,6 +391,7 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
                 <span style={{ background: '#dcfce7', color: GREEN, padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: 13 }}>{resultado.creados} creados</span>
                 <span style={{ background: '#dbeafe', color: BLUE, padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: 13 }}>{resultado.actualizados} actualizados</span>
+                {resultado.sinCambios > 0 && <span style={{ background: '#f3f4f6', color: '#6b7280', padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: 13 }}>{resultado.sinCambios} sin cambios</span>}
                 {resultado.errores > 0 && <span style={{ background: '#fef3c7', color: AMBER, padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: 13 }}>{resultado.errores} omitidos</span>}
                 {resultado.imgFallidas > 0 && <span style={{ background: '#fef3c7', color: AMBER, padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: 13 }}>{resultado.imgFallidas} imágenes fallaron</span>}
               </div>
@@ -310,10 +404,20 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
             <>
               <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = '' }} />
-              <div onClick={() => fileRef.current?.click()}
-                style={{ border: '2px dashed #d1d5db', borderRadius: 12, padding: '40px 20px', textAlign: 'center', cursor: 'pointer', background: '#fafafa' }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
-                <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: NAVY }}>Selecciona un archivo CSV</p>
+              <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setArrastrando(true) }}
+                onDragLeave={() => setArrastrando(false)}
+                onDrop={onDrop}
+                style={{
+                  border: `2px dashed ${arrastrando ? BLUE : '#d1d5db'}`, borderRadius: 12, padding: '40px 20px',
+                  textAlign: 'center', cursor: 'pointer', background: arrastrando ? `${BLUE}0d` : '#fafafa',
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{arrastrando ? '📥' : '📄'}</div>
+                <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: arrastrando ? BLUE : NAVY }}>
+                  {arrastrando ? 'Suelta el archivo aquí' : 'Arrastra un archivo CSV o haz clic para elegirlo'}
+                </p>
                 <p style={{ margin: 0, fontSize: 13, color: '#9ca3af' }}>Debe incluir al menos: <strong>sku, nombre, precio</strong></p>
               </div>
               <div style={{ marginTop: 16, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px', fontSize: 12, color: '#1e40af', lineHeight: 1.6 }}>
@@ -328,6 +432,7 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
                 <span style={{ fontSize: 13, color: '#6b7280' }}>📄 {nombreArchivo}</span>
                 <span style={{ marginLeft: 'auto', background: '#dcfce7', color: GREEN, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{nuevos} nuevos</span>
                 <span style={{ background: '#dbeafe', color: BLUE, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{actualizar} actualizar</span>
+                {sinCambiosCount > 0 && <span style={{ background: '#f3f4f6', color: '#6b7280', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{sinCambiosCount} sin cambios</span>}
                 {invalidas > 0 && <span style={{ background: '#fef3c7', color: AMBER, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{invalidas} con problemas</span>}
               </div>
 
@@ -358,7 +463,7 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
                   </thead>
                   <tbody>
                     {filas.slice(0, 100).map((f, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid #f3f4f6', background: f.valido ? '#fff' : '#fffbeb' }}>
+                      <tr key={i} style={{ borderTop: '1px solid #f3f4f6', background: !f.valido ? '#fffbeb' : f.sinCambios ? '#fafafa' : '#fff' }}>
                         <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: '#374151' }}>{f.sku || '—'}</td>
                         <td style={{ padding: '7px 12px', color: '#374151', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nombre || '—'}</td>
                         <td style={{ padding: '7px 12px', textAlign: 'right', color: '#374151' }}>{f.precio !== null ? `$${f.precio}` : '—'}</td>
@@ -367,9 +472,11 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
                         <td style={{ padding: '7px 12px' }}>
                           {!f.valido
                             ? <span style={{ color: AMBER, fontWeight: 700 }}>⚠️ {f.motivo}</span>
-                            : f.accion === 'nuevo'
-                              ? <span style={{ color: GREEN, fontWeight: 700 }}>Nuevo</span>
-                              : <span style={{ color: BLUE, fontWeight: 700 }}>Actualizar</span>}
+                            : f.sinCambios
+                              ? <span style={{ color: '#9ca3af', fontWeight: 700 }} title="Idéntico a lo ya guardado, no se escribe">Sin cambios</span>
+                              : f.accion === 'nuevo'
+                                ? <span style={{ color: GREEN, fontWeight: 700 }}>Nuevo</span>
+                                : <span style={{ color: BLUE, fontWeight: 700 }}>Actualizar</span>}
                         </td>
                       </tr>
                     ))}
@@ -398,9 +505,13 @@ export default function ImportCSVModal({ onClose, onDone, existingSkus }: Props)
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '16px 24px', borderTop: '1px solid #f3f4f6', background: '#fafafa' }}>
             <button onClick={() => { setFilas(null); setNombreArchivo('') }} disabled={importando}
               style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 13, fontWeight: 600, cursor: importando ? 'not-allowed' : 'pointer' }}>← Elegir otro archivo</button>
-            <button onClick={importar} disabled={importando || validas === 0}
-              style={{ background: validas === 0 ? '#93c5fd' : BLUE, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: importando || validas === 0 ? 'not-allowed' : 'pointer' }}>
-              {importando ? 'Importando...' : `Importar ${validas} producto${validas !== 1 ? 's' : ''}`}
+            <button onClick={importar} disabled={importando || aEscribirCount === 0}
+              style={{ background: aEscribirCount === 0 ? '#93c5fd' : BLUE, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: importando || aEscribirCount === 0 ? 'not-allowed' : 'pointer' }}>
+              {importando
+                ? 'Importando...'
+                : aEscribirCount === 0
+                  ? (validas > 0 ? 'Nada que actualizar' : 'Sin filas válidas')
+                  : `Importar ${aEscribirCount} producto${aEscribirCount !== 1 ? 's' : ''}`}
             </button>
           </div>
         )}
