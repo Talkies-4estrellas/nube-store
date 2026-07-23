@@ -70,7 +70,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 86px;
+  min-height: 96px;
   margin: 0 -16px;
   padding: 0 18px;
   background: #fff;
@@ -82,7 +82,7 @@
   place-items: center;
   width: 100%;
   min-width: 0;
-  height: 86px;
+  height: 96px;
   padding: 14px 0;
   overflow: hidden;
   cursor: pointer;
@@ -208,7 +208,7 @@
 .oe-store .brand-logo {
   grid-area: 1 / 1;
   max-width: 100%;
-  max-height: 42px;
+  max-height: 60px;
   object-fit: contain;
   transition: opacity calc(var(--nav-dur) * 0.7) var(--nav-ease), transform var(--nav-dur) var(--nav-ease), max-height var(--nav-dur) var(--nav-ease);
 }
@@ -311,7 +311,7 @@
 
 .oe-store.nav-collapsed .sidebar-head {
   justify-content: center;
-  min-height: 76px;
+  min-height: 92px;
   margin: 0 -10px;
   padding: 0;
   border-radius: 999px;
@@ -330,8 +330,8 @@
 
 .oe-store.nav-collapsed .brand {
   width: 100%;
-  height: 76px;
-  padding: 16px;
+  height: 92px;
+  padding: 10px;
 }
 
 .oe-store.nav-collapsed .brand-logo.full {
@@ -342,7 +342,7 @@
 .oe-store.nav-collapsed .brand-logo.mark {
   opacity: 1;
   transform: scale(1);
-  max-height: 34px;
+  max-height: 60px;
 }
 
 .oe-store.nav-collapsed .nav-item {
@@ -2012,11 +2012,19 @@
     margin: 0 -18px;
     border-radius: 0;
     padding: 0 12px;
-    min-height: 64px;
+    min-height: 80px;
   }
 
+  /* Centrado respecto a TODA la barra (no solo el espacio libre entre
+     hamburguesa y los íconos de la derecha, que no es simétrico: la
+     hamburguesa sola pesa menos que lupa+carrito juntos). Se saca del
+     flujo flex y se centra con position:absolute sobre .sidebar-head
+     (que ya tiene position:relative arriba). */
   .oe-store .brand {
-    flex: 1 1 auto;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: auto;
     height: auto;
     min-width: 0;
@@ -2024,12 +2032,16 @@
     padding: 0;
     margin-bottom: 0;
     overflow: visible;
-    justify-items: start;
   }
 
-  /* Lupa y carrito visibles solo aquí */
+  /* Lupa y carrito visibles solo aquí. El primero empuja el grupo
+     lupa+carrito al extremo derecho (la hamburguesa queda a la
+     izquierda, el logo centrado de forma absoluta e independiente). */
   .oe-store .head-action {
     display: flex;
+  }
+  .oe-store .head-search {
+    margin-left: auto;
   }
   .oe-store .head-search-bar {
     display: flex;
@@ -2046,22 +2058,26 @@
      El SVG solo trae viewBox (sin width/height propios) y el contenedor
      está en width/height auto: un porcentaje no tendría contra qué
      resolverse y la imagen colapsaría a 0. Con el alto fijo, el ancho
-     se deriva de la proporción del viewBox (658.75 x 126.01 = 5.23:1). */
+     se deriva de la proporción del viewBox.
+     En móvil se usa el logo "mark" (monograma, viewBox 608x532 ~1.14:1)
+     en vez del "full" (viewBox 1177x532, con tagline debajo) porque no
+     entra bien en la barra angosta del header móvil. */
   .oe-store .brand-logo.full,
   .oe-store.nav-collapsed .brand-logo.full {
+    display: none;
+  }
+
+  .oe-store .brand-logo.mark,
+  .oe-store.nav-collapsed .brand-logo.mark {
     display: block;
     width: auto;
-    height: 34px;
+    height: 60px;
     max-width: 100%;
     max-height: none;
     opacity: 1;
     transform: none;
   }
 
-  .oe-store .brand-logo.mark,
-  .oe-store.nav-collapsed .brand-logo.mark {
-    display: none;
-  }
 
   /* Hamburguesa: primera en la fila, en flujo normal */
   .oe-store .nav-burger {
@@ -2163,14 +2179,16 @@
     padding: 14px 0;
   }
 
+  /* En móvil el logo siempre es el "mark" (ver arriba); estas reglas de
+     nav-collapsed son para el sidebar de escritorio y no deben pisarlo. */
   .oe-store.nav-collapsed .brand-logo.full {
-    opacity: 1;
-    transform: none;
+    display: none;
   }
 
   .oe-store.nav-collapsed .brand-logo.mark {
-    opacity: 0;
-    transform: scale(0.82);
+    display: block;
+    opacity: 1;
+    transform: none;
   }
 
   .oe-store.nav-collapsed .profile-card {

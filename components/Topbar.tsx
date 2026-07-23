@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -219,9 +218,6 @@ export default function Topbar() {
         </button>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {!isMobile && (
-          <Image src="/imagenes/logo-oe_1-png-300x49.avif" alt="Order Express" width={110} height={18} style={{ objectFit: 'contain' }} priority />
-        )}
         {user && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: isMobile ? 0 : 12, borderLeft: isMobile ? 'none' : '1px solid #e5e7eb' }}>
             <div title={user.nombre} style={{ width: 30, height: 30, background: '#252855', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>

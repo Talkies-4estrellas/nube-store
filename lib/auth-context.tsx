@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
-export type Role = 'admin' | 'vendedor' | 'bodega'
+export type Role = 'admin' | 'vendedor' | 'bodega' | 'proveedor' | 'basico'
 
 export type AuthUser = {
   id: string
@@ -13,18 +13,22 @@ export type AuthUser = {
   role: Role
 }
 
-// Rutas que cada rol puede ver en el panel admin
+// Rutas que cada rol puede ver
 export const ROLE_ROUTES: Record<Role, string[]> = {
-  admin:    ['/dashboard', '/ventas', '/productos', '/clientes', '/envio-nube', '/tienda-en-linea', '/punto-de-venta', '/configuracion'],
-  vendedor: ['/dashboard', '/ventas', '/clientes'],
-  bodega:   ['/productos', '/envio-nube'],
+  admin:     ['/dashboard', '/ventas', '/productos', '/clientes', '/envio-nube', '/tienda-en-linea', '/punto-de-venta', '/configuracion'],
+  vendedor:  ['/dashboard', '/ventas', '/clientes'],
+  bodega:    ['/productos', '/envio-nube'],
+  proveedor: ['/proveedores'],
+  basico:    ['/mi-cuenta'],
 }
 
 // Página de inicio por rol (post-login)
 export const ROLE_HOME: Record<Role, string> = {
-  admin:    '/dashboard',
-  vendedor: '/dashboard',
-  bodega:   '/productos',
+  admin:     '/dashboard',
+  vendedor:  '/dashboard',
+  bodega:    '/productos',
+  proveedor: '/proveedores',
+  basico:    '/mi-cuenta',
 }
 
 export function canAccess(role: Role | undefined, pathname: string): boolean {

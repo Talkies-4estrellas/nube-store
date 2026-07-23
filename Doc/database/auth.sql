@@ -1,16 +1,27 @@
 -- ============================================================
 --  ORDER EXPRESS — Autenticación y Roles
 --  Ejecutar en Supabase SQL Editor DESPUÉS del schema principal
+--
+--  NOTA 23/07/2026: las policies "select autenticado" de clientes/ventas/
+--  venta_items/envios de este archivo quedaron OBSOLETAS — dejaban ver todo
+--  a cualquier cuenta logueada, incluidas las de rol 'basico' (clientes
+--  reales). La versión correcta (staff vs "propio", con auth.jwt()->>'email')
+--  vive en schema_completo.sql, que es la fuente de verdad actual.
 -- ============================================================
 
 -- ---- 1. Tabla de roles ----
 create table if not exists user_roles (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid references auth.users(id) on delete cascade not null unique,
-  role       text not null check (role in ('admin', 'vendedor', 'bodega')),
+  role       text not null check (role in ('admin', 'vendedor', 'bodega', 'proveedor', 'basico')),
   nombre     text not null,
+  empresa    text,
+  telefono   text,
   created_at timestamptz default now()
 );
+-- Roles agregados 22/07/2026: 'proveedor' (panel /proveedores) y 'basico' (panel /mi-cuenta),
+-- para unificar en esta misma tabla la autenticación de proveedores y clientes,
+-- que antes vivían fuera de Supabase Auth (localStorage + tabla `registros`).
 
 alter table user_roles enable row level security;
 
@@ -168,10 +179,51 @@ insert into user_roles (user_id, role, nombre) values
 
 
 -- ================================================================
+--  11. AUTO-ALTA EN user_roles PARA SELF-SIGNUP (proveedor / basico)
+--  Agregado 23/07/2026. Usado por app/registro/page.tsx (supabase.auth.signUp).
+--  El rol se SANITIZA aquí: aunque el metadata del signUp venga manipulado
+--  desde el navegador, solo puede terminar en 'proveedor' o 'basico'. Nunca
+--  puede autoasignarse 'admin', 'vendedor' o 'bodega' por esta vía.
+-- ================================================================
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rol_solicitado text := new.raw_user_meta_data->>'role';
+  rol_final text;
+begin
+  rol_final := case when rol_solicitado in ('proveedor', 'basico') then rol_solicitado else 'basico' end;
+
+  insert into public.user_roles (user_id, role, nombre, empresa, telefono)
+  values (
+    new.id,
+    rol_final,
+    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email, '@', 1)),
+    new.raw_user_meta_data->>'empresa',
+    new.raw_user_meta_data->>'telefono'
+  )
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+
+-- ================================================================
 --  PERMISOS EXTRA DE ROL (resumen)
 -- ================================================================
--- admin    → Dashboard, Ventas, Productos, Clientes, Envíos,
---            Tienda en línea, Punto de venta, Configuración
--- vendedor → Dashboard, Ventas, Clientes
--- bodega   → Productos, Envíos
+-- admin     → Dashboard, Ventas, Productos, Clientes, Envíos,
+--             Tienda en línea, Punto de venta, Configuración
+-- vendedor  → Dashboard, Ventas, Clientes
+-- bodega    → Productos, Envíos
+-- proveedor → /proveedores (portal de proveedores)
+-- basico    → /mi-cuenta (panel de cliente)
 -- ================================================================

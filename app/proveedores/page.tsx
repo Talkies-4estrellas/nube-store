@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef, DragEvent, ChangeEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp, captureFrameAsWebp, uploadToSupabase } from '@/lib/uploadWebp'
 import { useSidebar } from '@/lib/sidebar-context'
+import { useAuth } from '@/lib/auth-context'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -84,6 +86,8 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 }
 
 export default function ProveedoresPage() {
+  const { user, loading: authLoading, signOut } = useAuth()
+  const router = useRouter()
   const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'ajustes'>('registro')
   const { isMobile } = useSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -268,6 +272,20 @@ export default function ProveedoresPage() {
     }
   }
 
+  // Protección por rol: solo proveedores (o admin) pueden entrar
+  useEffect(() => {
+    if (authLoading) return
+    if (!user || (user.role !== 'proveedor' && user.role !== 'admin')) {
+      router.replace('/login?redirect=/proveedores')
+    }
+  }, [authLoading, user, router])
+
+  // Prellenar nombre/email con los de la cuenta logueada
+  useEffect(() => {
+    if (!user || user.role !== 'proveedor') return
+    setProveedor(p => ({ ...p, nombre: p.nombre || user.nombre, email: user.email }))
+  }, [user])
+
   // Cargar borrador + email guardado al inicio
   useEffect(() => {
     // Cargar perfil guardado del proveedor
@@ -290,17 +308,16 @@ export default function ProveedoresPage() {
       }
     } catch { /* ignorar */ }
 
-    // Si ya envió antes, auto-cargar su historial
-    try {
-      const email = localStorage.getItem(EMAIL_KEY)
-      if (email) {
-        setSavedEmail(email)
-        setTab('historial')
-        cargarHistorial(email)
-        cargarMisProductos(email)
-      }
-    } catch { /* ignorar */ }
   }, [])
+
+  // Con sesión real, cargar el historial del email de la cuenta logueada
+  useEffect(() => {
+    if (!user?.email) return
+    setSavedEmail(user.email)
+    setTab('historial')
+    cargarHistorial(user.email)
+    cargarMisProductos(user.email)
+  }, [user?.email])
 
   // Realtime: cuando el admin cambia el estado de una solicitud → refrescar
   useEffect(() => {
@@ -538,6 +555,14 @@ export default function ProveedoresPage() {
     )
   }
 
+  if (authLoading || !user || (user.role !== 'proveedor' && user.role !== 'admin')) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f8' }}>
+        <p style={{ color: '#6b7280', fontSize: 14, fontWeight: 600 }}>Verificando sesión...</p>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
@@ -556,10 +581,7 @@ export default function ProveedoresPage() {
 
         {/* Logo + botón cerrar en mobile */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', marginBottom: 16 }}>
-          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em' }}>
-            <span style={{ color: '#1b1f4b' }}>Order</span>
-            <span style={{ color: PINK }}>Express</span>
-          </div>
+          <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 38, width: 'auto' }} />
           {isMobile && (
             <button onClick={() => setSidebarOpen(false)}
               style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', flexShrink: 0 }}>
@@ -581,24 +603,22 @@ export default function ProveedoresPage() {
           {navItem('ajustes', 'Ajustes', '⚙️')}
         </nav>
 
-        {/* Footer: email guardado */}
-        {savedEmail && (
-          <div style={{ paddingTop: 12, borderTop: '1px solid #f3f4f6', marginTop: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 10px' }}>
-              <div style={{ width: 34, height: 34, background: NAVY, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-                {savedEmail[0].toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{savedEmail}</p>
-                <span style={{ fontSize: 10, fontWeight: 700, background: '#d1fae5', color: '#065f46', padding: '1px 7px', borderRadius: 20 }}>Proveedor</span>
-              </div>
+        {/* Footer: sesión real */}
+        <div style={{ paddingTop: 12, borderTop: '1px solid #f3f4f6', marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 10px' }}>
+            <div style={{ width: 34, height: 34, background: NAVY, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+              {user.email[0].toUpperCase()}
             </div>
-            <button type="button" onClick={() => { try { localStorage.removeItem(EMAIL_KEY) } catch {} setSavedEmail(''); setHistorialItems(null); setTab('registro') }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', border: 'none', borderRadius: 999, background: 'rgba(231,34,109,0.10)', color: PINK, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
-              Cambiar cuenta
-            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#d1fae5', color: '#065f46', padding: '1px 7px', borderRadius: 20 }}>{user.role === 'admin' ? 'Admin' : 'Proveedor'}</span>
+            </div>
           </div>
-        )}
+          <button type="button" onClick={signOut}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', border: 'none', borderRadius: 999, background: 'rgba(231,34,109,0.10)', color: PINK, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+            Cerrar sesión
+          </button>
+        </div>
       </aside>
 
       {/* ---- Área principal ---- */}

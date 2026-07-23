@@ -10,7 +10,7 @@ import { useSidebar } from '@/lib/sidebar-context'
 const NAVY = '#252855'
 const PINK = '#e7226d'
 
-const PUBLIC_PATHS = ['/', '/login', '/proveedores']
+const PUBLIC_PATHS = ['/', '/login', '/registro', '/proveedores', '/mi-cuenta']
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -60,8 +60,8 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   )
 }
 
-const ROLE_LABELS: Record<string, string> = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodega' }
-const ROLE_HOME:   Record<string, string> = { admin: '/dashboard', vendedor: '/dashboard', bodega: '/productos' }
+const ROLE_LABELS: Record<string, string> = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodega', proveedor: 'Proveedor', basico: 'Cliente' }
+const ROLE_HOME:   Record<string, string> = { admin: '/dashboard', vendedor: '/dashboard', bodega: '/productos', proveedor: '/proveedores', basico: '/mi-cuenta' }
 
 function AccessDenied({ role }: { role: string }) {
   return (

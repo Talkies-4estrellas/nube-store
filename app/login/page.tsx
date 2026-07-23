@@ -7,7 +7,6 @@ import { ROLE_HOME } from '@/lib/auth-context'
 import type { Role } from '@/lib/auth-context'
 
 const NAVY = '#252855'
-const PINK = '#e7226d'
 
 function LoginForm() {
   const router       = useRouter()
@@ -59,16 +58,12 @@ function LoginForm() {
     <div style={{ minHeight: '100vh', background: '#f0f2f8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
 
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 40, height: 40, background: NAVY, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ color: '#fff', fontWeight: 900, fontSize: 16 }}>OE</span>
-            </div>
-            <span style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.02em' }}>
-              <span style={{ color: NAVY }}>Order</span>
-              <span style={{ color: PINK }}>Express</span>
-            </span>
-          </div>
+        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6b7280', fontSize: 13, fontWeight: 600, textDecoration: 'none', marginBottom: 20 }}>
+          ← Volver a la tienda
+        </a>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 32 }}>
+          <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 60, width: 'auto', marginBottom: 8 }} />
           <p style={{ color: '#6b7280', fontSize: 14 }}>Panel administrativo</p>
         </div>
 
@@ -129,8 +124,11 @@ function LoginForm() {
           </form>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 20 }}>
-          ¿Sin acceso? Contacta al administrador del sistema.
+        <p style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginTop: 20 }}>
+          ¿Eres cliente o proveedor? <a href="/registro" style={{ color: NAVY, fontWeight: 700, textDecoration: 'none' }}>Crea una cuenta</a>
+        </p>
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
+          ¿Sin acceso al panel administrativo? Contacta al administrador del sistema.
         </p>
       </div>
     </div>

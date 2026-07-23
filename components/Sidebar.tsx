@@ -48,9 +48,11 @@ const NAVY = '#252855'
 const PINK = '#e7226d'
 
 const ROLE_BADGE: Record<Role, { label: string; bg: string; color: string }> = {
-  admin:    { label: 'Admin',    bg: '#ede9fe', color: '#6d28d9' },
-  vendedor: { label: 'Vendedor', bg: '#dbeafe', color: '#1e40af' },
-  bodega:   { label: 'Bodega',   bg: '#d1fae5', color: '#065f46' },
+  admin:     { label: 'Admin',     bg: '#ede9fe', color: '#6d28d9' },
+  vendedor:  { label: 'Vendedor',  bg: '#dbeafe', color: '#1e40af' },
+  bodega:    { label: 'Bodega',    bg: '#d1fae5', color: '#065f46' },
+  proveedor: { label: 'Proveedor', bg: '#fef3c7', color: '#92400e' },
+  basico:    { label: 'Cliente',   bg: '#f3f4f6', color: '#374151' },
 }
 
 const s: Record<string, CSSProperties> = {
@@ -59,7 +61,6 @@ const s: Record<string, CSSProperties> = {
     display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0,
     zIndex: 100, padding: '20px 14px 16px', overflow: 'hidden',
   },
-  logo:    { fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', padding: '0 8px', marginBottom: 16 },
   nav:     { flex: 1, minHeight: 0, background: '#f1f2f6', borderRadius: 22, padding: '12px 10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 },
   label:   { fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' },
   footer:  { paddingTop: 12 },
@@ -130,9 +131,8 @@ export default function Sidebar() {
 
   return (
     <aside style={sidebarStyle}>
-      <div style={s.logo}>
-        <span style={{ color: '#1b1f4b' }}>Order</span>
-        <span style={{ color: PINK }}>Express</span>
+      <div style={{ padding: '0 8px', marginBottom: 16 }}>
+        <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 44, width: 'auto', maxWidth: '100%' }} />
       </div>
 
       <nav className="admin-nav-scroll" style={s.nav}>

@@ -228,8 +228,14 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
           <div>
             <label style={labelStyle}>Imagen del producto</label>
             {form.imagenPreview ? (
-              <div style={{ position: 'relative', marginTop: 8 }}>
-                <img src={form.imagenPreview} alt="preview" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 10, border: '1px solid #e5e7eb', display: 'block' }} />
+              <div onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
+                style={{ position: 'relative', marginTop: 8, borderRadius: 10, outline: dragging ? '2px dashed #0049ff' : 'none', outlineOffset: 2, transition: 'outline 0.15s' }}>
+                <img src={form.imagenPreview} alt="preview" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 10, border: '1px solid #e5e7eb', display: 'block', opacity: dragging ? 0.5 : 1 }} />
+                {dragging && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239,246,255,0.85)', borderRadius: 10, pointerEvents: 'none' }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: '#0049ff' }}>Suelta la imagen aquí</p>
+                  </div>
+                )}
                 <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
                   <button onClick={() => fileRef.current?.click()} style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>🖼️ Cambiar</button>
                   <button onClick={() => setForm(f => ({ ...f, imagen: null, imagenPreview: null }))} style={{ background: 'rgba(220,38,38,0.85)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>

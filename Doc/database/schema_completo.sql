@@ -223,7 +223,7 @@ create table if not exists envios (
   paqueteria     text,
   numero_guia    text,
   estado_envio   text not null default 'Pendiente'
-                   check (estado_envio in ('Pendiente', 'En camino', 'Entregado', 'Devuelto')),
+                   check (estado_envio in ('Pendiente', 'En tránsito', 'Entregado', 'Cancelado')),
   direccion      text,
   ciudad_destino text,
   costo_envio    numeric(10, 2) default 0,
@@ -231,6 +231,13 @@ create table if not exists envios (
   fecha_entrega  date,
   created_at     timestamptz not null default now()
 );
+-- Fix 23/07/2026: la constraint original ('Pendiente','En camino','Entregado',
+-- 'Devuelto') no coincidía con los estados que la pantalla /envio-nube
+-- realmente usa ('En tránsito', 'Cancelado'), así que esas transiciones
+-- fallaban en silencio contra la base real.
+alter table envios drop constraint if exists envios_estado_envio_check;
+alter table envios add constraint envios_estado_envio_check
+  check (estado_envio in ('Pendiente', 'En tránsito', 'Entregado', 'Cancelado'));
 
 
 -- ============================================================
@@ -239,10 +246,17 @@ create table if not exists envios (
 create table if not exists user_roles (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid references auth.users(id) on delete cascade not null unique,
-  role       text not null check (role in ('admin', 'vendedor', 'bodega')),
+  role       text not null check (role in ('admin', 'vendedor', 'bodega', 'proveedor', 'basico')),
   nombre     text not null,
+  empresa    text,
+  telefono   text,
   created_at timestamptz default now()
 );
+alter table user_roles drop constraint if exists user_roles_role_check;
+alter table user_roles add constraint user_roles_role_check
+  check (role in ('admin', 'vendedor', 'bodega', 'proveedor', 'basico'));
+alter table user_roles add column if not exists empresa  text;
+alter table user_roles add column if not exists telefono text;
 
 
 -- ============================================================
@@ -396,13 +410,25 @@ create policy "productos delete admin bodega" on productos
 drop policy if exists "clientes insert anon storefront" on clientes;
 create policy "clientes insert anon storefront" on clientes for insert with check (true);
 
+-- Fix 23/07/2026: "select autenticado" dejaba ver TODOS los clientes a
+-- cualquier cuenta logueada, incluidas las de rol 'basico' (clientes reales
+-- de la tienda). Se separa en acceso de staff vs acceso al propio registro.
 drop policy if exists "clientes select autenticado" on clientes;
-create policy "clientes select autenticado" on clientes
-  for select using (auth.role() = 'authenticated');
+drop policy if exists "clientes select staff" on clientes;
+create policy "clientes select staff" on clientes
+  for select using (get_my_role() in ('admin', 'vendedor'));
+drop policy if exists "clientes select propio" on clientes;
+create policy "clientes select propio" on clientes
+  for select using (email = auth.jwt()->>'email');
 
 drop policy if exists "clientes update admin vendedor" on clientes;
 create policy "clientes update admin vendedor" on clientes
   for update using (get_my_role() in ('admin', 'vendedor'));
+
+drop policy if exists "clientes update propio" on clientes;
+create policy "clientes update propio" on clientes
+  for update using (email = auth.jwt()->>'email')
+  with check (email = auth.jwt()->>'email');
 
 drop policy if exists "clientes delete admin vendedor" on clientes;
 create policy "clientes delete admin vendedor" on clientes
@@ -413,8 +439,12 @@ drop policy if exists "ventas insert anon storefront" on ventas;
 create policy "ventas insert anon storefront" on ventas for insert with check (true);
 
 drop policy if exists "ventas select autenticado" on ventas;
-create policy "ventas select autenticado" on ventas
-  for select using (auth.role() = 'authenticated');
+drop policy if exists "ventas select staff" on ventas;
+create policy "ventas select staff" on ventas
+  for select using (get_my_role() in ('admin', 'vendedor'));
+drop policy if exists "ventas select propio" on ventas;
+create policy "ventas select propio" on ventas
+  for select using (cliente_id in (select id from clientes where email = auth.jwt()->>'email'));
 
 drop policy if exists "ventas update admin vendedor" on ventas;
 create policy "ventas update admin vendedor" on ventas
@@ -429,8 +459,15 @@ drop policy if exists "venta_items insert anon storefront" on venta_items;
 create policy "venta_items insert anon storefront" on venta_items for insert with check (true);
 
 drop policy if exists "venta_items select autenticado" on venta_items;
-create policy "venta_items select autenticado" on venta_items
-  for select using (auth.role() = 'authenticated');
+drop policy if exists "venta_items select staff" on venta_items;
+create policy "venta_items select staff" on venta_items
+  for select using (get_my_role() in ('admin', 'vendedor'));
+drop policy if exists "venta_items select propio" on venta_items;
+create policy "venta_items select propio" on venta_items
+  for select using (venta_id in (
+    select v.id from ventas v join clientes c on c.id = v.cliente_id
+    where c.email = auth.jwt()->>'email'
+  ));
 
 drop policy if exists "venta_items update admin vendedor" on venta_items;
 create policy "venta_items update admin vendedor" on venta_items
@@ -438,8 +475,15 @@ create policy "venta_items update admin vendedor" on venta_items
 
 -- envios
 drop policy if exists "envios select autenticado" on envios;
-create policy "envios select autenticado" on envios
-  for select using (auth.role() = 'authenticated');
+drop policy if exists "envios select staff" on envios;
+create policy "envios select staff" on envios
+  for select using (get_my_role() in ('admin', 'bodega'));
+drop policy if exists "envios select propio" on envios;
+create policy "envios select propio" on envios
+  for select using (venta_id in (
+    select v.id from ventas v join clientes c on c.id = v.cliente_id
+    where c.email = auth.jwt()->>'email'
+  ));
 
 drop policy if exists "envios write admin bodega" on envios;
 create policy "envios write admin bodega" on envios for all
@@ -678,6 +722,45 @@ drop policy if exists "cliente gestiona su carrito" on cart_items;
 create policy "cliente gestiona su carrito" on cart_items for all with check (true);
 
 create index if not exists idx_cart_items_registro on cart_items(registro_id);
+
+
+-- ============================================================
+--  AUTO-ALTA EN user_roles PARA SELF-SIGNUP (proveedor / basico)
+--  Agregado 23/07/2026. Usado por app/registro/page.tsx (supabase.auth.signUp).
+--  El rol se SANITIZA aquí: aunque el metadata del signUp venga manipulado
+--  desde el navegador, solo puede terminar en 'proveedor' o 'basico'. Nunca
+--  puede autoasignarse 'admin', 'vendedor' o 'bodega' por esta vía.
+-- ============================================================
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rol_solicitado text := new.raw_user_meta_data->>'role';
+  rol_final text;
+begin
+  rol_final := case when rol_solicitado in ('proveedor', 'basico') then rol_solicitado else 'basico' end;
+
+  insert into public.user_roles (user_id, role, nombre, empresa, telefono)
+  values (
+    new.id,
+    rol_final,
+    coalesce(new.raw_user_meta_data->>'nombre', split_part(new.email, '@', 1)),
+    new.raw_user_meta_data->>'empresa',
+    new.raw_user_meta_data->>'telefono'
+  )
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
 
 
 -- ============================================================

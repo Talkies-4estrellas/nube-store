@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isValidEmail } from '@/lib/validation'
+import { useAuth, ROLE_HOME } from '@/lib/auth-context'
 
 type CheckoutState = 'form' | 'loading' | 'success' | 'error'
 
@@ -137,6 +138,7 @@ function loadFavoritosFromStorage(): string[] {
 /* ---- Componente principal ---- */
 export default function Storefront() {
   const router = useRouter()
+  const { user: panelUser } = useAuth()
   const [view, setView] = useState('inicio')
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -282,6 +284,7 @@ export default function Storefront() {
     topbar_btn2: 'Ofertas',
     carrusel: null as { img: string; kicker: string; title: string }[] | null,
     politica_devolucion: '',
+    fondo_logo: 'blanco' as 'blanco' | 'azul',
   })
   const [mostrarGarantias, setMostrarGarantias] = useState(false)
 
@@ -1285,7 +1288,7 @@ export default function Storefront() {
   return (
     <div className={`oe-store${navCollapsed ? ' nav-collapsed' : ''}`} data-view={view}>
       <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}${headerHidden ? ' nav-hidden' : ''}`} aria-label="Navegacion principal">
-        <div className="sidebar-head">
+        <div className="sidebar-head" style={{ background: storeConfig.fondo_logo === 'azul' ? '#252855' : '#fff' }}>
           <button
             type="button"
             className="nav-burger"
@@ -1440,20 +1443,18 @@ export default function Storefront() {
               </div>
               <button className="icon-button dark" type="button" aria-label="Carrito" onClick={openCart}><Ic n="shopping-cart" /><span>{cartCount}</span></button>
 
-              {/* Botón: Portal de proveedores */}
-              <a href="/proveedores" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                📦 Soy proveedor
-              </a>
-
-              {/* Botón: Iniciar sesión */}
-              <a href="/login" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                → Iniciar sesión
-              </a>
-
-              {/* Botón: Panel administrativo */}
-              <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 6, background: storeConfig.color_acento || '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                🔒 Panel admin
-              </a>
+              {/* Sesión: si no hay cuenta logueada, solo "Iniciar sesión".
+                  Si hay sesión activa, ícono de perfil que lleva al panel de su rol. */}
+              {panelUser ? (
+                <a href={ROLE_HOME[panelUser.role]} title={panelUser.nombre}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: '50%', background: storeConfig.color_acento || '#e7226d', color: '#fff', fontWeight: 800, fontSize: 14, textDecoration: 'none', flexShrink: 0 }}>
+                  {panelUser.nombre.charAt(0).toUpperCase()}
+                </a>
+              ) : (
+                <a href="/login" style={{ display: 'flex', alignItems: 'center', gap: 6, background: storeConfig.color_acento || '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                  → Iniciar sesión
+                </a>
+              )}
             </div>
           </header>
 
@@ -1660,13 +1661,8 @@ export default function Storefront() {
             <button onClick={closeLoginModal} style={{ position: 'absolute', top: 14, right: 14, background: '#f3f4f6', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 18, color: '#6b7280', lineHeight: 1 }}>×</button>
 
             {/* Logo */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-              <div style={{ width: 34, height: 34, background: '#252855', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: '#fff', fontWeight: 900, fontSize: 12 }}>OE</span>
-              </div>
-              <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                <span style={{ color: '#252855' }}>Order</span><span style={{ color: '#e7226d' }}>Express</span>
-              </span>
+            <div style={{ marginBottom: 20 }}>
+              <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 40, width: 'auto' }} />
             </div>
 
             {/* Pestañas */}

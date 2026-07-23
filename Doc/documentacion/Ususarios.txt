@@ -1,0 +1,4 @@
+Rol	            Email	                   Contraseña	 
+Administrador	    admin@ordersexpress.test	   Admin2026!	
+Proveedor	    proveedor@ordersexpress.test   Proveedor2026!	
+Básico              cliente@ordersexpress.test	   Cliente2026!	

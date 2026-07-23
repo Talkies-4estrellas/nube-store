@@ -133,7 +133,7 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
       `}</style>
 
       {/* Topbar limpio — sin admin. En móvil el buscador colapsa a un icono. */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 16px', height: 56, display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100 }}>
+      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 16px', height: esMovil ? 80 : 56, display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100 }}>
         {!(esMovil && buscarAbiertoMovil) && (
           <button type="button" aria-label="Volver al catálogo" onClick={() => history.length > 1 ? history.back() : (window.location.href = '/')}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 12, background: '#f1f2f6', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
@@ -142,8 +142,14 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
         )}
 
         {!(esMovil && buscarAbiertoMovil) && (
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }}>
-            <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 30, width: 'auto' }} />
+          <Link href="/" style={esMovil ? {
+            display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none',
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          } : {
+            display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none',
+            flex: '0 0 auto', minWidth: 0,
+          }}>
+            <img src={esMovil ? '/storefront/monograma.svg' : '/storefront/logo.svg'} alt="OrderExpress" style={{ height: esMovil ? 60 : 40, width: 'auto', maxWidth: '100%' }} />
           </Link>
         )}
 
@@ -193,11 +199,11 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
           </div>
         )}
 
-        {!(esMovil && buscarAbiertoMovil) && <div style={{ flex: 1 }} />}
+        {!esMovil && <div style={{ flex: 1 }} />}
 
         {esMovil && !buscarAbiertoMovil && (
           <button type="button" aria-label="Buscar" onClick={() => setBuscarAbiertoMovil(true)}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 12, background: '#f1f2f6', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 12, background: '#f1f2f6', border: 'none', cursor: 'pointer', flexShrink: 0, marginLeft: 'auto' }}>
             <Search size={18} color={NAVY} />
           </button>
         )}

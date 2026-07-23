@@ -1,11 +1,41 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
+
+const NAVY = '#252855'
 
 export default function TiendaEnLineaPage() {
   const [vista, setVista] = useState<'pc' | 'movil'>('pc')
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const previewBoxRef = useRef<HTMLDivElement>(null)
+
+  const [fondoLogo, setFondoLogo] = useState<'blanco' | 'azul'>('blanco')
+  const [guardandoFondo, setGuardandoFondo] = useState(false)
+  const [errorFondo, setErrorFondo] = useState('')
+
+  useEffect(() => {
+    supabase.from('config_storefront').select('fondo_logo').eq('id', 1).single()
+      .then(({ data, error }) => {
+        if (error) { setErrorFondo('No se pudo cargar la configuración: ' + error.message); return }
+        if (data?.fondo_logo) setFondoLogo(data.fondo_logo)
+      })
+  }, [])
+
+  async function cambiarFondoLogo(valor: 'blanco' | 'azul') {
+    const anterior = fondoLogo
+    setFondoLogo(valor)
+    setErrorFondo('')
+    setGuardandoFondo(true)
+    const { error } = await supabase.from('config_storefront').upsert({ id: 1, fondo_logo: valor, updated_at: new Date().toISOString() })
+    setGuardandoFondo(false)
+    if (error) {
+      setFondoLogo(anterior)
+      setErrorFondo('No se pudo guardar: ' + error.message)
+      return
+    }
+    iframeRef.current?.contentWindow?.location.reload()
+  }
 
   // El ancho del panel se mide en vivo: en escritorio son 520px, pero en
   // móvil la rejilla se apila y el panel pasa a ocupar el ancho disponible.
@@ -46,6 +76,39 @@ export default function TiendaEnLineaPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, color: '#111', margin: 0 }}>Diseño</h1>
+      </div>
+
+      <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 16 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+          Fondo del logo
+        </p>
+        <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 14px' }}>
+          Aplica a la barra donde vive el logo, tanto en escritorio como en móvil.
+        </p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => cambiarFondoLogo('blanco')} disabled={guardandoFondo} style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10,
+            border: `2px solid ${fondoLogo === 'blanco' ? NAVY : '#e5e7eb'}`,
+            background: '#fff', color: '#111', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>
+            <span style={{ width: 18, height: 18, borderRadius: 5, background: '#fff', border: '1px solid #d1d5db' }} />
+            Blanco
+          </button>
+          <button onClick={() => cambiarFondoLogo('azul')} disabled={guardandoFondo} style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10,
+            border: `2px solid ${fondoLogo === 'azul' ? NAVY : '#e5e7eb'}`,
+            background: '#fff', color: '#111', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>
+            <span style={{ width: 18, height: 18, borderRadius: 5, background: NAVY }} />
+            Azul
+          </button>
+        </div>
+        {errorFondo && (
+          <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, marginTop: 10 }}>{errorFondo}</p>
+        )}
+        {guardandoFondo && (
+          <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 10 }}>Guardando...</p>
+        )}
       </div>
 
       <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
