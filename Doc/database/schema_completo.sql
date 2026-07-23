@@ -38,8 +38,10 @@ create extension if not exists "uuid-ossp";
 -- ============================================================
 create table if not exists categorias (
   id     serial primary key,
-  nombre text not null unique
+  nombre text not null unique,
+  activo boolean not null default true
 );
+alter table categorias add column if not exists activo boolean not null default true;
 
 insert into categorias (nombre) values
   ('Bolsos'), ('Cinturones'), ('Billeteras'), ('Estuches'), ('Relojes'),
@@ -53,6 +55,18 @@ on conflict do nothing;
 alter table categorias enable row level security;
 drop policy if exists "categorias select publico" on categorias;
 create policy "categorias select publico" on categorias for select using (true);
+
+drop policy if exists "categorias insert admin bodega" on categorias;
+create policy "categorias insert admin bodega" on categorias
+  for insert with check (get_my_role() in ('admin', 'bodega'));
+
+drop policy if exists "categorias update admin bodega" on categorias;
+create policy "categorias update admin bodega" on categorias
+  for update using (get_my_role() in ('admin', 'bodega'));
+
+drop policy if exists "categorias delete admin bodega" on categorias;
+create policy "categorias delete admin bodega" on categorias
+  for delete using (get_my_role() in ('admin', 'bodega'));
 
 
 -- ============================================================
@@ -623,9 +637,13 @@ create table if not exists config_metodos_pago (
   transferencia boolean not null default true,
   tarjeta       boolean not null default false,
   mercadopago   boolean not null default false,
+  paypal        boolean not null default false,
+  bbva          boolean not null default false,
   updated_at    timestamptz default now(),
   constraint single_row_metodos check (id = 1)
 );
+alter table config_metodos_pago add column if not exists paypal boolean not null default false;
+alter table config_metodos_pago add column if not exists bbva   boolean not null default false;
 
 alter table config_metodos_pago enable row level security;
 insert into config_metodos_pago (id) values (1) on conflict do nothing;

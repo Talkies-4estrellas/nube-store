@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import SubNav from '../_subnav'
 
 const NAVY = '#252855'
 const inp: React.CSSProperties = {
@@ -51,7 +50,6 @@ export default function PaginasPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <SubNav />
           <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Páginas</h1>
         </div>
 

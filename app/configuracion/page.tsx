@@ -129,7 +129,7 @@ export default function ConfiguracionPage() {
 
   const [negocio, setNegocio] = useState({ nombre: 'Order Express', moneda: 'MXN — Peso mexicano', zona: 'America/Mexico_City', idioma: 'Español (México)' })
   const [contacto, setContacto] = useState({ email: '', telefono: '', whatsapp: '', instagram: '', facebook: '', direccion: '', ciudad: '', pais: 'México' })
-  const [pagos, setPagos] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false })
+  const [pagos, setPagos] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false, paypal: false, bbva: false })
   const [notif, setNotif] = useState({ stock_bajo: true, nueva_venta: true, email_resumen: false })
   const [heroTitulo, setHeroTitulo] = useState('')
   const [heroSubtitulo, setHeroSubtitulo] = useState('')
@@ -150,7 +150,7 @@ export default function ConfiguracionPage() {
     supabase.from('config_metodos_pago').select('*').eq('id', 1).single()
       .then(({ data }) => {
         if (!data) return
-        setPagos({ efectivo: data.efectivo, transferencia: data.transferencia, tarjeta: data.tarjeta, mercadopago: data.mercadopago })
+        setPagos({ efectivo: data.efectivo, transferencia: data.transferencia, tarjeta: data.tarjeta, mercadopago: data.mercadopago, paypal: data.paypal ?? false, bbva: data.bbva ?? false })
       })
     // Cargar preferencias de notificación del usuario actual
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -269,6 +269,8 @@ export default function ConfiguracionPage() {
             <Toggle label="Transferencia bancaria" desc="SPEI, depósito o transferencia directa" value={pagos.transferencia} onChange={v => setPagos(p => ({ ...p, transferencia: v }))} />
             <Toggle label="Tarjeta de crédito / débito" desc="Requiere terminal bancaria o lector conectado" value={pagos.tarjeta} onChange={v => setPagos(p => ({ ...p, tarjeta: v }))} />
             <Toggle label="Mercado Pago" desc="Link de pago o QR — requiere cuenta activa" value={pagos.mercadopago} onChange={v => setPagos(p => ({ ...p, mercadopago: v }))} />
+            <Toggle label="PayPal" desc="Checkout con cuenta PayPal o tarjeta — requiere cuenta de negocio" value={pagos.paypal} onChange={v => setPagos(p => ({ ...p, paypal: v }))} />
+            <Toggle label="BBVA (OpenPay)" desc="Transferencia SPEI con referencia — requiere cuenta OpenPay/BBVA" value={pagos.bbva} onChange={v => setPagos(p => ({ ...p, bbva: v }))} />
           </Card>
         )}
 

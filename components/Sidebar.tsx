@@ -33,6 +33,16 @@ const ALL_SECTIONS: NavSection[] = [
   },
 ]
 
+const TIENDA_EN_LINEA_SUBITEMS = [
+  { href: '/tienda-en-linea',                label: 'Diseño' },
+  { href: '/tienda-en-linea/paginas',         label: 'Páginas' },
+  { href: '/tienda-en-linea/blog',            label: 'Carrusel', badge: 'Nuevo' },
+  { href: '/tienda-en-linea/menus',           label: 'Menús' },
+  { href: '/tienda-en-linea/filtros',         label: 'Filtros' },
+  { href: '/tienda-en-linea/redes-sociales',  label: 'Redes sociales' },
+  { href: '/tienda-en-linea/legal',           label: 'Legal / Envíos' },
+]
+
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -137,6 +147,33 @@ export default function Sidebar() {
                     <span style={{ position: 'absolute', top: 8, right: 10, background: '#d97706', color: '#fff', fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', pointerEvents: 'none' }}>
                       {stockBajoCount > 99 ? '99+' : stockBajoCount}
                     </span>
+                  )}
+                </div>
+              ) : item.href === '/tienda-en-linea' ? (
+                <div key={item.href}>
+                  <NavLink {...item} active={pathname.startsWith(item.href)} />
+                  {pathname.startsWith(item.href) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1, margin: '2px 0 4px 30px', borderLeft: '2px solid #e5e7eb', paddingLeft: 10 }}>
+                      {TIENDA_EN_LINEA_SUBITEMS.map(sub => {
+                        const active = pathname === sub.href
+                        return (
+                          <Link key={sub.href} href={sub.href} style={{
+                            display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px',
+                            fontSize: 13, color: active ? NAVY : '#6b7280',
+                            fontWeight: active ? 800 : 600,
+                            background: active ? '#fff' : 'transparent',
+                            borderRadius: 8, textDecoration: 'none',
+                          }}>
+                            {sub.label}
+                            {sub.badge && (
+                              <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 10 }}>
+                                {sub.badge}
+                              </span>
+                            )}
+                          </Link>
+                        )
+                      })}
+                    </div>
                   )}
                 </div>
               ) : (

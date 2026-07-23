@@ -116,11 +116,20 @@ const bump = (el: Element) =>
 type CartEntry = { product: Product; quantity: number }
 
 const CART_KEY = 'oe_cart'
+const FAVORITOS_KEY = 'oe_favoritos'
 
 function loadCartFromStorage(): CartEntry[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = localStorage.getItem(CART_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function loadFavoritosFromStorage(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(FAVORITOS_KEY)
     return raw ? JSON.parse(raw) : []
   } catch { return [] }
 }
@@ -141,9 +150,23 @@ export default function Storefront() {
   const [galleryIndex, setGalleryIndex] = useState(0)
   const [qaAnswers, setQaAnswers] = useState<Record<number, string[]>>({})
   const [qaInputs, setQaInputs] = useState<Record<number, string>>({})
+  const [preguntasUsuario, setPreguntasUsuario] = useState<string[]>([])
+  const [mostrarFormPregunta, setMostrarFormPregunta] = useState(false)
+  const [nuevaPregunta, setNuevaPregunta] = useState('')
+
+  function enviarPregunta() {
+    const texto = nuevaPregunta.trim()
+    if (!texto) return
+    setPreguntasUsuario(prev => [...prev, texto])
+    setNuevaPregunta('')
+    setMostrarFormPregunta(false)
+  }
 
   // Carrito persistente en localStorage
   const [cart, setCart] = useState<CartEntry[]>(loadCartFromStorage)
+
+  // Favoritos persistentes en localStorage (lista de títulos de producto)
+  const [favoritos, setFavoritos] = useState<string[]>(loadFavoritosFromStorage)
 
   // Productos y categorías desde Supabase
   const [dbProducts, setDbProducts] = useState<Product[]>([])
@@ -162,6 +185,45 @@ export default function Storefront() {
   const [checkoutForm, setCheckoutForm] = useState({ nombre: '', email: '' })
   const [checkoutError, setCheckoutError] = useState('')
   const [ventaNumero, setVentaNumero] = useState<number | null>(null)
+  const [metodosPago, setMetodosPago] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false, paypal: false, bbva: false })
+  const [metodoPago, setMetodoPago] = useState('')
+  const [referenciaBBVA, setReferenciaBBVA] = useState<{ clabe: string; referencia: string; banco: string } | null>(null)
+
+  /* ---- Cargar métodos de pago habilitados ---- */
+  useEffect(() => {
+    supabase.from('config_metodos_pago').select('*').eq('id', 1).maybeSingle()
+      .then(({ data }) => { if (data) setMetodosPago(prev => ({ ...prev, ...data })) })
+  }, [])
+
+  const metodosDisponibles = [
+    { key: 'efectivo', label: 'Efectivo' },
+    { key: 'transferencia', label: 'Transferencia' },
+    { key: 'tarjeta', label: 'Tarjeta' },
+    { key: 'mercadopago', label: 'Mercado Pago' },
+    { key: 'paypal', label: 'PayPal' },
+    { key: 'bbva', label: 'BBVA' },
+  ].filter(m => metodosPago[m.key as keyof typeof metodosPago])
+
+  useEffect(() => {
+    if (!metodoPago && metodosDisponibles.length > 0) setMetodoPago(metodosDisponibles[0].key)
+  }, [metodosPago]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Abrir una vista específica al llegar por link externo, ej. ?view=carrito
+  // (icono de carrito de la ficha de producto) o ?buscar=texto (buscador ahí)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const buscar = params.get('buscar')
+    const vistaInicial = params.get('view')
+    if (buscar) {
+      setSearchValue(buscar)
+      setSearchQuery(buscar)
+      setView('busqueda')
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (vistaInicial) {
+      goView(vistaInicial)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Regreso desde el checkout de Mercado Pago (?pago=exito|fallido|pendiente)
   useEffect(() => {
@@ -219,12 +281,23 @@ export default function Storefront() {
     topbar_btn1: 'Nuevo',
     topbar_btn2: 'Ofertas',
     carrusel: null as { img: string; kicker: string; title: string }[] | null,
+    politica_devolucion: '',
   })
+  const [mostrarGarantias, setMostrarGarantias] = useState(false)
 
   /* ---- Persistir carrito en localStorage ---- */
   useEffect(() => {
     try { localStorage.setItem(CART_KEY, JSON.stringify(cart)) } catch {}
   }, [cart])
+
+  /* ---- Persistir favoritos en localStorage ---- */
+  useEffect(() => {
+    try { localStorage.setItem(FAVORITOS_KEY, JSON.stringify(favoritos)) } catch {}
+  }, [favoritos])
+
+  function toggleFavorito(title: string) {
+    setFavoritos(prev => prev.includes(title) ? prev.filter(t => t !== title) : [...prev, title])
+  }
 
   /* ---- Cargar config de tienda desde Supabase + realtime ---- */
   useEffect(() => {
@@ -256,7 +329,7 @@ export default function Storefront() {
           .eq('activo', true)
           .gt('stock', 0)
           .order('created_at', { ascending: false }),
-        supabase.from('categorias').select('nombre').order('nombre'),
+        supabase.from('categorias').select('nombre').eq('activo', true).order('nombre'),
       ])
       if (prods) {
         const typed = prods as unknown as SupabaseProduct[]
@@ -382,6 +455,7 @@ export default function Storefront() {
     if (!nombre || !email) { setCheckoutError('Nombre y email son obligatorios'); return }
     if (!isValidEmail(email)) { setCheckoutError('El email no es válido'); return }
     if (cart.length === 0) { setCheckoutError('El carrito está vacío'); return }
+    if (!metodoPago) { setCheckoutError('Selecciona un método de pago'); return }
     setCheckoutState('loading')
     setCheckoutError('')
 
@@ -401,9 +475,10 @@ export default function Storefront() {
     const total = cart.reduce((t, i) => t + priceValue(i.product[2]) * i.quantity, 0)
 
     // Crear venta
+    const etiquetaMetodo = metodosDisponibles.find(m => m.key === metodoPago)?.label || metodoPago
     const { data: venta, error: ventaErr } = await supabase
       .from('ventas')
-      .insert({ cliente_id: clienteId, estado: 'Pendiente', total, notas: 'Pedido desde tienda web' })
+      .insert({ cliente_id: clienteId, estado: 'Pendiente', total, notas: `Pedido desde tienda web · Método: ${etiquetaMetodo}` })
       .select('id, numero').single()
     if (ventaErr || !venta) { setCheckoutError('Error al crear el pedido'); setCheckoutState('error'); return }
 
@@ -423,26 +498,55 @@ export default function Storefront() {
       if (itemsErr) { setCheckoutError('Error al guardar productos'); setCheckoutState('error'); return }
     }
 
-    // Iniciar el pago con Mercado Pago (Checkout Pro)
-    try {
-      const res = await fetch('/api/pagos/crear-preferencia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ventaId: venta.id }),
-      })
-      const data = await res.json()
-      if (res.ok && data.url) {
-        setCart([])
-        try { localStorage.removeItem(CART_KEY) } catch {}
-        window.location.href = data.url   // redirige al checkout de Mercado Pago
-        return
+    // Si eligió una pasarela con redirección (Mercado Pago o PayPal), iniciar el pago
+    const endpointRedireccion: Record<string, string> = {
+      mercadopago: '/api/pagos/crear-preferencia',
+      paypal: '/api/pagos/paypal/crear-orden',
+    }
+    if (endpointRedireccion[metodoPago]) {
+      try {
+        const res = await fetch(endpointRedireccion[metodoPago], {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ventaId: venta.id }),
+        })
+        const data = await res.json()
+        if (res.ok && data.url) {
+          setCart([])
+          try { localStorage.removeItem(CART_KEY) } catch {}
+          window.location.href = data.url   // redirige al checkout externo
+          return
+        }
+        console.warn('Pasarela de pago no disponible:', data.error)
+      } catch (e) {
+        console.warn('No se pudo iniciar el pago:', e)
       }
-      console.warn('Pasarela de pago no disponible:', data.error)
-    } catch (e) {
-      console.warn('No se pudo iniciar el pago:', e)
     }
 
-    // Sin pasarela configurada: el pedido queda registrado como Pendiente
+    // BBVA: genera una referencia SPEI y la muestra en el propio modal (sin redirección)
+    if (metodoPago === 'bbva') {
+      try {
+        const res = await fetch('/api/pagos/bbva/crear-referencia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ventaId: venta.id }),
+        })
+        const data = await res.json()
+        if (res.ok && data.clabe) {
+          setReferenciaBBVA({ clabe: data.clabe, referencia: data.referencia, banco: data.banco })
+          setVentaNumero(venta.numero)
+          setCart([])
+          try { localStorage.removeItem(CART_KEY) } catch {}
+          setCheckoutState('success')
+          return
+        }
+        console.warn('Referencia BBVA no disponible:', data.error)
+      } catch (e) {
+        console.warn('No se pudo generar la referencia BBVA:', e)
+      }
+    }
+
+    // Sin pasarela configurada (o no disponible aún): el pedido queda registrado como Pendiente
     setVentaNumero(venta.numero)
     setCart([])
     try { localStorage.removeItem(CART_KEY) } catch {}
@@ -634,11 +738,21 @@ export default function Storefront() {
     </button>
   )
 
-  const ProductCard = ([title, text, price, image, category]: Product) => (
+  const ProductCard = ([title, text, price, image, category]: Product) => {
+    const guardado = favoritos.includes(title)
+    return (
     <article key={title} className="store-product" data-detail-title={title} onClick={(e) => onCardClick(e, title)}>
       <div className="store-product-media">
         <img src={image} alt={title} />
-        <button className="icon-button" type="button" aria-label="Guardar"><Ic n="heart" /></button>
+        <button
+          className={`icon-button${guardado ? ' saved' : ''}`}
+          type="button"
+          aria-label={guardado ? 'Quitar de favoritos' : 'Guardar en favoritos'}
+          aria-pressed={guardado}
+          onClick={(e) => { e.stopPropagation(); toggleFavorito(title) }}
+        >
+          <Ic n="heart" />
+        </button>
       </div>
       <span>{category}</span>
       <h3>{title}</h3>
@@ -648,7 +762,8 @@ export default function Storefront() {
         <AddButton title={title} dark />
       </div>
     </article>
-  )
+    )
+  }
 
   const gridClass: Record<string, string> = {
     inicio: 'content-grid',
@@ -744,23 +859,28 @@ export default function Storefront() {
             </svg>
           </div>
 
-          <button
-            className={`category cat-sm${activeCat === 'Todo' ? ' active' : ''}`}
-            type="button"
-            onClick={() => setActiveCat('Todo')}
-          >
-            <Ic n="grid-2x2" /><span>Todo</span><b>{dbProducts.length}</b>
-          </button>
-          {categorias.map(cat => (
+          {/* Lista larga de categorías: en móvil el <select> de arriba ya
+              cubre la misma función en mucho menos espacio, así que esta
+              lista se oculta ahí (ver .category-buttons en storefront.css). */}
+          <div className="category-buttons">
             <button
-              key={cat}
-              className={`category cat-sm${activeCat === cat ? ' active' : ''}`}
+              className={`category cat-sm${activeCat === 'Todo' ? ' active' : ''}`}
               type="button"
-              onClick={() => setActiveCat(cat)}
+              onClick={() => setActiveCat('Todo')}
             >
-              <Ic n="shopping-bag" /><span>{cat}</span><b>{catCounts[cat] ?? 0}</b>
+              <Ic n="grid-2x2" /><span>Todo</span><b>{dbProducts.length}</b>
             </button>
-          ))}
+            {categorias.map(cat => (
+              <button
+                key={cat}
+                className={`category cat-sm${activeCat === cat ? ' active' : ''}`}
+                type="button"
+                onClick={() => setActiveCat(cat)}
+              >
+                <Ic n="shopping-bag" /><span>{cat}</span><b>{catCounts[cat] ?? 0}</b>
+              </button>
+            ))}
+          </div>
           <div className="range-card">
             <span>Rango de precio</span>
             <strong>
@@ -816,8 +936,18 @@ export default function Storefront() {
     )
   }
 
-  const renderFavorites = () =>
-    dbProducts.slice(0, 4).map(([title, text, price, image, category]) => (
+  const renderFavorites = () => {
+    const guardados = dbProducts.filter(([title]) => favoritos.includes(title))
+    if (guardados.length === 0) {
+      return (
+        <article className="empty-state">
+          <Ic n="heart" />
+          <h3>Sin favoritos todavía</h3>
+          <p>Toca el corazón en cualquier producto del catálogo para guardarlo aquí.</p>
+        </article>
+      )
+    }
+    return guardados.map(([title, text, price, image, category]) => (
       <article key={title} className="wishlist-item" data-detail-title={title} onClick={(e) => onCardClick(e, title)}>
         <img src={image} alt={title} />
         <div>
@@ -829,6 +959,7 @@ export default function Storefront() {
         <AddButton title={title} icon="shopping-cart" label="Agregar favorito" />
       </article>
     ))
+  }
 
   const renderDeals = () => {
     const dealProds = dbProducts.slice(0, 3)
@@ -905,7 +1036,7 @@ export default function Storefront() {
           <p><span>Envio</span><strong>Gratis</strong></p>
           <p><span>Descuento</span><strong>-{formatPrice(discount)}</strong></p>
           <div><span>Total</span><strong>{formatPrice(total)}</strong></div>
-          <button className="period-button active" type="button" onClick={() => { setCheckoutForm({ nombre: '', email: '' }); setCheckoutState('form'); setCheckoutError(''); setShowCheckout(true) }}>Continuar pago</button>
+          <button className="period-button active" type="button" onClick={() => { setCheckoutForm({ nombre: '', email: '' }); setCheckoutState('form'); setCheckoutError(''); setReferenciaBBVA(null); setShowCheckout(true) }}>Continuar pago</button>
           {cart.length > 0 && (
             <button
               className="period-button"
@@ -923,7 +1054,7 @@ export default function Storefront() {
     const cards: [string, string, string, string | null][] = [
       ['message-circle', 'Chat de compra', 'Resuelve dudas sobre productos antes de comprar.', storeConfig.whatsapp ? `https://wa.me/${storeConfig.whatsapp.replace(/\D/g, '')}` : null],
       ['truck', 'Envios y rastreo', 'Consulta estados y tiempos de entrega con el equipo.', storeConfig.email_contacto ? `mailto:${storeConfig.email_contacto}` : null],
-      ['shield-check', 'Garantias', 'Cambios, devoluciones y cobertura de accesorios.', null],
+      ['shield-check', 'Garantias', 'Cambios, devoluciones y cobertura de accesorios.', 'GARANTIAS'],
       ['sparkles', 'Asesoria', 'Recomendaciones para elegir tu setup ideal.', storeConfig.instagram ? `https://instagram.com/${storeConfig.instagram.replace('@', '')}` : null],
     ]
     return (
@@ -933,9 +1064,11 @@ export default function Storefront() {
             <Ic n={icon} />
             <h3>{title}</h3>
             <p>{text}</p>
-            {href
-              ? <a href={href} target="_blank" rel="noopener noreferrer" className="round-button dark" aria-label={title} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: '#111', color: '#fff', textDecoration: 'none' }}><Ic n="arrow-right" /></a>
-              : <button className="round-button dark" type="button" aria-label={title}><Ic n="arrow-right" /></button>
+            {href === 'GARANTIAS'
+              ? <button className="round-button dark" type="button" aria-label={title} onClick={() => setMostrarGarantias(true)}><Ic n="arrow-right" /></button>
+              : href
+                ? <a href={href} target="_blank" rel="noopener noreferrer" className="round-button dark" aria-label={title} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: '50%', background: '#111', color: '#fff', textDecoration: 'none' }}><Ic n="arrow-right" /></a>
+                : <button className="round-button dark" type="button" aria-label={title} disabled style={{ opacity: 0.4, cursor: 'not-allowed' }}><Ic n="arrow-right" /></button>
             }
           </article>
         ))}
@@ -1086,9 +1219,29 @@ export default function Storefront() {
               <span>Preguntas y respuestas</span>
               <h3>Resuelve dudas del producto.</h3>
             </div>
-            <button className="period-button" type="button">Preguntar</button>
+            <button className="period-button" type="button" onClick={() => setMostrarFormPregunta(v => !v)}>Preguntar</button>
           </div>
+          {mostrarFormPregunta && (
+            <div className="answer-box" style={{ marginBottom: 16 }}>
+              <input
+                type="text"
+                placeholder="Escribe tu pregunta sobre este producto"
+                aria-label="Nueva pregunta"
+                value={nuevaPregunta}
+                autoFocus
+                onChange={(e) => setNuevaPregunta(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') enviarPregunta() }}
+              />
+              <button className="round-button dark" type="button" aria-label="Enviar pregunta" onClick={enviarPregunta}><Ic n="send" /></button>
+            </div>
+          )}
           <div className="question-list">
+            {preguntasUsuario.map((question, i) => (
+              <article key={`nueva-${i}`} className="question-card">
+                <h4>{question}</h4>
+                <p>Gracias por tu pregunta — nuestro equipo te responderá pronto.</p>
+              </article>
+            ))}
             {questionSamples.map(([question, answer], index) => (
               <article key={question} className="question-card">
                 <h4>{question}</h4>
@@ -1172,10 +1325,38 @@ export default function Storefront() {
                 aria-label="Buscar productos"
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
+                onFocus={() => searchValue.length > 1 && setShowSuggestions(searchSuggestions.length > 0)}
                 autoComplete="off"
               />
               <button type="button" aria-label="Cerrar busqueda"
                 onClick={() => { setMobileSearchOpen(false); onSearchChange('') }}>×</button>
+
+              {showSuggestions && (
+                <div style={{ position: 'absolute', top: '100%', left: 12, right: 12, marginTop: 6, background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', zIndex: 200, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                  {searchSuggestions.map(([title, , price, image, category]) => (
+                    <button
+                      key={title}
+                      type="button"
+                      onMouseDown={() => { openDetail(title); setShowSuggestions(false); setSearchValue(''); setMobileSearchOpen(false) }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: '1px solid #f3f4f6' }}
+                    >
+                      <img src={image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>{category}</p>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#0049ff', flexShrink: 0 }}>{price}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { onSearchSubmit(e as unknown as React.FormEvent); setMobileSearchOpen(false) }}
+                    style={{ width: '100%', padding: '10px 14px', background: '#f9fafb', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6b7280', fontWeight: 600, textAlign: 'center' }}
+                  >
+                    Ver todos los resultados para "{searchValue}" →
+                  </button>
+                </div>
+              )}
             </form>
           )}
         </div>
@@ -1350,8 +1531,17 @@ export default function Storefront() {
                 <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.5, marginBottom: 6 }}>
                   Tu pedido <strong style={{ color: '#0049ff' }}>#{ventaNumero}</strong> fue registrado con éxito.
                 </p>
-                <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>Te contactaremos pronto para coordinar el pago y entrega.</p>
-                <button onClick={() => { setShowCheckout(false); goView('catalogo') }}
+                {referenciaBBVA ? (
+                  <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px', textAlign: 'left', margin: '16px 0' }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8 }}>Paga por transferencia SPEI (BBVA)</p>
+                    <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>Banco: <strong style={{ color: '#111' }}>{referenciaBBVA.banco}</strong></p>
+                    <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>CLABE: <strong style={{ color: '#111' }}>{referenciaBBVA.clabe}</strong></p>
+                    <p style={{ fontSize: 12, color: '#6b7280' }}>Referencia: <strong style={{ color: '#111' }}>{referenciaBBVA.referencia}</strong></p>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>Te contactaremos pronto para coordinar el pago y entrega.</p>
+                )}
+                <button onClick={() => { setShowCheckout(false); setReferenciaBBVA(null); goView('catalogo') }}
                   style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                   Seguir comprando
                 </button>
@@ -1378,6 +1568,24 @@ export default function Storefront() {
                     <input type="email" value={checkoutForm.email} onChange={e => setCheckoutForm(f => ({ ...f, email: e.target.value }))}
                       placeholder="tu@email.com" disabled={checkoutState === 'loading'}
                       style={{ width: '100%', padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Método de pago</label>
+                    {metodosDisponibles.length === 0 ? (
+                      <p style={{ fontSize: 12, color: '#9ca3af' }}>No hay métodos de pago configurados todavía.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {metodosDisponibles.map(m => (
+                          <label key={m.key}
+                            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: `1px solid ${metodoPago === m.key ? '#0049ff' : '#e5e7eb'}`, background: metodoPago === m.key ? '#eff4ff' : '#fff', borderRadius: 8, fontSize: 14, cursor: 'pointer' }}>
+                            <input type="radio" name="metodoPago" value={m.key} checked={metodoPago === m.key}
+                              onChange={() => setMetodoPago(m.key)} disabled={checkoutState === 'loading'} />
+                            {m.label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {checkoutError && (
@@ -1407,6 +1615,36 @@ export default function Storefront() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- Modal de Garantías / devoluciones ---- */}
+      {mostrarGarantias && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget) setMostrarGarantias(false) }}>
+          <div style={{ background: '#fff', borderRadius: 20, width: '100%', maxWidth: 480, maxHeight: '80vh', boxShadow: '0 24px 64px rgba(0,0,0,0.2)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>Garantías y devoluciones</h3>
+              <button onClick={() => setMostrarGarantias(false)} aria-label="Cerrar" style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
+              {storeConfig.politica_devolucion ? (
+                <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{storeConfig.politica_devolucion}</p>
+              ) : (
+                <>
+                  <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.7, margin: '0 0 12px' }}>
+                    Todos nuestros productos cuentan con garantía contra defectos de fábrica. Si algo no está en orden, contáctanos y lo resolvemos.
+                  </p>
+                  {storeConfig.whatsapp && (
+                    <a href={`https://wa.me/${storeConfig.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#25d366', color: '#fff', borderRadius: 99, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+                      💬 Hablar por WhatsApp
+                    </a>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

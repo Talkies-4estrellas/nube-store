@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { use } from 'react'
+import { ArrowLeft, Search, ShoppingCart } from 'lucide-react'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -47,6 +48,38 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
   const [added, setAdded] = useState(false)
   const [cartCount, setCartCount] = useState(0)
   const [imgActiva, setImgActiva] = useState(0)
+  const [buscarValor, setBuscarValor] = useState('')
+  const [sugerencias, setSugerencias] = useState<{ nombre: string; sku: string; precio: number; imagen_url: string | null }[]>([])
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
+  const [esMovil, setEsMovil] = useState(false)
+  const [buscarAbiertoMovil, setBuscarAbiertoMovil] = useState(false)
+
+  // En móvil el buscador colapsa a solo un icono para no romper la barra
+  // (logo + volver + carrito ya ocupan espacio suficiente en pantallas chicas).
+  useEffect(() => {
+    const check = () => setEsMovil(window.innerWidth < 700)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  function onBuscarSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const q = buscarValor.trim()
+    if (!q) return
+    window.location.href = `/?buscar=${encodeURIComponent(q)}`
+  }
+
+  function onBuscarChange(val: string) {
+    setBuscarValor(val)
+    if (val.trim().length > 1) {
+      supabase.from('productos').select('nombre, sku, precio, imagen_url')
+        .eq('activo', true).ilike('nombre', `%${val.trim()}%`).limit(5)
+        .then(({ data }) => { setSugerencias(data || []); setMostrarSugerencias((data || []).length > 0) })
+    } else {
+      setMostrarSugerencias(false)
+    }
+  }
 
   useEffect(() => {
     supabase
@@ -99,25 +132,128 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
         .thumb-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
       `}</style>
 
-      {/* Topbar limpio — sin admin */}
-      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <div style={{ width: 28, height: 28, background: NAVY, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: '#fff', fontWeight: 900, fontSize: 10 }}>OE</span>
+      {/* Topbar limpio — sin admin. En móvil el buscador colapsa a un icono. */}
+      <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '0 16px', height: 56, display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 100 }}>
+        {!(esMovil && buscarAbiertoMovil) && (
+          <button type="button" aria-label="Volver al catálogo" onClick={() => history.length > 1 ? history.back() : (window.location.href = '/')}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 12, background: '#f1f2f6', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
+            <ArrowLeft size={20} color={NAVY} />
+          </button>
+        )}
+
+        {!(esMovil && buscarAbiertoMovil) && (
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }}>
+            <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 30, width: 'auto' }} />
+          </Link>
+        )}
+
+        {!esMovil && (
+          <div style={{ position: 'relative', flex: '0 1 320px' }}>
+            <form onSubmit={onBuscarSubmit} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 999, padding: '0 6px 0 14px', height: 42 }}>
+              <Search size={17} color={NAVY} style={{ flexShrink: 0 }} />
+              <input
+                autoFocus={esMovil}
+                type="search"
+                value={buscarValor}
+                onChange={e => onBuscarChange(e.target.value)}
+                onFocus={() => buscarValor.trim().length > 1 && setMostrarSugerencias(sugerencias.length > 0)}
+                onBlur={() => setTimeout(() => setMostrarSugerencias(false), 150)}
+                placeholder="Buscar productos" autoComplete="off"
+                style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontSize: 14, fontWeight: 700, color: NAVY }} />
+              {esMovil && (
+                <button type="button" aria-label="Cerrar búsqueda"
+                  onClick={() => { setBuscarAbiertoMovil(false); setBuscarValor(''); setMostrarSugerencias(false) }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: '#9ca3af', fontSize: 20, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>
+                  ×
+                </button>
+              )}
+            </form>
+
+            {mostrarSugerencias && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', zIndex: 200, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                {sugerencias.map(p => (
+                  <button key={p.sku} type="button"
+                    onMouseDown={() => { window.location.href = `/tienda/${p.sku}` }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: '1px solid #f3f4f6' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                    <img src={p.imagen_url || FALLBACK} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0049ff', flexShrink: 0 }}>${Number(p.precio).toLocaleString('es-MX')}</span>
+                  </button>
+                ))}
+                <button type="button" onMouseDown={onBuscarSubmit as unknown as React.MouseEventHandler}
+                  style={{ width: '100%', padding: '10px 14px', background: '#f9fafb', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>
+                  Ver todos los resultados para "{buscarValor}" →
+                </button>
+              </div>
+            )}
           </div>
-          <span style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-0.02em' }}>
-            <span style={{ color: NAVY }}>Order</span><span style={{ color: PINK }}>Express</span>
-          </span>
-        </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link href="/" style={{ fontSize: 13, color: '#374151', fontWeight: 600, textDecoration: 'none' }}>← Catálogo</Link>
-          <Link href="/" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, background: NAVY, color: '#fff', fontSize: 13, fontWeight: 700, padding: '7px 14px', borderRadius: 20, textDecoration: 'none' }}>
-            🛒 Carrito
+        )}
+
+        {!(esMovil && buscarAbiertoMovil) && <div style={{ flex: 1 }} />}
+
+        {esMovil && !buscarAbiertoMovil && (
+          <button type="button" aria-label="Buscar" onClick={() => setBuscarAbiertoMovil(true)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 12, background: '#f1f2f6', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
+            <Search size={18} color={NAVY} />
+          </button>
+        )}
+
+        {esMovil && buscarAbiertoMovil && (
+          <div style={{ position: 'relative', flex: 1 }}>
+            <form onSubmit={onBuscarSubmit} role="search" style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 999, padding: '0 6px 0 14px', height: 42 }}>
+              <Search size={17} color={NAVY} style={{ flexShrink: 0 }} />
+              <input
+                autoFocus
+                type="search"
+                value={buscarValor}
+                onChange={e => onBuscarChange(e.target.value)}
+                onFocus={() => buscarValor.trim().length > 1 && setMostrarSugerencias(sugerencias.length > 0)}
+                onBlur={() => setTimeout(() => setMostrarSugerencias(false), 150)}
+                placeholder="Buscar productos" autoComplete="off"
+                style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontSize: 14, fontWeight: 700, color: NAVY }} />
+              <button type="button" aria-label="Cerrar búsqueda"
+                onClick={() => { setBuscarAbiertoMovil(false); setBuscarValor(''); setMostrarSugerencias(false) }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: '#9ca3af', fontSize: 20, cursor: 'pointer', flexShrink: 0, lineHeight: 1 }}>
+                ×
+              </button>
+            </form>
+
+            {mostrarSugerencias && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6, background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', zIndex: 200, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+                {sugerencias.map(p => (
+                  <button key={p.sku} type="button"
+                    onMouseDown={() => { window.location.href = `/tienda/${p.sku}` }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: '1px solid #f3f4f6' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                    <img src={p.imagen_url || FALLBACK} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</p>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0049ff', flexShrink: 0 }}>${Number(p.precio).toLocaleString('es-MX')}</span>
+                  </button>
+                ))}
+                <button type="button" onMouseDown={onBuscarSubmit as unknown as React.MouseEventHandler}
+                  style={{ width: '100%', padding: '10px 14px', background: '#f9fafb', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>
+                  Ver todos los resultados para "{buscarValor}" →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!(esMovil && buscarAbiertoMovil) && (
+          <Link href="/?view=carrito" aria-label="Carrito" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 12, background: NAVY, flexShrink: 0 }}>
+            <ShoppingCart size={20} color="#fff" />
             {cartCount > 0 && (
-              <span style={{ background: PINK, borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900 }}>{cartCount}</span>
+              <span style={{ position: 'absolute', top: -4, right: -4, background: PINK, color: '#fff', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900 }}>{cartCount}</span>
             )}
           </Link>
-        </div>
+        )}
       </header>
 
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '40px 24px' }}>
@@ -131,7 +267,7 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
         </div>
 
         {loading && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40 }}>
+          <div className="producto-principal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40 }}>
             <SkeletonBox w="100%" h={380} r={16} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <SkeletonBox w="60%" h={16} /><SkeletonBox w="90%" h={32} />
@@ -152,7 +288,7 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
 
         {producto && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48 }}>
+            <div className="producto-principal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48 }}>
 
               {/* Galería de imágenes */}
               <div>
@@ -254,7 +390,7 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
             </div>
 
             {/* Sección inferior */}
-            <div style={{ marginTop: 48, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            <div className="producto-detalle-grid" style={{ marginTop: 48, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
               {/* Descripción */}
               <div style={{ background: '#fff', borderRadius: 16, padding: '24px 28px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
                 <h2 style={{ fontSize: 16, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Sobre este producto</h2>

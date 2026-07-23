@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import SubNav from '../_subnav'
 
 const NAVY = '#252855'
 
@@ -46,7 +45,6 @@ export default function MenusPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <SubNav />
           <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Menús</h1>
         </div>
         <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Activa o desactiva las secciones del menú lateral de la tienda. <strong>Inicio</strong> siempre es visible.</p>

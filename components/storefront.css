@@ -493,6 +493,16 @@
   border-color: #061126;
 }
 
+/* Corazón de favoritos guardado: relleno en rosa en vez de solo el trazo */
+.oe-store .icon-button.saved {
+  background: var(--pink);
+  color: #fff;
+  border-color: var(--pink);
+}
+.oe-store .icon-button.saved svg {
+  fill: currentColor;
+}
+
 .oe-store .icon-button span {
   position: absolute;
   top: -5px;
@@ -1957,6 +1967,14 @@
 }
 
 @media (max-width: 1180px) {
+  /* La lista larga de botones de categoría (uno por cada categoría, con
+     conteo) ocupa demasiado espacio en móvil y ya existe el <select>
+     desplegable justo arriba que hace lo mismo. Se oculta solo la lista;
+     el select y la tarjeta de rango de precio siguen visibles. */
+  .oe-store .category-buttons {
+    display: none;
+  }
+
   .oe-store .sidebar {
     position: sticky;
     top: 0;

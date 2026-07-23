@@ -2,7 +2,6 @@
 
 import { useRef, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import SubNav from '../_subnav'
 import { uploadToSupabase } from '@/lib/uploadWebp'
 
 const NAVY = '#252855'
@@ -20,12 +19,14 @@ const DEFAULT_SLIDES: Slide[] = [
   { img: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=1400&q=80', kicker: 'Audio premium', title: 'Sonido claro para concentrarte más.' },
 ]
 
+const SLIDE_VACIO: Slide = { img: '', kicker: '', title: '' }
+
 export default function BlogPage() {
   const [slides, setSlides] = useState<Slide[]>(DEFAULT_SLIDES)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [uploading, setUploading] = useState<number | null>(null)
-  const fileRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
+  const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
   useEffect(() => {
     supabase.from('config_storefront').select('carrusel').eq('id', 1).single()
@@ -36,6 +37,16 @@ export default function BlogPage() {
 
   function setSlide(i: number, field: keyof Slide, val: string) {
     setSlides(prev => { const s = [...prev]; s[i] = { ...s[i], [field]: val }; return s })
+  }
+
+  function agregarSlide() {
+    setSlides(prev => [...prev, { ...SLIDE_VACIO }])
+  }
+
+  function eliminarSlide(i: number) {
+    if (!confirm('¿Eliminar esta diapositiva del carrusel?')) return
+    setSlides(prev => prev.filter((_, idx) => idx !== i))
+    delete fileRefs.current[i]
   }
 
   async function handleImgUpload(i: number, file: File) {
@@ -63,10 +74,9 @@ export default function BlogPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <SubNav />
           <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Carrusel de imágenes</h1>
         </div>
-        <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Las 3 diapositivas del banner principal. Sube una imagen o pega una URL pública.</p>
+        <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Las diapositivas del banner principal. Sube una imagen o pega una URL pública, y agrega o elimina las que necesites.</p>
 
         {slides.map((slide, i) => (
           <div key={i} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
@@ -79,12 +89,19 @@ export default function BlogPage() {
               <span style={{ position: 'absolute', top: 10, left: 12, background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20 }}>
                 Slide {i + 1}
               </span>
-              {/* Botón subir sobre la imagen */}
-              <button onClick={() => fileRefs[i].current?.click()}
-                style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                {uploading === i ? 'Subiendo…' : '📁 Subir imagen'}
-              </button>
-              <input ref={fileRefs[i]} type="file" accept="image/*" style={{ display: 'none' }}
+              {/* Botones sobre la imagen */}
+              <div style={{ position: 'absolute', top: 10, right: 12, display: 'flex', gap: 6 }}>
+                <button onClick={() => fileRefs.current[i]?.click()}
+                  style={{ background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                  {uploading === i ? 'Subiendo…' : '📁 Subir imagen'}
+                </button>
+                <button onClick={() => eliminarSlide(i)} disabled={slides.length <= 1}
+                  title={slides.length <= 1 ? 'Debe quedar al menos una diapositiva' : 'Eliminar diapositiva'}
+                  style={{ background: 'rgba(220,38,38,0.75)', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: slides.length <= 1 ? 'default' : 'pointer', opacity: slides.length <= 1 ? 0.5 : 1 }}>
+                  🗑 Eliminar
+                </button>
+              </div>
+              <input ref={el => { fileRefs.current[i] = el }} type="file" accept="image/*" style={{ display: 'none' }}
                 onChange={e => { if (e.target.files?.[0]) handleImgUpload(i, e.target.files[0]) }} />
               {slide.title && (
                 <div style={{ position: 'absolute', bottom: 10, left: 14, right: 14 }}>
@@ -111,6 +128,14 @@ export default function BlogPage() {
             </div>
           </div>
         ))}
+
+        <button onClick={agregarSlide} type="button" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          background: '#fff', color: NAVY, border: '2px dashed #d1d5db', borderRadius: 12,
+          padding: '16px', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+        }}>
+          + Agregar diapositiva
+        </button>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={guardar} disabled={saving} style={{

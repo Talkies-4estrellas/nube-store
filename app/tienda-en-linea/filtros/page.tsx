@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import SubNav from '../_subnav'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -15,15 +14,35 @@ const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#37415
 type Fields = { topbar_btn1: string; topbar_btn2: string }
 const DEFAULTS: Fields = { topbar_btn1: 'Nuevo', topbar_btn2: 'Ofertas' }
 
+type Categoria = { id: number; nombre: string; activo: boolean }
+
 export default function FiltrosPage() {
   const [f, setF] = useState<Fields>(DEFAULTS)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [cargandoCategorias, setCargandoCategorias] = useState(true)
+  const [nuevaCategoria, setNuevaCategoria] = useState('')
+  const [creando, setCreando] = useState(false)
+  const [errorCategoria, setErrorCategoria] = useState('')
+  const [paginaCategorias, setPaginaCategorias] = useState(1)
+  const POR_PAGINA = 10
+
   useEffect(() => {
     supabase.from('config_storefront').select('topbar_btn1,topbar_btn2').eq('id', 1).single()
       .then(({ data }) => { if (data) setF({ ...DEFAULTS, ...data }) })
+    cargarCategorias()
   }, [])
+
+  function cargarCategorias() {
+    setCargandoCategorias(true)
+    supabase.from('categorias').select('id, nombre, activo').order('nombre')
+      .then(({ data }) => { setCategorias(data || []); setCargandoCategorias(false) })
+  }
+
+  const totalPaginasCategorias = Math.max(1, Math.ceil(categorias.length / POR_PAGINA))
+  const categoriasPagina = categorias.slice((paginaCategorias - 1) * POR_PAGINA, paginaCategorias * POR_PAGINA)
 
   function set(key: keyof Fields, val: string) { setF(p => ({ ...p, [key]: val })) }
 
@@ -34,12 +53,44 @@ export default function FiltrosPage() {
     setTimeout(() => setSaved(false), 2500)
   }
 
+  async function crearCategoria(e: React.FormEvent) {
+    e.preventDefault()
+    const nombre = nuevaCategoria.trim()
+    if (!nombre) return
+    setErrorCategoria('')
+    setCreando(true)
+    const { error } = await supabase.from('categorias').insert({ nombre })
+    setCreando(false)
+    if (error) {
+      setErrorCategoria(error.code === '23505' ? 'Esa categoría ya existe.' : 'Error al crear la categoría.')
+      return
+    }
+    setNuevaCategoria('')
+    setPaginaCategorias(1)
+    cargarCategorias()
+  }
+
+  async function alternarActivo(cat: Categoria) {
+    setCategorias(prev => prev.map(c => c.id === cat.id ? { ...c, activo: !c.activo } : c))
+    await supabase.from('categorias').update({ activo: !cat.activo }).eq('id', cat.id)
+  }
+
+  async function eliminarCategoria(cat: Categoria) {
+    if (!confirm(`¿Eliminar la categoría "${cat.nombre}"? Los productos que la usan quedarán sin categoría.`)) return
+    setCategorias(prev => {
+      const restantes = prev.filter(c => c.id !== cat.id)
+      const ultimaPagina = Math.max(1, Math.ceil(restantes.length / POR_PAGINA))
+      setPaginaCategorias(p => Math.min(p, ultimaPagina))
+      return restantes
+    })
+    await supabase.from('categorias').delete().eq('id', cat.id)
+  }
+
   return (
     <div className="te-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 24, alignItems: 'start' }}>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <SubNav />
           <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: 0 }}>Filtros</h1>
         </div>
         <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Los dos botones de acceso rápido que aparecen en el topbar de la tienda junto al buscador.</p>
@@ -80,6 +131,91 @@ export default function FiltrosPage() {
           }}>
             {saving ? 'Guardando...' : saved ? '¡Guardado!' : 'Guardar cambios'}
           </button>
+        </div>
+
+        {/* Categorías */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Categorías</p>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+            Las categorías inactivas dejan de aparecer en el filtro de la tienda, pero sus productos y el historial no se ven afectados.
+          </p>
+
+          <form onSubmit={crearCategoria} style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <input style={{ ...inp, flex: 1 }} value={nuevaCategoria} onChange={e => setNuevaCategoria(e.target.value)}
+              placeholder="Nombre de la nueva categoría" disabled={creando} />
+            <button type="submit" disabled={creando || !nuevaCategoria.trim()} style={{
+              background: NAVY, color: '#fff', border: 'none', padding: '0 20px', borderRadius: 8,
+              fontWeight: 700, fontSize: 14, cursor: creando ? 'default' : 'pointer', whiteSpace: 'nowrap',
+              opacity: creando || !nuevaCategoria.trim() ? 0.6 : 1,
+            }}>
+              {creando ? 'Creando...' : '+ Agregar'}
+            </button>
+          </form>
+          {errorCategoria && (
+            <p style={{ fontSize: 12, color: '#dc2626', margin: '-8px 0 16px', fontWeight: 600 }}>{errorCategoria}</p>
+          )}
+
+          {cargandoCategorias ? (
+            <p style={{ fontSize: 13, color: '#9ca3af' }}>Cargando categorías...</p>
+          ) : categorias.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#9ca3af' }}>No hay categorías todavía.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {categoriasPagina.map(cat => (
+                <div key={cat.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  border: '1px solid #e5e7eb', borderRadius: 8,
+                  background: cat.activo ? '#fff' : '#f9fafb',
+                }}>
+                  <span style={{
+                    flex: 1, fontSize: 14, fontWeight: 600,
+                    color: cat.activo ? '#111' : '#9ca3af',
+                    textDecoration: cat.activo ? 'none' : 'line-through',
+                  }}>
+                    {cat.nombre}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                    background: cat.activo ? '#d1fae5' : '#f3f4f6',
+                    color: cat.activo ? '#065f46' : '#6b7280',
+                  }}>
+                    {cat.activo ? 'Activa' : 'Inactiva'}
+                  </span>
+                  <button type="button" onClick={() => alternarActivo(cat)} style={{
+                    background: '#fff', color: '#374151', border: '1px solid #d1d5db',
+                    padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                  }}>
+                    {cat.activo ? 'Desactivar' : 'Activar'}
+                  </button>
+                  <button type="button" onClick={() => eliminarCategoria(cat)} style={{
+                    background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+                    padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                  }}>
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+
+              {totalPaginasCategorias > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingTop: 12, borderTop: '1px solid #f3f4f6' }}>
+                  <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                    {(paginaCategorias - 1) * POR_PAGINA + 1}–{Math.min(paginaCategorias * POR_PAGINA, categorias.length)} de {categorias.length}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" onClick={() => setPaginaCategorias(p => Math.max(1, p - 1))} disabled={paginaCategorias === 1}
+                      style={{ background: '#fff', color: '#374151', border: '1px solid #d1d5db', padding: '6px 12px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: paginaCategorias === 1 ? 'default' : 'pointer', opacity: paginaCategorias === 1 ? 0.5 : 1 }}>
+                      ← Anterior
+                    </button>
+                    <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>Página {paginaCategorias} de {totalPaginasCategorias}</span>
+                    <button type="button" onClick={() => setPaginaCategorias(p => Math.min(totalPaginasCategorias, p + 1))} disabled={paginaCategorias === totalPaginasCategorias}
+                      style={{ background: '#fff', color: '#374151', border: '1px solid #d1d5db', padding: '6px 12px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: paginaCategorias === totalPaginasCategorias ? 'default' : 'pointer', opacity: paginaCategorias === totalPaginasCategorias ? 0.5 : 1 }}>
+                      Siguiente →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

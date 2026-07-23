@@ -230,6 +230,36 @@ body {
   }
 }
 
+/* Ficha de producto pública (/tienda/[slug]): "Sobre este producto" +
+   "Especificaciones" lado a lado. En móvil se apilan; sin esto el panel
+   derecho se sale de la pantalla y corta texto (ej. "Disponibilidad"). */
+@media (max-width: 700px) {
+  .producto-detalle-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .producto-detalle-grid > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Imagen + info del producto (y su esqueleto de carga): en escritorio van
+   lado a lado. En móvil, al tener una sola imagen la columna de la foto
+   queda mucho más corta que la de info, y como el grid estira ambas
+   columnas a la misma altura, se veía un hueco vacío enorme debajo de la
+   foto. Se apilan: imagen arriba, info abajo — funciona igual con 1 o
+   varias fotos, porque el orden de apilado sigue el orden del HTML. */
+@media (max-width: 700px) {
+  .producto-principal-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 24px !important;
+  }
+  .producto-principal-grid > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
 /* Configuración: menú lateral fijo (220px) + contenido.
    En móvil el menú pasa arriba y ambos ocupan el ancho completo. */
 @media (max-width: 768px) {
