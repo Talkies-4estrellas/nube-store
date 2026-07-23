@@ -98,6 +98,7 @@ Un archivo por día, en orden cronológico. Cada entrada documenta un commit: ha
 | `seccion-02-07-2026.md` | 02/07/2026 | Inicio del arreglo para presentación: validación email, skeletons, página de presentación, ruta de tienda por slug. |
 | `seccion-03-07-2026.md` | 03/07/2026 | Robustez, fixes críticos, rediseño portal de proveedores, migraciones DB, documentación del proyecto. |
 | `seccion-05-07-2026.md` | 05/07/2026 | "Adiós nube-store": consolidación definitiva del nombre Order Express. |
+| `seccion-22-07-2026.md` | 22/07/2026 | Pasarelas de pago (Mercado Pago/PayPal/BBVA), unificación del header duplicado en la ficha de producto, submenú de Tienda en línea en el Sidebar, gestor de categorías en Filtros, carrusel con slides dinámicos. |
 
 ---
 
@@ -116,6 +117,7 @@ Punto de entrada central que cruza cada **área de documentación** (columnas) c
 | [02/07](sesiones/seccion-02-07-2026.md) | | ✓ | ✓ | ✓ | | |
 | [03/07](sesiones/seccion-03-07-2026.md) | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [05/07](sesiones/seccion-05-07-2026.md) | ✓ | | | | ✓ | ✓ |
+| [22/07](sesiones/seccion-22-07-2026.md) | ✓ | ✓ | ✓ | ✓ | ✓ | |
 
 > La portada de la documentación por áreas está en [`Doc/documentacion/documento.md`](documentacion/documento.md).
 
@@ -134,15 +136,17 @@ Punto de entrada central que cruza cada **área de documentación** (columnas) c
 ## Rutas públicas (sin autenticación)
 
 ```
-/              → Storefront (tienda pública)
-/login         → Login del panel admin
-/proveedores   → Portal de proveedores
+/                  → Storefront (tienda pública)
+/tienda/[slug]     → Ficha de producto pública (slug = SKU en mayúsculas)
+/login             → Login del panel admin
+/proveedores       → Portal de proveedores
 ```
 
 Definidas en `components/AppChrome.tsx`:
 ```ts
 const PUBLIC_PATHS = ['/', '/login', '/proveedores']
 ```
+(`/tienda/[slug]` es pública por patrón de ruta dinámica, no está en esta lista explícita.)
 
 ---
 
@@ -163,7 +167,7 @@ Definidas en `.env.local` (local) y en el dashboard de Vercel (producción).
 |---------|---------|---------|
 | `next` | 16.2.9 | Framework principal — App Router + Turbopack |
 | `@supabase/ssr` | latest | Cliente Supabase con soporte de cookies para middleware |
-| `lucide-react` | ^1.22.0 | Iconos — **solo en `Storefront.tsx`**. El panel admin usa `Icon.tsx` propio. |
+| `lucide-react` | ^1.22.0 | Iconos — usado en `Storefront.tsx` y `app/tienda/[slug]/page.tsx` (storefront público). El panel admin usa `Icon.tsx` propio. |
 | `mercadopago` | ^3.2.0 | SDK de la pasarela de pagos (Checkout Pro). Solo servidor. Requiere Node 18+ |
 
 ---
@@ -194,6 +198,21 @@ Definidas en `.env.local` (local) y en el dashboard de Vercel (producción).
 | `Doc/database/migration_productos_ampliado.sql` | 15 columnas nuevas + recreación de la vista |
 | `Doc/migracion-supabase.md` | Guía paso a paso para migrar de una cuenta de Supabase a otra (datos + esquema + imágenes) |
 | `scripts/exportar-datos.ps1` | Script PowerShell: exporta esquema y datos de un proyecto Supabase vía `supabase db dump` |
+
+---
+
+## Archivos agregados el 22/07/2026
+
+### Pasarelas de pago (paralelas a Mercado Pago)
+| Archivo | Función |
+|---------|---------|
+| `app/api/pagos/paypal/crear-orden/route.ts` | Crea una orden de PayPal (Orders API v2, sin SDK) |
+| `app/api/pagos/paypal/capturar/route.ts` | Captura el pago cuando PayPal redirige de vuelta al comprador |
+| `app/api/pagos/bbva/crear-referencia/route.ts` | Genera una referencia de transferencia SPEI vía OpenPay (pasarela de BBVA para negocios) |
+| `app/api/pagos/bbva/webhook/route.ts` | Recibe la confirmación de OpenPay cuando se recibe la transferencia |
+
+### Navegación de Tienda en línea
+`app/tienda-en-linea/_subnav.tsx` se eliminó — la navegación entre las 7 subpáginas (Diseño, Páginas, Carrusel, Menús, Filtros, Redes sociales, Legal/Envíos) ahora vive como submenú expandible en `components/Sidebar.tsx`, bajo el ítem "Tienda en línea".
 
 ---
 

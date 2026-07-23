@@ -120,6 +120,29 @@ o el stock se descontaría dos veces.
 
 ---
 
+## Pasarelas de pago adicionales — agregado 22/07/2026
+
+El checkout de `Storefront.tsx` ahora tiene un selector de método de pago que lee
+`config_metodos_pago` (booleanos `efectivo`, `transferencia`, `tarjeta`, `mercadopago`,
+`paypal`, `bbva`) y solo muestra las opciones activas. Se agregaron dos pasarelas
+más, siguiendo el mismo patrón de `crear-preferencia`/`webhook` de Mercado Pago
+(recalcular importes en el servidor, nunca confiar en el navegador):
+
+| Ruta | Función |
+|---|---|
+| `app/api/pagos/paypal/crear-orden/route.ts` | Crea una orden de PayPal (Orders API v2 vía `fetch`, sin SDK — no se agregó dependencia nueva) |
+| `app/api/pagos/paypal/capturar/route.ts` | PayPal redirige aquí (`GET ?token=`) tras la aprobación; captura el cargo real y marca la venta `Pagado` |
+| `app/api/pagos/bbva/crear-referencia/route.ts` | Genera una referencia de transferencia SPEI vía **OpenPay** — BBVA no tiene una API pública de e-commerce propia; OpenPay es su producto para negocios en México |
+| `app/api/pagos/bbva/webhook/route.ts` | Recibe la notificación de OpenPay cuando se confirma la transferencia |
+
+**Variables de entorno que faltan para que cobren de verdad** (no están en `.env.local`
+todavía): `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MODE` (`sandbox`/`live`),
+`OPENPAY_MERCHANT_ID`, `OPENPAY_PRIVATE_KEY`, `OPENPAY_MODE`. Sin ellas, si el cliente
+elige esa opción en el checkout, la ruta responde con error y el pedido cae al flujo
+normal de `estado='Pendiente'` — no rompe nada, solo no genera el cobro real.
+
+---
+
 ## Sistema de Autenticación
 
 ### Paquete
@@ -282,17 +305,13 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
-- [ ] **Ejecutar `Doc/database/migration_productos_ampliado.sql`** (15 columnas nuevas + recrear vista) — sin esto el import CSV no guarda los campos nuevos
-- [ ] **Configurar `MP_ACCESS_TOKEN`** en `.env.local` y Vercel para activar la pasarela de pagos
-- [ ] **Configurar `SUPABASE_SERVICE_ROLE_KEY`** — requerida por el webhook de pagos y la descarga de imágenes del CSV
+- [ ] **Configurar `MP_ACCESS_TOKEN`, `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET`/`PAYPAL_MODE`, `OPENPAY_MERCHANT_ID`/`OPENPAY_PRIVATE_KEY`/`OPENPAY_MODE`** en `.env.local` y Vercel — las 3 pasarelas ya están integradas en código pero sin credenciales reales no cobran (22/07/2026)
+- [ ] **Correr en el SQL Editor de Supabase las policies de INSERT/UPDATE/DELETE de `clientes`, `ventas`, `venta_items` y `categorias`** — están en `schema_completo.sql` pero la base nueva (post-migración) no las tenía aplicadas; sin esto el checkout público falla (detectado 22/07/2026)
+- [ ] **Re-habilitar RLS en `productos` y `categorias`** antes de producción — sigue desactivado desde la sesión de importación CSV, por pedido explícito del usuario
+- [ ] Completar la "Parte 4" de la migración: crear usuario admin real en Supabase Auth + INSERT en `user_roles` — sigue bypaseado con RLS desactivado
 - [ ] Validar la firma `x-signature` del webhook de Mercado Pago (antes de producción)
-- [ ] Guardar `payment_id` de MP en `ventas` para conciliación
-- [ ] Script para copiar imágenes del bucket entre proyectos de Supabase (no van en el dump SQL)
+- [ ] Guardar `payment_id`/`chargeId` de MP, PayPal y OpenPay en `ventas` para conciliación
 - [ ] Vista previa de Tienda en línea: el iframe tiene `src="/"` fijo — si se navega dentro (ej. clic en "Soy proveedor"), se queda ahí y el switch PC/Móvil no vuelve sola al inicio. Falta botón "🏠 Inicio" o reset automático al cambiar de tab
-- [ ] Ejecutar en Supabase: `ALTER TABLE solicitudes_productos ADD COLUMN IF NOT EXISTS detalles jsonb DEFAULT NULL;`
-- [ ] Ejecutar `database/auth.sql` en Supabase SQL Editor (Step 1 del setup auth)
-- [ ] Crear usuario admin en Supabase Authentication y hacer INSERT en user_roles (Steps 2-3)
-- [ ] Ejecutar política anon para `solicitudes/` en Storage (ver schema.sql)
 - [ ] Migrar sistema de login de tienda (registros) a Supabase Auth
 - [ ] Carrito de tienda persistente en DB para clientes con cuenta (cart_items)
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
@@ -372,6 +391,18 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] **Fix breakpoint vista previa**: el simulador PC/Móvil de Tienda en línea usaba `vp: 1180`, exactamente el breakpoint móvil del storefront (`max-width: 1180px`, inclusivo) — la vista "PC" caía en rango móvil. Subido a `1280`
 - [x] Vista previa PC/Móvil con proporciones diferenciadas: PC ahora es un rectángulo horizontal tipo monitor (~16:10, alto = `PREVIEW_W * 0.62` acotado 260–420px) en vez de un recuadro alto y angosto; Móvil sin cambios (520×640)
 - [x] `/proveedores`: eliminada la barra de tabs horizontal duplicada en móvil (ya existía el mismo menú en la hamburguesa); "Mis enviados" renombrado a **"Mis productos"** en menú y título; contenido con `maxWidth: 1100` para no estirarse en pantallas anchas; título del header realineado a la izquierda (antes se iba al extremo derecho al ocultarse el stepper)
+
+## Completado (22/07/2026)
+- [x] Checkout: selector real de método de pago (efectivo/transferencia/Mercado Pago/PayPal/BBVA) leyendo `config_metodos_pago`, solo muestra los habilitados
+- [x] PayPal y BBVA (OpenPay) agregados como pasarelas — ver `## Pasarelas de pago adicionales` más arriba
+- [x] Fix RLS: `clientes`, `ventas`, `venta_items` no tenían policy de INSERT anónimo en la base nueva (bloqueaba todo el checkout público) — mismo patrón de policy faltante ya visto con `categorias` en la migración de BD; policies recreadas en `schema_completo.sql`
+- [x] `app/tienda/[slug]/page.tsx`: **header duplicado en PC corregido** — bug heredado de la sesión móvil anterior (clases `.producto-header-mobile/-desktop` con `display:none`/`!important` cruzadas que dejaron de esconderse bien). Reescrito como una sola barra con lógica de colapso en JS (`esMovil` + `buscarAbiertoMovil`) en vez de CSS por clases: flecha atrás, logo, buscador con sugerencias en vivo (miniatura + nombre + precio, igual que el buscador desktop de `Storefront.tsx`), carrito. En móvil el buscador colapsa a un icono que se expande junto al carrito
+- [x] Buscador móvil de `Storefront.tsx` (icono lupa junto al carrito en el header): tenía un bug real — actualizaba el estado de sugerencias al escribir pero nunca las renderizaba (el dropdown solo existía en la versión desktop). Agregado el mismo dropdown también ahí
+- [x] `Storefront.tsx`: soporte para `?view=` (abre cualquier vista, ej. `?view=carrito`) y `?buscar=` (abre resultados de búsqueda) en la URL — usado por los links del header de `/tienda/[slug]`
+- [x] Navegación de "Tienda en línea": las 7 subpáginas (Diseño, Páginas, Carrusel, Menús, Filtros, Redes sociales, Legal/Envíos) pasaron del dropdown hamburguesa (`_subnav.tsx`, eliminado) a un submenú expandible en `components/Sidebar.tsx`, visible cuando la ruta activa empieza con `/tienda-en-linea`
+- [x] `/tienda-en-linea` (Diseño): eliminada la galería "Temas de color" — nombres de marca engañosos (`Cosmética`, `Deportes`, `Moda oscuro`...) que en realidad solo cambiaban `color_acento`, no un diseño completo. Eliminada también la maqueta estática "Tema actual"/editor de identidad; la página quedó solo con el panel de Vista previa real (iframe)
+- [x] `/tienda-en-linea/filtros`: nuevo gestor de categorías — crear, activar/desactivar (`categorias.activo`, columna nueva), eliminar, con paginación de 10 en 10. `Storefront.tsx` filtra el listado público a solo categorías activas
+- [x] `/tienda-en-linea/blog` (Carrusel): ahora se pueden agregar y eliminar diapositivas — antes eran exactamente 3 fijas (`fileRefs` pasó de array fijo de `useRef` a un `Record<number, HTMLInputElement>` para soportar cantidad variable)
 
 ## Completado (16/07/2026)
 - [x] ProductoModal: rediseño "Datos adicionales" — paleta visual 12 colores con swatches, chips rosas para tallas (sin grupos predefinidos), variantes en tabla con botones −/+ y totalizador, peso con etiqueta "g" flotante, fotos ilimitadas con zona drag-and-drop y selección múltiple, badge resumen en toggle colapsable
