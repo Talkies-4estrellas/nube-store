@@ -11,15 +11,27 @@ const inp: React.CSSProperties = {
 }
 const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }
 
-type Fields = { topbar_btn1: string; topbar_btn2: string }
-const DEFAULTS: Fields = { topbar_btn1: 'Nuevo', topbar_btn2: 'Ofertas' }
+type Fields = { topbar_btn1: string; topbar_btn2: string; topbar_btn1_activo: boolean; topbar_btn2_activo: boolean }
+const DEFAULTS: Fields = { topbar_btn1: 'Nuevo', topbar_btn2: 'Ofertas', topbar_btn1_activo: true, topbar_btn2_activo: true }
 
 type Categoria = { id: number; nombre: string; activo: boolean }
+
+type BotonFiltro = { id: string; label: string; view: string; activo: boolean }
+const VISTAS_DISPONIBLES = [
+  { value: 'catalogo', label: 'Catálogo' },
+  { value: 'novedades', label: 'Novedades' },
+  { value: 'favoritos', label: 'Favoritos' },
+  { value: 'ofertas', label: 'Ofertas' },
+  { value: 'carrito', label: 'Carrito' },
+  { value: 'soporte', label: 'Soporte' },
+]
 
 export default function FiltrosPage() {
   const [f, setF] = useState<Fields>(DEFAULTS)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  const [botones, setBotones] = useState<BotonFiltro[]>([])
 
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [cargandoCategorias, setCargandoCategorias] = useState(true)
@@ -30,10 +42,23 @@ export default function FiltrosPage() {
   const POR_PAGINA = 10
 
   useEffect(() => {
-    supabase.from('config_storefront').select('topbar_btn1,topbar_btn2').eq('id', 1).single()
-      .then(({ data }) => { if (data) setF({ ...DEFAULTS, ...data }) })
+    supabase.from('config_storefront').select('topbar_btn1,topbar_btn2,topbar_btn1_activo,topbar_btn2_activo,filtros_extra').eq('id', 1).single()
+      .then(({ data }) => {
+        if (data) setF({ ...DEFAULTS, ...data })
+        if (data?.filtros_extra) setBotones(data.filtros_extra)
+      })
     cargarCategorias()
   }, [])
+
+  function agregarBoton() {
+    setBotones(prev => [...prev, { id: crypto.randomUUID(), label: '', view: 'catalogo', activo: true }])
+  }
+  function actualizarBoton(id: string, campo: keyof BotonFiltro, valor: string | boolean) {
+    setBotones(prev => prev.map(b => b.id === id ? { ...b, [campo]: valor } : b))
+  }
+  function eliminarBoton(id: string) {
+    setBotones(prev => prev.filter(b => b.id !== id))
+  }
 
   function cargarCategorias() {
     setCargandoCategorias(true)
@@ -44,11 +69,11 @@ export default function FiltrosPage() {
   const totalPaginasCategorias = Math.max(1, Math.ceil(categorias.length / POR_PAGINA))
   const categoriasPagina = categorias.slice((paginaCategorias - 1) * POR_PAGINA, paginaCategorias * POR_PAGINA)
 
-  function set(key: keyof Fields, val: string) { setF(p => ({ ...p, [key]: val })) }
+  function set<K extends keyof Fields>(key: K, val: Fields[K]) { setF(p => ({ ...p, [key]: val })) }
 
   async function guardar() {
     setSaving(true)
-    await supabase.from('config_storefront').upsert({ id: 1, ...f, updated_at: new Date().toISOString() })
+    await supabase.from('config_storefront').upsert({ id: 1, ...f, filtros_extra: botones, updated_at: new Date().toISOString() })
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -99,8 +124,18 @@ export default function FiltrosPage() {
         <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>Vista previa del topbar</p>
           <div style={{ background: '#f9fafb', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ background: PINK, color: '#fff', padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{f.topbar_btn1 || 'Nuevo'}</div>
-            <div style={{ background: '#fff', color: NAVY, border: `1.5px solid ${NAVY}`, padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{f.topbar_btn2 || 'Ofertas'}</div>
+            {f.topbar_btn1_activo && (
+              <div style={{ background: PINK, color: '#fff', padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{f.topbar_btn1 || 'Nuevo'}</div>
+            )}
+            {f.topbar_btn2_activo && (
+              <div style={{ background: '#fff', color: NAVY, border: `1.5px solid ${NAVY}`, padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{f.topbar_btn2 || 'Ofertas'}</div>
+            )}
+            {!f.topbar_btn1_activo && !f.topbar_btn2_activo && botones.filter(b => b.activo && b.label.trim()).length === 0 && (
+              <span style={{ fontSize: 12, color: '#9ca3af' }}>Sin botones activos</span>
+            )}
+            {botones.filter(b => b.activo && b.label.trim()).map(b => (
+              <div key={b.id} style={{ background: '#fff', color: NAVY, border: `1.5px solid ${NAVY}`, padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>{b.label}</div>
+            ))}
             <div style={{ flex: 1, background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 20, padding: '6px 14px', fontSize: 12, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 6 }}>
               🔍 Buscar productos
             </div>
@@ -111,17 +146,72 @@ export default function FiltrosPage() {
         <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Etiquetas de los botones</p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-            <div>
-              <label style={lbl}>Botón 1 → lleva a Novedades</label>
-              <input style={inp} value={f.topbar_btn1} onChange={e => set('topbar_btn1', e.target.value)} placeholder="Nuevo" />
+            <div style={{ opacity: f.topbar_btn1_activo ? 1 : 0.6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ ...lbl, marginBottom: 0 }}>Botón 1 → lleva a Novedades</label>
+                <button type="button" onClick={() => set('topbar_btn1_activo', !f.topbar_btn1_activo)} style={{
+                  width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+                  background: f.topbar_btn1_activo ? '#0049ff' : '#d1d5db', position: 'relative', flexShrink: 0,
+                }}>
+                  <span style={{ position: 'absolute', top: 2, left: f.topbar_btn1_activo ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </button>
+              </div>
+              <input style={inp} value={f.topbar_btn1} onChange={e => set('topbar_btn1', e.target.value)} placeholder="Nuevo" disabled={!f.topbar_btn1_activo} />
               <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>Se muestra resaltado en color de acento</p>
             </div>
-            <div>
-              <label style={lbl}>Botón 2 → lleva a Ofertas</label>
-              <input style={inp} value={f.topbar_btn2} onChange={e => set('topbar_btn2', e.target.value)} placeholder="Ofertas" />
+            <div style={{ opacity: f.topbar_btn2_activo ? 1 : 0.6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ ...lbl, marginBottom: 0 }}>Botón 2 → lleva a Ofertas</label>
+                <button type="button" onClick={() => set('topbar_btn2_activo', !f.topbar_btn2_activo)} style={{
+                  width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+                  background: f.topbar_btn2_activo ? '#0049ff' : '#d1d5db', position: 'relative', flexShrink: 0,
+                }}>
+                  <span style={{ position: 'absolute', top: 2, left: f.topbar_btn2_activo ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </button>
+              </div>
+              <input style={inp} value={f.topbar_btn2} onChange={e => set('topbar_btn2', e.target.value)} placeholder="Ofertas" disabled={!f.topbar_btn2_activo} />
               <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>Se muestra con borde, sin relleno</p>
             </div>
           </div>
+        </div>
+
+        {/* Botones extra */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>Botones extra</p>
+            <button type="button" onClick={agregarBoton}
+              style={{ background: '#eff6ff', color: '#0049ff', border: 'none', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+              + Agregar botón
+            </button>
+          </div>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 16px' }}>
+            Además de "Nuevo" y "Ofertas", agrega los que necesites — cada uno se puede activar/desactivar sin perderlo.
+          </p>
+
+          {botones.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '16px 0' }}>Todavía no agregaste ningún botón extra.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {botones.map(b => (
+                <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: 8, alignItems: 'center', padding: '10px', border: '1px solid #f3f4f6', borderRadius: 10, opacity: b.activo ? 1 : 0.6 }}>
+                  <input style={inp} value={b.label} onChange={e => actualizarBoton(b.id, 'label', e.target.value)} placeholder="Nombre del botón" />
+                  <select style={{ ...inp, cursor: 'pointer' }} value={b.view} onChange={e => actualizarBoton(b.id, 'view', e.target.value)}>
+                    {VISTAS_DISPONIBLES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+                  </select>
+                  <button type="button" onClick={() => actualizarBoton(b.id, 'activo', !b.activo)} style={{
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                    background: b.activo ? '#0049ff' : '#d1d5db', position: 'relative', flexShrink: 0,
+                  }}>
+                    <span style={{ position: 'absolute', top: 3, left: b.activo ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </button>
+                  <button type="button" onClick={() => eliminarBoton(b.id)}
+                    style={{ background: '#fef2f2', color: '#dc2626', border: 'none', width: 30, height: 30, borderRadius: 8, cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>
+                    🗑
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>

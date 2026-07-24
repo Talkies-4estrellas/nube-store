@@ -282,10 +282,13 @@ export default function Storefront() {
     nav_ocultar: '',
     topbar_btn1: 'Nuevo',
     topbar_btn2: 'Ofertas',
+    topbar_btn1_activo: true,
+    topbar_btn2_activo: true,
     carrusel: null as { img: string; kicker: string; title: string }[] | null,
     politica_devolucion: '',
     fondo_logo: 'blanco' as 'blanco' | 'azul',
     menu_extra: [] as { id: string; label: string; icono: string; url: string; nueva_pestana: boolean }[],
+    filtros_extra: [] as { id: string; label: string; view: string; activo: boolean }[],
   })
   const [mostrarGarantias, setMostrarGarantias] = useState(false)
 
@@ -1408,8 +1411,15 @@ export default function Storefront() {
             </div>
 
             <div className="top-actions" aria-label="Acciones superiores">
-              <button className={`period-button${topPeriod === 'nuevo' ? ' active' : ''}`} type="button" onClick={() => goView('novedades')}>{storeConfig.topbar_btn1 || 'Nuevo'}</button>
-              <button className={`period-button${topPeriod === 'ofertas' ? ' active' : ''}`} type="button" onClick={() => goView('ofertas')}>{storeConfig.topbar_btn2 || 'Ofertas'}</button>
+              {storeConfig.topbar_btn1_activo && (
+                <button className={`period-button${topPeriod === 'nuevo' ? ' active' : ''}`} type="button" onClick={() => goView('novedades')}>{storeConfig.topbar_btn1 || 'Nuevo'}</button>
+              )}
+              {storeConfig.topbar_btn2_activo && (
+                <button className={`period-button${topPeriod === 'ofertas' ? ' active' : ''}`} type="button" onClick={() => goView('ofertas')}>{storeConfig.topbar_btn2 || 'Ofertas'}</button>
+              )}
+              {storeConfig.filtros_extra.filter(b => b.activo && b.label?.trim()).map(b => (
+                <button key={b.id} className={`period-button${view === b.view ? ' active' : ''}`} type="button" onClick={() => goView(b.view)}>{b.label}</button>
+              ))}
               <div style={{ position: 'relative' }}>
                 <form className="search-box" onSubmit={onSearchSubmit} role="search">
                   <Ic n="search" />
