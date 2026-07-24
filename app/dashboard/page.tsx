@@ -119,6 +119,8 @@ export default function DashboardPage() {
   const [ventasPeriodo, setVentasPeriodo] = useState<VentaGrafica[]>([])
   const [stockBajo, setStockBajo]       = useState<ProductoBajo[]>([])
   const [totalClientes, setTotalClientes] = useState(0)
+  const [totalProveedores, setTotalProveedores] = useState(0)
+  const [totalSinStock, setTotalSinStock] = useState(0)
   const [loading, setLoading]           = useState(true)
   const [periodo, setPeriodo]           = useState<Periodo>('semana')
   const [loadingPeriodo, setLoadingPeriodo] = useState(false)
@@ -150,18 +152,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }, { data: sols }] = await Promise.all([
+      const [{ data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }, { data: sols }, { count: countProveedores }, { count: countSinStock }] = await Promise.all([
         supabase.from('ventas').select('*, clientes(nombre)').order('created_at', { ascending: false }).limit(5),
-        supabase.from('productos').select('id, nombre, stock').lte('stock', 3).order('stock'),
+        supabase.from('productos').select('id, nombre, stock').lte('stock', 3).order('stock').limit(50),
         supabase.from('clientes').select('id', { count: 'exact', head: true }),
         supabase.from('venta_items').select('nombre, cantidad, productos(categorias(nombre))'),
         supabase.from('ventas').select('cliente_id, total, clientes(nombre)').eq('estado', 'Pagado'),
         supabase.from('solicitudes_productos').select('*').eq('estado', 'pendiente').order('created_at', { ascending: false }),
+        supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'proveedor'),
+        supabase.from('productos').select('id', { count: 'exact', head: true }).eq('stock', 0),
       ])
       if (v) setVentas(v)
       if (p) setStockBajo(p)
       if (sols) setSolicitudes(sols)
       setTotalClientes(count ?? 0)
+      setTotalProveedores(countProveedores ?? 0)
+      setTotalSinStock(countSinStock ?? 0)
 
       // Calcular top metrics
       const tops: TopMetric[] = []
@@ -257,7 +263,8 @@ export default function DashboardPage() {
     { label: `Ventas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString('es-MX')}`, icon: 'dollar', href: '/ventas', color: '#059669' },
     { label: 'Pedidos pendientes', value: pendientes, icon: 'clipboard', href: '/ventas', color: '#d97706' },
     { label: 'Clientes registrados', value: totalClientes, icon: 'users', href: '/clientes', color: BLUE },
-    { label: 'Productos sin stock', value: stockBajo.filter(p => p.stock === 0).length, icon: 'warning', href: '/productos', color: '#dc2626' },
+    { label: 'Proveedores registrados', value: totalProveedores, icon: 'users', href: '/configuracion', color: '#7c3aed' },
+    { label: 'Productos sin stock', value: totalSinStock, icon: 'warning', href: '/productos', color: '#dc2626' },
   ]
 
   return (
@@ -283,7 +290,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Métricas */}
-      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: isMobile ? 10 : 16, marginBottom: 20 }}>
+      <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: isMobile ? 10 : 16, marginBottom: 20 }}>
         {metrics.map(m => (
           <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>
             <div style={{ background: '#fff', borderRadius: 12, padding: isMobile ? '14px 16px' : 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.15s', display: isMobile ? 'flex' : 'block', alignItems: 'center', gap: isMobile ? 12 : 0 }}>

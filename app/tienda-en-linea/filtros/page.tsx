@@ -80,9 +80,13 @@ export default function FiltrosPage() {
 
   async function crearCategoria(e: React.FormEvent) {
     e.preventDefault()
-    const nombre = nuevaCategoria.trim()
+    const nombre = nuevaCategoria.trim().replace(/\s+/g, ' ')
     if (!nombre) return
     setErrorCategoria('')
+    if (categorias.some(c => c.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
+      setErrorCategoria('Esa categoría ya existe.')
+      return
+    }
     setCreando(true)
     const { error } = await supabase.from('categorias').insert({ nombre })
     setCreando(false)

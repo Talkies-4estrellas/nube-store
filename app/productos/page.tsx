@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
 import { toCSV, downloadCSV } from '@/lib/csv'
 import { paginasVisibles } from '@/lib/pagination'
+import { obtenerOcrearCategoriaId } from '@/lib/categorias'
 import Icon from '@/components/Icon'
 import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
 
@@ -51,6 +52,7 @@ type Product = {
   imagen_url?: string | null
   origen?: string | null
   proveedor_nombre?: string | null
+  activo?: boolean | null
 }
 
 const estadoStyle: Record<string, { bg: string; text: string }> = {
@@ -251,6 +253,7 @@ export default function ProductosPage() {
   async function handleSave(form: {
     nombre: string; sku: string; categoria: string; precio: string
     stock: string; descripcion: string; imagen: File | null; imagenPreview: string | null
+    activo: boolean
     colores: string[]; tallas: string[]; variantes: Array<{ color: string; talla: string; stock: string }>
     peso: string; largo: string; ancho: string; alto: string
     imagenesExtra: Array<{ file: File | null; preview: string | null }>
@@ -278,26 +281,10 @@ export default function ProductosPage() {
       } catch (e) { console.error('Error subiendo imagen extra:', e) }
     }
 
-    // Obtener o crear categoría
-    let categoria_id: string | null = null
-    const { data: catExistente } = await supabase
-      .from('categorias')
-      .select('id')
-      .eq('nombre', form.categoria)
-      .single()
-
-    if (catExistente) {
-      categoria_id = catExistente.id
-    } else {
-      const { data: catNueva } = await supabase
-        .from('categorias')
-        .insert({ nombre: form.categoria })
-        .select('id')
-        .single()
-      if (catNueva) {
-        categoria_id = catNueva.id
-        await fetchCategorias()
-      }
+    // Obtener o crear categoría (sin duplicar por mayúsculas/espacios)
+    const categoria_id = await obtenerOcrearCategoriaId(supabase, form.categoria)
+    if (categoria_id !== null && !categorias.some(c => c.toLowerCase() === form.categoria.trim().toLowerCase())) {
+      await fetchCategorias()
     }
 
     const tieneDetalles = form.colores.length > 0 || form.tallas.length > 0 || form.variantes.length > 0 || form.peso || form.largo || urlsExtra.length > 0
@@ -317,6 +304,7 @@ export default function ProductosPage() {
       precio: parseFloat(form.precio),
       stock: parseInt(form.stock),
       categoria_id,
+      activo: form.activo,
       ...(imagen_url ? { imagen_url } : {}),
       detalles,
     }
@@ -841,11 +829,7 @@ export default function ProductosPage() {
           onClose={() => { setShowModal(false); setEditando(null) }}
           onSave={handleSave}
           onNuevaCategoria={async (nombre) => {
-            // Insertar solo si no existe ya
-            const { data: existe } = await supabase.from('categorias').select('id').eq('nombre', nombre).maybeSingle()
-            if (!existe) {
-              await supabase.from('categorias').insert({ nombre })
-            }
+            await obtenerOcrearCategoriaId(supabase, nombre)
             await fetchCategorias()
           }}
           inicial={editando ? {
@@ -858,6 +842,7 @@ export default function ProductosPage() {
             descripcion: '',
             imagen: null,
             imagenPreview: editando.imagen_url ?? null,
+            activo: editando.activo !== false,
           } : undefined}
         />
       )}

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { convertToWebp, captureFrameAsWebp, uploadToSupabase } from '@/lib/uploadWebp'
 import { useSidebar } from '@/lib/sidebar-context'
 import { useAuth } from '@/lib/auth-context'
+import { obtenerOcrearCategoriaId } from '@/lib/categorias'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -544,19 +545,16 @@ export default function ProveedoresPage() {
     if (file) handleFile(file)
   }
 
-  // ---- Nueva categoría ----
+  // ---- Nueva categoría (sin duplicar por mayúsculas/espacios) ----
   async function guardarNuevaCat() {
     if (!nuevaCatNombre.trim()) return
     setSavingCat(true)
-    const { data, error } = await supabase
-      .from('categorias')
-      .insert({ nombre: nuevaCatNombre.trim() })
-      .select('id, nombre')
-      .single()
+    const id = await obtenerOcrearCategoriaId(supabase, nuevaCatNombre)
     setSavingCat(false)
-    if (error || !data) { alert('Error al crear la categoría'); return }
-    setCategorias(prev => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)))
-    setProd(p => ({ ...p, categoria_id: String(data.id) }))
+    if (id === null) { alert('Error al crear la categoría'); return }
+    const { data } = await supabase.from('categorias').select('id, nombre').order('nombre')
+    if (data) setCategorias(data)
+    setProd(p => ({ ...p, categoria_id: String(id) }))
     setNuevaCatNombre('')
     setNuevaCatMode(false)
   }

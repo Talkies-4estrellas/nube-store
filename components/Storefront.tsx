@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import './storefront.css'
 import {
-  Home, ShoppingBag, Sparkles, Heart, BadgePercent, ShoppingCart, Headphones,
+  Home, ShoppingBag, Sparkles, Heart, BadgePercent, ShoppingCart, Headphones, LifeBuoy,
   Search, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight, Plus, SlidersHorizontal,
   Keyboard, Gamepad2, Speaker, Watch, Check, PackageCheck, ShieldCheck, Truck, Send,
   Grid2x2, SearchX, MessageCircle, LogIn, type LucideIcon,
@@ -17,7 +17,7 @@ type CheckoutState = 'form' | 'loading' | 'success' | 'error'
 
 const ICONS: Record<string, LucideIcon> = {
   home: Home, 'shopping-bag': ShoppingBag, sparkles: Sparkles, heart: Heart,
-  'badge-percent': BadgePercent, 'shopping-cart': ShoppingCart, headphones: Headphones,
+  'badge-percent': BadgePercent, 'shopping-cart': ShoppingCart, headphones: Headphones, 'life-buoy': LifeBuoy,
   search: Search, 'arrow-right': ArrowRight, 'arrow-left': ArrowLeft,
   'chevron-left': ChevronLeft, 'chevron-right': ChevronRight, plus: Plus,
   'sliders-horizontal': SlidersHorizontal, keyboard: Keyboard, 'gamepad-2': Gamepad2,
@@ -25,7 +25,22 @@ const ICONS: Record<string, LucideIcon> = {
   'shield-check': ShieldCheck, truck: Truck, send: Send, 'grid-2x2': Grid2x2,
   'search-x': SearchX, 'message-circle': MessageCircle, 'log-in': LogIn,
 }
+function SupportAgentIcon() {
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="7.5" r="4.5" />
+      <path d="M6.5 7.5a5.5 5.5 0 0 1 11 0" />
+      <rect x="5.3" y="6.7" width="1.8" height="3" rx="0.9" />
+      <rect x="16.9" y="6.7" width="1.8" height="3" rx="0.9" />
+      <path d="M6.2 9.2v1a2 2 0 0 0 2 2h1.3" />
+      <path d="M4 21v-1.5A4.5 4.5 0 0 1 8.5 15h7A4.5 4.5 0 0 1 20 19.5V21" />
+      <rect x="9" y="16.3" width="6" height="4.2" rx="0.6" />
+    </svg>
+  )
+}
+
 function Ic({ n }: { n: string }) {
+  if (n === 'support-agent') return <SupportAgentIcon />
   const C = ICONS[n]
   return C ? <C /> : null
 }
@@ -96,7 +111,7 @@ const navItems = [
   { view: 'favoritos', icon: 'heart', label: 'Favoritos' },
   { view: 'ofertas', icon: 'badge-percent', label: 'Ofertas' },
   { view: 'carrito', icon: 'shopping-cart', label: 'Carrito' },
-  { view: 'soporte', icon: 'headphones', label: 'Soporte' },
+  { view: 'soporte', icon: 'support-agent', label: 'Soporte' },
 ]
 
 const slides = [
@@ -291,6 +306,7 @@ export default function Storefront() {
     filtros_extra: [] as { id: string; label: string; view: string; activo: boolean }[],
     destacados: null as { imagen: string; kicker?: string; titulo: string; texto: string; cta: string }[] | null,
   })
+  const [configLoaded, setConfigLoaded] = useState(false)
   const [mostrarGarantias, setMostrarGarantias] = useState(false)
 
   /* ---- Persistir carrito en localStorage ---- */
@@ -315,6 +331,7 @@ export default function Storefront() {
           setStoreConfig(prev => ({ ...prev, ...data }))
           if (data.meta_titulo) document.title = data.meta_titulo
         }
+        setConfigLoaded(true)
       })
 
     const ch = supabase.channel('storefront-config-realtime')
@@ -1419,7 +1436,7 @@ export default function Storefront() {
       </aside>
 
       <main className="page-shell">
-        <section className="home-immersive">
+        <section className="home-immersive" style={{ visibility: configLoaded ? 'visible' : 'hidden' }}>
           <header className="topbar">
             <div>
               <p className="eyebrow">{storeConfig.nombre_tienda}</p>
@@ -1518,7 +1535,7 @@ export default function Storefront() {
           </section>
         </section>
 
-        <section className="hero-grid" aria-label="Productos destacados">
+        <section className="hero-grid" aria-label="Productos destacados" style={{ visibility: configLoaded ? 'visible' : 'hidden' }}>
           {activeDestacados.slice(0, 2).map((d, i) => (
             <article key={i} className={i === 0 ? 'hero-card featured' : 'hero-card console'}>
               <div className="hero-copy">

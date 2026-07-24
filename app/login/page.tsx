@@ -63,8 +63,7 @@ function LoginForm() {
         </a>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 32 }}>
-          <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 60, width: 'auto', marginBottom: 8 }} />
-          <p style={{ color: '#6b7280', fontSize: 14 }}>Panel administrativo</p>
+          <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 60, width: 'auto' }} />
         </div>
 
         <div style={{ background: '#fff', borderRadius: 16, padding: '36px 36px 32px', boxShadow: '0 4px 24px rgba(37,40,85,0.10)' }}>
@@ -126,9 +125,6 @@ function LoginForm() {
 
         <p style={{ textAlign: 'center', fontSize: 13, color: '#6b7280', marginTop: 20 }}>
           ¿Eres cliente o proveedor? <a href="/registro" style={{ color: NAVY, fontWeight: 700, textDecoration: 'none' }}>Crea una cuenta</a>
-        </p>
-        <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
-          ¿Sin acceso al panel administrativo? Contacta al administrador del sistema.
         </p>
       </div>
     </div>

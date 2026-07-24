@@ -61,6 +61,7 @@ type Producto = {
   descripcion: string
   imagen: File | null
   imagenPreview: string | null
+  activo: boolean
 } & ProductoExtra
 
 const emptyExtra = (): ProductoExtra => ({
@@ -68,7 +69,7 @@ const emptyExtra = (): ProductoExtra => ({
   peso: '', largo: '', ancho: '', alto: '', imagenesExtra: [],
 })
 
-const empty: Producto = { nombre: '', sku: '', categoria: '', precio: '', stock: '', descripcion: '', imagen: null, imagenPreview: null, ...emptyExtra() }
+const empty: Producto = { nombre: '', sku: '', categoria: '', precio: '', stock: '', descripcion: '', imagen: null, imagenPreview: null, activo: true, ...emptyExtra() }
 
 type Props = {
   onClose: () => void
@@ -309,6 +310,18 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
               placeholder="Describe el producto: materiales, medidas, características..."
               rows={3} style={{ ...inputStyle(false), resize: 'vertical' }} />
           </Field>
+
+          {/* Visibilidad */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: 10, background: '#fafafa' }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#374151' }}>Producto visible</p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>Si lo desactivas, deja de mostrarse en la tienda en línea aunque tenga stock</p>
+            </div>
+            <button type="button" onClick={() => setForm(f => ({ ...f, activo: !f.activo }))}
+              style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: form.activo ? '#0049ff' : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+              <span style={{ position: 'absolute', top: 2, left: form.activo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            </button>
+          </div>
 
           {/* ---- Datos adicionales ---- */}
           <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 4 }}>

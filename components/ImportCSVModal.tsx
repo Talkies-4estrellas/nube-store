@@ -3,6 +3,7 @@
 import { useState, useRef, type DragEvent } from 'react'
 import { supabase } from '@/lib/supabase'
 import { parseCSV, readFileSmart, cleanNumber, stripHtml } from '@/lib/csv'
+import { mapearCategorias } from '@/lib/categorias'
 
 const NAVY = '#252855'
 const BLUE = '#0049ff'
@@ -325,20 +326,10 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
     setErrorMsg('')
 
     try {
-      // 1. Categorías: buscar o crear
+      // 1. Categorías: buscar o crear (sin duplicar por mayúsculas/espacios)
       setProgreso({ fase: 'Preparando categorías', hecho: 0, total: 1 })
       const nombresCat = Array.from(new Set(aEscribir.map(f => f.categoria).filter(Boolean)))
-      const mapaCat = new Map<string, number>()
-      if (nombresCat.length) {
-        const { data: existentes } = await supabase.from('categorias').select('id, nombre').in('nombre', nombresCat)
-        existentes?.forEach(c => mapaCat.set(c.nombre, c.id))
-        const faltan = nombresCat.filter(n => !mapaCat.has(n))
-        if (faltan.length) {
-          const { data: nuevas } = await supabase
-            .from('categorias').insert(faltan.map(nombre => ({ nombre }))).select('id, nombre')
-          nuevas?.forEach(c => mapaCat.set(c.nombre, c.id))
-        }
-      }
+      const mapaCat = await mapearCategorias(supabase, nombresCat)
 
       // 2. Imágenes: descargar y alojar en nuestro Storage
       let mapaImg = new Map<string, string>()
