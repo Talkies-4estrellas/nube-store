@@ -285,6 +285,7 @@ export default function Storefront() {
     carrusel: null as { img: string; kicker: string; title: string }[] | null,
     politica_devolucion: '',
     fondo_logo: 'blanco' as 'blanco' | 'azul',
+    menu_extra: [] as { id: string; label: string; icono: string; url: string; nueva_pestana: boolean }[],
   })
   const [mostrarGarantias, setMostrarGarantias] = useState(false)
 
@@ -1373,6 +1374,18 @@ export default function Storefront() {
               onClick={(e) => { e.preventDefault(); goView(item.view) }}
             >
               <Ic n={item.icon} /><span>{item.label}</span>
+            </a>
+          ))}
+          {storeConfig.menu_extra.filter(btn => btn.label?.trim()).map((btn) => (
+            <a
+              key={btn.id}
+              className="nav-item"
+              href={btn.url || '#'}
+              target={btn.nueva_pestana ? '_blank' : undefined}
+              rel={btn.nueva_pestana ? 'noopener noreferrer' : undefined}
+            >
+              <span style={{ fontSize: 16, width: 20, textAlign: 'center', flexShrink: 0 }}>{btn.icono || '🔗'}</span>
+              <span>{btn.label}</span>
             </a>
           ))}
         </nav>

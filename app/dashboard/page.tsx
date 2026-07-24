@@ -8,7 +8,7 @@ import { useSidebar } from '@/lib/sidebar-context'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
 type VentaGrafica = { total: number; estado: string; created_at: string }
-type ProductoBajo = { nombre: string; stock: number }
+type ProductoBajo = { id: string; nombre: string; stock: number }
 type Toast = { id: number; message: string; icon: string; color: string }
 type TopMetric = { label: string; value: string; sub: string; icon: string; color: string }
 type Solicitud = {
@@ -152,7 +152,7 @@ export default function DashboardPage() {
     async function load() {
       const [{ data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }, { data: sols }] = await Promise.all([
         supabase.from('ventas').select('*, clientes(nombre)').order('created_at', { ascending: false }).limit(5),
-        supabase.from('productos').select('nombre, stock').lte('stock', 3).order('stock'),
+        supabase.from('productos').select('id, nombre, stock').lte('stock', 3).order('stock'),
         supabase.from('clientes').select('id', { count: 'exact', head: true }),
         supabase.from('venta_items').select('nombre, cantidad, productos(categorias(nombre))'),
         supabase.from('ventas').select('cliente_id, total, clientes(nombre)').eq('estado', 'Pagado'),
@@ -403,7 +403,7 @@ export default function DashboardPage() {
           ) : (
             <>
               {stockBajo.map(p => (
-                <div key={p.nombre} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
                   <span style={{ fontSize: 13, color: '#374151', flex: 1 }}>{p.nombre}</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: p.stock === 0 ? '#dc2626' : '#d97706', background: p.stock === 0 ? '#fee2e2' : '#fef3c7', padding: '2px 10px', borderRadius: 20 }}>
                     {p.stock === 0 ? 'Sin stock' : `${p.stock} unid.`}

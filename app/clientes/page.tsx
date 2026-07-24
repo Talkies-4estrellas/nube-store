@@ -35,6 +35,16 @@ const tagStyle: Record<string, { bg: string; text: string }> = {
 
 const tags = ['Todos', 'VIP', 'Regular', 'Nuevo']
 
+type Proveedor = {
+  id: string
+  nombre: string
+  email: string
+  empresa: string | null
+  telefono: string | null
+  created_at: string
+  productos_aprobados?: number
+}
+
 const AVATAR_COLORS = ['#0049ff','#7c3aed','#db2777','#059669','#d97706','#dc2626','#0891b2','#374151']
 function avatarColor(nombre: string) {
   let h = 0
@@ -47,6 +57,11 @@ function initials(nombre: string) {
 }
 
 export default function ClientesPage() {
+  const [seccion, setSeccion] = useState<'clientes' | 'proveedores'>('clientes')
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
+  const [loadingProveedores, setLoadingProveedores] = useState(true)
+  const [searchProv, setSearchProv] = useState('')
+
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -104,6 +119,28 @@ export default function ClientesPage() {
 
   useEffect(() => { fetchClientes() }, [])
 
+  async function fetchProveedores() {
+    setLoadingProveedores(true)
+    const [{ data }, { data: solicitudes }] = await Promise.all([
+      supabase.from('user_roles').select('id, nombre, email, empresa, telefono, created_at').eq('role', 'proveedor').order('created_at', { ascending: false }),
+      supabase.from('solicitudes_productos').select('proveedor_email').eq('estado', 'aprobado'),
+    ])
+    if (data) {
+      const conteo: Record<string, number> = {}
+      for (const s of (solicitudes ?? [])) conteo[s.proveedor_email] = (conteo[s.proveedor_email] ?? 0) + 1
+      setProveedores(data.map(p => ({ ...p, productos_aprobados: conteo[p.email] ?? 0 })))
+    }
+    setLoadingProveedores(false)
+  }
+
+  useEffect(() => { if (seccion === 'proveedores' && proveedores.length === 0) fetchProveedores() }, [seccion]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filteredProveedores = proveedores.filter(p =>
+    p.nombre.toLowerCase().includes(searchProv.toLowerCase()) ||
+    p.email.toLowerCase().includes(searchProv.toLowerCase()) ||
+    (p.empresa ?? '').toLowerCase().includes(searchProv.toLowerCase())
+  )
+
   async function handleDelete(c: Cliente) {
     setDeleting(true)
     await supabase.from('clientes').update({ deleted_at: new Date().toISOString() }).eq('id', c.id)
@@ -139,13 +176,78 @@ export default function ClientesPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Clientes</h1>
-        <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-          + Agregar cliente
-        </button>
+        {seccion === 'clientes' && (
+          <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            + Agregar cliente
+          </button>
+        )}
       </div>
 
+      {/* Pestañas */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <button onClick={() => setSeccion('clientes')} style={{
+          padding: '9px 18px', borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          background: seccion === 'clientes' ? '#0049ff' : '#f3f4f6', color: seccion === 'clientes' ? '#fff' : '#374151', border: 'none',
+        }}>👤 Clientes</button>
+        <button onClick={() => setSeccion('proveedores')} style={{
+          padding: '9px 18px', borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          background: seccion === 'proveedores' ? '#0049ff' : '#f3f4f6', color: seccion === 'proveedores' ? '#fff' : '#374151', border: 'none',
+        }}>📦 Proveedores{proveedores.length > 0 ? ` (${proveedores.length})` : ''}</button>
+      </div>
+
+      {seccion === 'proveedores' ? (
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <input
+            value={searchProv}
+            onChange={e => setSearchProv(e.target.value)}
+            placeholder="Buscar por nombre, email o empresa..."
+            style={{ width: '100%', maxWidth: 360, padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', marginBottom: 16 }}
+          />
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                {['Proveedor', 'Empresa', 'Teléfono', 'Productos aprobados', 'Registrado'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loadingProveedores ? (
+                <SkeletonTableBody rows={5} cols={['180px', '140px', '110px', '80px', '90px']} />
+              ) : filteredProveedores.map(p => (
+                <tr key={p.id} style={{ borderBottom: '1px solid #f9fafb' }}>
+                  <td style={{ padding: '13px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 34, height: 34, background: avatarColor(p.nombre), borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                        {initials(p.nombre)}
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{p.nombre}</p>
+                        <p style={{ fontSize: 11, color: '#9ca3af' }}>{p.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ padding: '13px 0', fontSize: 13, color: '#6b7280' }}>{p.empresa ?? '—'}</td>
+                  <td style={{ padding: '13px 0', fontSize: 13, color: '#6b7280' }}>{p.telefono ?? '—'}</td>
+                  <td style={{ padding: '13px 0', fontSize: 13, fontWeight: 600 }}>{p.productos_aprobados ?? 0}</td>
+                  <td style={{ padding: '13px 0', fontSize: 12, color: '#6b7280' }}>
+                    {new Date(p.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!loadingProveedores && filteredProveedores.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
+              <Icon name="users" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
+              <p style={{ fontSize: 14 }}>No se encontraron proveedores</p>
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
         {[
@@ -329,6 +431,8 @@ export default function ClientesPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {confirmDelete && (
         <ConfirmDialog

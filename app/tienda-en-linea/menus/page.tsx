@@ -14,14 +14,26 @@ const NAV_OPTIONS = [
   { view: 'soporte',   label: 'Soporte',     icon: '🎧', desc: 'Centro de ayuda y contacto' },
 ]
 
+type BotonExtra = { id: string; label: string; icono: string; url: string; nueva_pestana: boolean }
+const inp: React.CSSProperties = {
+  width: '100%', padding: '9px 10px', border: '1px solid #e5e7eb', borderRadius: 8,
+  fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff', fontFamily: 'inherit',
+}
+
 export default function MenusPage() {
   const [navOcultar, setNavOcultar] = useState('')
+  const [extra, setExtra] = useState<BotonExtra[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    supabase.from('config_storefront').select('nav_ocultar').eq('id', 1).single()
-      .then(({ data }) => { if (data) setNavOcultar(data.nav_ocultar ?? '') })
+    supabase.from('config_storefront').select('nav_ocultar, menu_extra').eq('id', 1).single()
+      .then(({ data }) => {
+        if (data) {
+          setNavOcultar(data.nav_ocultar ?? '')
+          setExtra(Array.isArray(data.menu_extra) ? data.menu_extra : [])
+        }
+      })
   }, [])
 
   function toggle(view: string) {
@@ -33,9 +45,19 @@ export default function MenusPage() {
 
   const hidden = new Set(navOcultar.split(',').map(s => s.trim()).filter(Boolean))
 
+  function agregarBoton() {
+    setExtra(prev => [...prev, { id: crypto.randomUUID(), label: '', icono: '🔗', url: '', nueva_pestana: true }])
+  }
+  function actualizarBoton(id: string, campo: keyof BotonExtra, valor: string | boolean) {
+    setExtra(prev => prev.map(b => b.id === id ? { ...b, [campo]: valor } : b))
+  }
+  function eliminarBoton(id: string) {
+    setExtra(prev => prev.filter(b => b.id !== id))
+  }
+
   async function guardar() {
     setSaving(true)
-    await supabase.from('config_storefront').upsert({ id: 1, nav_ocultar: navOcultar, updated_at: new Date().toISOString() })
+    await supabase.from('config_storefront').upsert({ id: 1, nav_ocultar: navOcultar, menu_extra: extra, updated_at: new Date().toISOString() })
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -96,6 +118,47 @@ export default function MenusPage() {
           })}
         </div>
 
+        {/* Botones personalizados */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: NAVY, margin: 0 }}>Botones personalizados</p>
+            <button type="button" onClick={agregarBoton}
+              style={{ background: '#eff6ff', color: '#0049ff', border: 'none', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+              + Agregar botón
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px' }}>
+            Agrega más botones al menú lateral: a un WhatsApp, una página externa, tus redes, etc.
+          </p>
+
+          {extra.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '20px 0' }}>Todavía no agregaste ningún botón.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {extra.map(btn => (
+                <div key={btn.id} style={{ display: 'grid', gridTemplateColumns: '56px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '10px', border: '1px solid #f3f4f6', borderRadius: 10 }}>
+                  <input style={{ ...inp, textAlign: 'center', fontSize: 18 }} value={btn.icono}
+                    onChange={e => actualizarBoton(btn.id, 'icono', e.target.value)} placeholder="🔗" maxLength={4} />
+                  <input style={inp} value={btn.label}
+                    onChange={e => actualizarBoton(btn.id, 'label', e.target.value)} placeholder="Nombre del botón" />
+                  <input style={inp} value={btn.url}
+                    onChange={e => actualizarBoton(btn.id, 'url', e.target.value)} placeholder="https://..." />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={btn.nueva_pestana} onChange={e => actualizarBoton(btn.id, 'nueva_pestana', e.target.checked)} />
+                      Pestaña nueva
+                    </label>
+                    <button type="button" onClick={() => eliminarBoton(btn.id)}
+                      style={{ background: '#fef2f2', color: '#dc2626', border: 'none', width: 30, height: 30, borderRadius: 8, cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={guardar} disabled={saving} style={{
             background: saved ? '#059669' : NAVY, color: '#fff', border: 'none',
@@ -127,6 +190,12 @@ export default function MenusPage() {
               <div key={o.view} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 14 }}>{o.icon}</span>
                 <span style={{ fontSize: 13, color: '#374151' }}>{o.label}</span>
+              </div>
+            ))}
+            {extra.filter(b => b.label.trim()).map(b => (
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14 }}>{b.icono || '🔗'}</span>
+                <span style={{ fontSize: 13, color: '#374151' }}>{b.label}</span>
               </div>
             ))}
           </div>
