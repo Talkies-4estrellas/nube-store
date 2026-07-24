@@ -14,6 +14,23 @@ const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#37415
 type Fields = { politica_envio: string; politica_devolucion: string; terminos: string }
 const DEFAULTS: Fields = { politica_envio: '', politica_devolucion: '', terminos: '' }
 
+type PagosSecretos = {
+  openpay_merchant_id: string; openpay_private_key: string; openpay_mode: 'sandbox' | 'live'
+  paypal_client_id: string; paypal_client_secret: string; paypal_mode: 'sandbox' | 'live'
+  mp_access_token: string
+}
+const PAGOS_DEFAULTS: PagosSecretos = {
+  openpay_merchant_id: '', openpay_private_key: '', openpay_mode: 'sandbox',
+  paypal_client_id: '', paypal_client_secret: '', paypal_mode: 'sandbox',
+  mp_access_token: '',
+}
+
+const inp: React.CSSProperties = {
+  width: '100%', padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8,
+  fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fff', fontFamily: 'inherit',
+}
+const selectStyle: React.CSSProperties = { ...inp, cursor: 'pointer' }
+
 const secciones = [
   {
     key: 'politica_envio' as const,
@@ -43,18 +60,39 @@ export default function LegalPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [pagos, setPagos] = useState<PagosSecretos>(PAGOS_DEFAULTS)
+  const [savingPagos, setSavingPagos] = useState(false)
+  const [savedPagos, setSavedPagos] = useState(false)
+  const [errorPagos, setErrorPagos] = useState('')
+
   useEffect(() => {
     supabase.from('config_storefront').select('politica_envio,politica_devolucion,terminos').eq('id', 1).single()
       .then(({ data }) => { if (data) setF({ ...DEFAULTS, ...data }) })
+    supabase.from('config_pagos_secretos').select('*').eq('id', 1).maybeSingle()
+      .then(({ data, error }) => {
+        if (error) { setErrorPagos('No se pudieron cargar las llaves: ' + error.message); return }
+        if (data) setPagos({ ...PAGOS_DEFAULTS, ...data })
+      })
   }, [])
 
   function set(key: keyof Fields, val: string) { setF(p => ({ ...p, [key]: val })) }
+  function setPago<K extends keyof PagosSecretos>(key: K, val: PagosSecretos[K]) { setPagos(p => ({ ...p, [key]: val })) }
 
   async function guardar() {
     setSaving(true)
     await supabase.from('config_storefront').upsert({ id: 1, ...f, updated_at: new Date().toISOString() })
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2500)
+  }
+
+  async function guardarPagos() {
+    setSavingPagos(true)
+    setErrorPagos('')
+    const { error } = await supabase.from('config_pagos_secretos').upsert({ id: 1, ...pagos, updated_at: new Date().toISOString() })
+    setSavingPagos(false)
+    if (error) { setErrorPagos('No se pudo guardar: ' + error.message); return }
+    setSavedPagos(true)
+    setTimeout(() => setSavedPagos(false), 2500)
   }
 
   return (
@@ -91,6 +129,80 @@ export default function LegalPage() {
           }}>
             {saving ? 'Guardando...' : saved ? '¡Guardado!' : 'Guardar cambios'}
           </button>
+        </div>
+
+        {/* ---- Claves de las pasarelas de pago ---- */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <span style={{ fontSize: 20 }}>🔑</span>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY }}>Claves de pago</p>
+          </div>
+          <p style={{ margin: '0 0 20px', fontSize: 11, color: '#9ca3af' }}>
+            Credenciales de las pasarelas. Solo las puede ver y editar un administrador — no se exponen en la tienda pública.
+          </p>
+
+          {/* BBVA / OpenPay */}
+          <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>BBVA (OpenPay)</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+            <div>
+              <label style={lbl}>Merchant ID</label>
+              <input style={inp} value={pagos.openpay_merchant_id} onChange={e => setPago('openpay_merchant_id', e.target.value)} placeholder="mxxxxxxxxxxxx" />
+            </div>
+            <div>
+              <label style={lbl}>Llave privada</label>
+              <input type="password" style={inp} value={pagos.openpay_private_key} onChange={e => setPago('openpay_private_key', e.target.value)} placeholder="sk_xxxxxxxxxxxx" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={lbl}>Modo</label>
+              <select style={selectStyle} value={pagos.openpay_mode} onChange={e => setPago('openpay_mode', e.target.value as 'sandbox' | 'live')}>
+                <option value="sandbox">Pruebas (sandbox)</option>
+                <option value="live">Producción (live)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* PayPal */}
+          <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>PayPal</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+            <div>
+              <label style={lbl}>Client ID</label>
+              <input style={inp} value={pagos.paypal_client_id} onChange={e => setPago('paypal_client_id', e.target.value)} placeholder="AeXXXXXXXXXXXXXXXXXXXXXX" />
+            </div>
+            <div>
+              <label style={lbl}>Client Secret</label>
+              <input type="password" style={inp} value={pagos.paypal_client_secret} onChange={e => setPago('paypal_client_secret', e.target.value)} placeholder="EXXXXXXXXXXXXXXXXXXXXXXX" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={lbl}>Modo</label>
+              <select style={selectStyle} value={pagos.paypal_mode} onChange={e => setPago('paypal_mode', e.target.value as 'sandbox' | 'live')}>
+                <option value="sandbox">Pruebas (sandbox)</option>
+                <option value="live">Producción (live)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Mercado Pago */}
+          <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>Mercado Pago</p>
+          <div style={{ marginBottom: 20 }}>
+            <label style={lbl}>Access Token</label>
+            <input type="password" style={inp} value={pagos.mp_access_token} onChange={e => setPago('mp_access_token', e.target.value)} placeholder="APP_USR-xxxx o TEST-xxxx" />
+            <p style={{ fontSize: 11, color: '#9ca3af', margin: '4px 0 0' }}>Usa el token que empieza con TEST- para pruebas, o APP_USR- para producción.</p>
+          </div>
+
+          {errorPagos && (
+            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 16 }}>
+              {errorPagos}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={guardarPagos} disabled={savingPagos} style={{
+              background: savedPagos ? '#059669' : NAVY, color: '#fff', border: 'none',
+              padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'background 0.2s',
+            }}>
+              {savingPagos ? 'Guardando...' : savedPagos ? '¡Guardado!' : 'Guardar claves'}
+            </button>
+          </div>
         </div>
       </div>
 

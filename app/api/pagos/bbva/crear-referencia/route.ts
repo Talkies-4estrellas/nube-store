@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { getPagosConfig } from '@/lib/pagos-config'
 
 export const runtime = 'nodejs'
 
@@ -16,10 +17,9 @@ export const runtime = 'nodejs'
  * Devuelve: { clabe, referencia, banco }
  */
 export async function POST(req: Request) {
-  const merchantId = process.env.OPENPAY_MERCHANT_ID
-  const privateKey = process.env.OPENPAY_PRIVATE_KEY
+  const { openpayMerchantId: merchantId, openpayPrivateKey: privateKey, openpayMode } = await getPagosConfig()
   if (!merchantId || !privateKey) {
-    return NextResponse.json({ error: 'Falta configurar OPENPAY_MERCHANT_ID / OPENPAY_PRIVATE_KEY' }, { status: 500 })
+    return NextResponse.json({ error: 'Falta configurar las credenciales de OpenPay/BBVA' }, { status: 500 })
   }
 
   const supabase = getServerSupabase()
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   }
 
   const total = items.reduce((t, it) => t + Number(it.precio) * Number(it.cantidad), 0)
-  const base = process.env.OPENPAY_MODE === 'live'
+  const base = openpayMode === 'live'
     ? `https://api.openpay.mx/v1/${merchantId}`
     : `https://sandbox-api.openpay.mx/v1/${merchantId}`
 

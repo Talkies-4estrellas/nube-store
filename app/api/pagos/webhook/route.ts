@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { MercadoPagoConfig, Payment } from 'mercadopago'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { getPagosConfig } from '@/lib/pagos-config'
 
 export const runtime = 'nodejs'
 
@@ -18,9 +19,9 @@ export const runtime = 'nodejs'
  * propósito): si devolvemos error, MP reintenta una y otra vez.
  */
 export async function POST(req: Request) {
-  const accessToken = process.env.MP_ACCESS_TOKEN
+  const { mpAccessToken: accessToken } = await getPagosConfig()
   if (!accessToken) {
-    console.error('Webhook MP: falta MP_ACCESS_TOKEN')
+    console.error('Webhook MP: falta configurar el access token de Mercado Pago')
     return NextResponse.json({ ok: false }, { status: 500 })
   }
 

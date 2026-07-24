@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, DragEvent, ChangeEvent } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp, captureFrameAsWebp, uploadToSupabase } from '@/lib/uploadWebp'
@@ -40,6 +41,33 @@ type MiSolicitud = {
   estado: string
   created_at: string
   imagen_url: string | null
+}
+
+type SeguimientoFila = {
+  itemId: string
+  productoNombre: string
+  productoSku: string
+  productoImagen: string | null
+  costo: number | null
+  cantidad: number
+  subtotal: number
+  ventaNumero: number
+  ventaEstado: string
+  ventaFecha: string
+  paqueteria: string | null
+  numeroGuia: string | null
+  estadoEnvio: string | null
+  fechaEnvio: string | null
+  fechaEntrega: string | null
+}
+
+const TRACKING_URL_PROV: Record<string, (guia: string) => string> = {
+  'DHL':          g => `https://www.dhl.com/mx-es/home/rastreo.html?tracking-id=${g}`,
+  'FedEx':        g => `https://www.fedex.com/apps/fedextrack/?trknbr=${g}`,
+  'Estafeta':     g => `https://rastreo.estafeta.com/Index.aspx?internationalAirGuide=${g}`,
+  'Redpack':      g => `https://www.redpack.com.mx/es/rastreo/?guias=${g}`,
+  'J&T Express':  g => `https://www.jtexpress.mx/trajectoryQuery?expressList=${g}`,
+  'Paquetexpress':g => `https://www.paquetexpress.com.mx/rastreo/?guide=${g}`,
 }
 
 type ProductoLocal = {
@@ -88,7 +116,7 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 export default function ProveedoresPage() {
   const { user, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
-  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'ajustes'>('registro')
+  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'ajustes'>('registro')
   const { isMobile } = useSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [savedEmail, setSavedEmail] = useState('')
@@ -119,6 +147,71 @@ export default function ProveedoresPage() {
   // Tab Ajustes — perfil guardado del proveedor
   const [perfil, setPerfil] = useState({ nombre: '', empresa: '', email: '', telefono: '' })
   const [perfilGuardado, setPerfilGuardado] = useState(false)
+
+  // Tab Seguimiento y pagos
+  const [seguimiento, setSeguimiento] = useState<SeguimientoFila[]>([])
+  const [loadingSeguimiento, setLoadingSeguimiento] = useState(false)
+
+  async function cargarSeguimiento(email: string) {
+    if (!email) return
+    setLoadingSeguimiento(true)
+
+    const { data: aprobadas } = await supabase
+      .from('solicitudes_productos').select('producto_sku')
+      .eq('proveedor_email', email).eq('estado', 'aprobado')
+
+    const skus = [...new Set((aprobadas ?? []).map(s => s.producto_sku))]
+    if (skus.length === 0) { setSeguimiento([]); setLoadingSeguimiento(false); return }
+
+    const { data: productos } = await supabase
+      .from('productos').select('id, nombre, sku, costo, imagen_url').in('sku', skus)
+    const productoIds = (productos ?? []).map(p => p.id)
+    if (productoIds.length === 0) { setSeguimiento([]); setLoadingSeguimiento(false); return }
+
+    const { data: items } = await supabase
+      .from('venta_items').select('id, venta_id, producto_id, cantidad, subtotal').in('producto_id', productoIds)
+    if (!items || items.length === 0) { setSeguimiento([]); setLoadingSeguimiento(false); return }
+
+    const ventaIds = [...new Set(items.map(i => i.venta_id))]
+    const [{ data: ventas }, { data: envios }] = await Promise.all([
+      supabase.from('ventas').select('id, numero, estado, created_at').in('id', ventaIds),
+      supabase.from('envios').select('venta_id, paqueteria, numero_guia, estado_envio, fecha_envio, fecha_entrega').in('venta_id', ventaIds),
+    ])
+
+    const productoPorId = new Map((productos ?? []).map(p => [p.id, p]))
+    const ventaPorId = new Map((ventas ?? []).map(v => [v.id, v]))
+    const envioPorVenta = new Map((envios ?? []).map(e => [e.venta_id, e]))
+
+    const filas: SeguimientoFila[] = items
+      .map(item => {
+        const producto = productoPorId.get(item.producto_id)
+        const venta = ventaPorId.get(item.venta_id)
+        const envio = envioPorVenta.get(item.venta_id)
+        if (!producto || !venta) return null
+        return {
+          itemId: item.id,
+          productoNombre: producto.nombre,
+          productoSku: producto.sku,
+          productoImagen: producto.imagen_url,
+          costo: producto.costo,
+          cantidad: item.cantidad,
+          subtotal: Number(item.subtotal),
+          ventaNumero: venta.numero,
+          ventaEstado: venta.estado,
+          ventaFecha: venta.created_at,
+          paqueteria: envio?.paqueteria ?? null,
+          numeroGuia: envio?.numero_guia ?? null,
+          estadoEnvio: envio?.estado_envio ?? null,
+          fechaEnvio: envio?.fecha_envio ?? null,
+          fechaEntrega: envio?.fecha_entrega ?? null,
+        }
+      })
+      .filter((f): f is SeguimientoFila => f !== null)
+      .sort((a, b) => new Date(b.ventaFecha).getTime() - new Date(a.ventaFecha).getTime())
+
+    setSeguimiento(filas)
+    setLoadingSeguimiento(false)
+  }
 
   async function cargarMisProductos(email: string) {
     setLoadingMisProductos(true)
@@ -314,9 +407,10 @@ export default function ProveedoresPage() {
   useEffect(() => {
     if (!user?.email) return
     setSavedEmail(user.email)
-    setTab('historial')
+    setTab('seguimiento')
     cargarHistorial(user.email)
     cargarMisProductos(user.email)
+    cargarSeguimiento(user.email)
   }, [user?.email])
 
   // Realtime: cuando el admin cambia el estado de una solicitud → refrescar
@@ -534,7 +628,7 @@ export default function ProveedoresPage() {
 
   const catNombre = (id: string) => categorias.find(c => String(c.id) === id)?.nombre ?? '—'
 
-  const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'ajustes', label: string, emoji: string) => {
+  const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'ajustes', label: string, emoji: string) => {
     const active = tab === id
     return (
       <button onClick={() => {
@@ -579,12 +673,14 @@ export default function ProveedoresPage() {
         zIndex: 100, padding: '16px 12px 16px', transition: 'transform 0.25s ease, box-shadow 0.25s ease',
       }}>
 
-        {/* Logo + botón cerrar en mobile */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', marginBottom: 16 }}>
-          <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 38, width: 'auto' }} />
+        {/* Logo centrado (lleva a la tienda) + botón cerrar en mobile */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px', marginBottom: 16 }}>
+          <Link href="/" title="Ver tienda" style={{ display: 'flex', alignItems: 'center' }}>
+            <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 44, width: 'auto' }} />
+          </Link>
           {isMobile && (
             <button onClick={() => setSidebarOpen(false)}
-              style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', flexShrink: 0 }}>
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', flexShrink: 0 }}>
               ×
             </button>
           )}
@@ -593,13 +689,11 @@ export default function ProveedoresPage() {
         {/* Nav */}
         <nav style={{ flex: 1, minHeight: 0, background: '#f1f2f6', borderRadius: 22, padding: '12px 10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>PORTAL</span>
+          {navItem('seguimiento', 'Administración', '🚚')}
           {navItem('registro',  'Registrar producto', '📦')}
           {navItem('historial', 'Mis solicitudes',    '🔍')}
           {navItem('misEnviados', 'Mis productos', '📋')}
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '20px 14px 6px', display: 'block' }}>ACCESO</span>
-          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', color: NAVY, fontSize: 14, fontWeight: 700, borderRadius: 999, border: '2px solid transparent', textDecoration: 'none' }}>
-            <span style={{ fontSize: 16 }}>🏠</span> Volver a la tienda
-          </a>
           {navItem('ajustes', 'Ajustes', '⚙️')}
         </nav>
 
@@ -636,7 +730,7 @@ export default function ProveedoresPage() {
             </svg>
           </button>
           <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : 'Ajustes'}
+            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? 'Administración' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
             <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1406,6 +1500,124 @@ export default function ProveedoresPage() {
             )}
           </div>
         )}
+
+        {/* ---- Tab: Seguimiento y pagos ---- */}
+        {tab === 'seguimiento' && (() => {
+          const pagado = seguimiento.filter(f => f.ventaEstado === 'Pagado')
+          const enProceso = seguimiento.filter(f => f.ventaEstado !== 'Pagado' && f.ventaEstado !== 'Cancelado')
+          const totalAPagar = pagado.reduce((t, f) => t + (f.costo ?? 0) * f.cantidad, 0)
+          const totalEnProceso = enProceso.reduce((t, f) => t + (f.costo ?? 0) * f.cantidad, 0)
+          const piezasVendidas = seguimiento.reduce((t, f) => t + f.cantidad, 0)
+
+          const estadoVentaStyle: Record<string, { bg: string; text: string }> = {
+            'Pendiente': { bg: '#fef3c7', text: '#92400e' },
+            'En proceso': { bg: '#dbeafe', text: '#1e40af' },
+            'Pagado': { bg: '#d1fae5', text: '#065f46' },
+            'Enviado': { bg: '#e0e7ff', text: '#3730a3' },
+            'Cancelado': { bg: '#fee2e2', text: '#991b1b' },
+          }
+          const estadoEnvioStyle: Record<string, { bg: string; text: string }> = {
+            'Pendiente': { bg: '#fef3c7', text: '#92400e' },
+            'En tránsito': { bg: '#dbeafe', text: '#1e40af' },
+            'Entregado': { bg: '#d1fae5', text: '#065f46' },
+            'Cancelado': { bg: '#fee2e2', text: '#991b1b' },
+          }
+          const badge = (label: string, map: Record<string, { bg: string; text: string }>) => {
+            const s = map[label] ?? { bg: '#f3f4f6', text: '#374151' }
+            return <span style={{ background: s.bg, color: s.text, fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>{label}</span>
+          }
+
+          return (
+            <div>
+              {/* Panel de pago */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Piezas vendidas</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>{piezasVendidas}</p>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Por pagar (en proceso)</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: '#92400e', margin: 0 }}>${totalEnProceso.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Ya pagado</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: '#059669', margin: 0 }}>${totalAPagar.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+              <p style={{ fontSize: 12, color: '#9ca3af', margin: '-10px 0 20px' }}>
+                Calculado sobre el costo registrado de cada producto × cantidad vendida. Es informativo — el pago real se coordina con el equipo de Order Express.
+              </p>
+
+              {/* Listado */}
+              <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                {loadingSeguimiento ? (
+                  <div style={{ padding: '48px', textAlign: 'center' }}>
+                    <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Cargando...</p>
+                  </div>
+                ) : seguimiento.length === 0 ? (
+                  <div style={{ padding: '48px', textAlign: 'center' }}>
+                    <p style={{ fontSize: 40, margin: '0 0 12px' }}>🚚</p>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>Todavía no se ha vendido ningún producto tuyo</p>
+                    <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>En cuanto se venda uno, vas a poder seguir aquí el envío y el pago.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {seguimiento.map((f, i) => {
+                      const tracking = f.numeroGuia && f.paqueteria && TRACKING_URL_PROV[f.paqueteria]
+                      return (
+                        <div key={f.itemId} style={{
+                          display: 'grid', gridTemplateColumns: '56px 1fr auto', gap: 16, alignItems: 'center',
+                          padding: '16px 28px', borderBottom: i < seguimiento.length - 1 ? '1px solid #f3f4f6' : 'none',
+                          background: i % 2 === 0 ? '#fff' : '#fafafa',
+                        }}>
+                          <div style={{ width: 56, height: 56, borderRadius: 12, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                            {f.productoImagen ? <img src={f.productoImagen} alt={f.productoNombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📦'}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {f.productoNombre} <span style={{ fontWeight: 600, color: '#9ca3af' }}>×{f.cantidad}</span>
+                            </p>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center', flexWrap: 'wrap', fontSize: 11, color: '#9ca3af' }}>
+                              <span style={{ fontFamily: 'monospace' }}>{f.productoSku}</span>
+                              <span>·</span>
+                              <span>Pedido #{f.ventaNumero}</span>
+                              <span>·</span>
+                              <span>Vendido el {new Date(f.ventaFecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                              {badge(f.ventaEstado, estadoVentaStyle)}
+                              {f.estadoEnvio && badge(f.estadoEnvio, estadoEnvioStyle)}
+                              {f.paqueteria && (
+                                <span style={{ fontSize: 11, color: '#6b7280' }}>
+                                  {f.paqueteria}{f.numeroGuia ? ` · Guía ${f.numeroGuia}` : ''}
+                                </span>
+                              )}
+                              {tracking && (
+                                <a href={TRACKING_URL_PROV[f.paqueteria!](f.numeroGuia!)} target="_blank" rel="noopener noreferrer"
+                                  style={{ fontSize: 11, fontWeight: 700, color: '#0049ff', textDecoration: 'none' }}>
+                                  Rastrear ↗
+                                </a>
+                              )}
+                              {f.fechaEnvio && (
+                                <span style={{ fontSize: 11, color: '#9ca3af' }}>Salió: {new Date(f.fechaEnvio).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</span>
+                              )}
+                              {f.fechaEntrega && (
+                                <span style={{ fontSize: 11, color: '#9ca3af' }}>Entregado: {new Date(f.fechaEntrega).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</span>
+                              )}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: '#059669', whiteSpace: 'nowrap' }}>
+                            ${((f.costo ?? 0) * f.cantidad).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ---- Tab: Ajustes ---- */}
         {tab === 'ajustes' && (

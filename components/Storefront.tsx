@@ -1446,8 +1446,8 @@ export default function Storefront() {
               {/* Sesión: si no hay cuenta logueada, solo "Iniciar sesión".
                   Si hay sesión activa, ícono de perfil que lleva al panel de su rol. */}
               {panelUser ? (
-                <a href={ROLE_HOME[panelUser.role]} title={panelUser.nombre}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: '50%', background: storeConfig.color_acento || '#e7226d', color: '#fff', fontWeight: 800, fontSize: 14, textDecoration: 'none', flexShrink: 0 }}>
+                <a href={ROLE_HOME[panelUser.role]} title={panelUser.nombre} className="icon-button"
+                  style={{ borderRadius: '50%', background: storeConfig.color_acento || '#e7226d', color: '#fff', fontWeight: 800, fontSize: 16, textDecoration: 'none', border: 'none' }}>
                   {panelUser.nombre.charAt(0).toUpperCase()}
                 </a>
               ) : (

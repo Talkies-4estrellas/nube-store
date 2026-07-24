@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { getPagosConfig } from '@/lib/pagos-config'
 
 export const runtime = 'nodejs'
 
@@ -8,14 +9,14 @@ export const runtime = 'nodejs'
  * Capturamos la orden (efectúa el cobro real) y marcamos la venta como Pagada.
  */
 
-function paypalBase() {
-  return process.env.PAYPAL_MODE === 'live'
+function paypalBase(mode: string) {
+  return mode === 'live'
     ? 'https://api-m.paypal.com'
     : 'https://api-m.sandbox.paypal.com'
 }
 
-async function obtenerAccessToken(clientId: string, secret: string) {
-  const res = await fetch(`${paypalBase()}/v1/oauth2/token`, {
+async function obtenerAccessToken(clientId: string, secret: string, mode: string) {
+  const res = await fetch(`${paypalBase(mode)}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString('base64')}`,
@@ -35,8 +36,7 @@ export async function GET(req: Request) {
   const numero = url.searchParams.get('venta')
   const origin = process.env.NEXT_PUBLIC_SITE_URL || url.origin
 
-  const clientId = process.env.PAYPAL_CLIENT_ID
-  const secret = process.env.PAYPAL_CLIENT_SECRET
+  const { paypalClientId: clientId, paypalClientSecret: secret, paypalMode } = await getPagosConfig()
   if (!orderId || !ventaId || !clientId || !secret) {
     return NextResponse.redirect(`${origin}/?pago=fallido`)
   }
@@ -47,8 +47,8 @@ export async function GET(req: Request) {
   }
 
   try {
-    const accessToken = await obtenerAccessToken(clientId, secret)
-    const res = await fetch(`${paypalBase()}/v2/checkout/orders/${orderId}/capture`, {
+    const accessToken = await obtenerAccessToken(clientId, secret, paypalMode)
+    const res = await fetch(`${paypalBase(paypalMode)}/v2/checkout/orders/${orderId}/capture`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,

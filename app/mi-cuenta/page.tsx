@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth, ROLE_HOME } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
@@ -65,7 +66,7 @@ export default function MiCuentaPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
 
-  const [tab, setTab] = useState<'pedidos' | 'datos'>('pedidos')
+  const [tab, setTab] = useState<'pedidos' | 'datos' | 'perfil'>('pedidos')
   const [cargando, setCargando] = useState(true)
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [ventas, setVentas] = useState<Venta[]>([])
@@ -74,6 +75,50 @@ export default function MiCuentaPage() {
   const [form, setForm] = useState({ telefono: '', direccion: '', ciudad: '', codigo_postal: '', estado_region: '', pais: 'México' })
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
+
+  // Configuración de perfil (nombre + contraseña)
+  const [perfilNombre, setPerfilNombre] = useState('')
+  const [passwordNueva, setPasswordNueva] = useState('')
+  const [passwordConfirmar, setPasswordConfirmar] = useState('')
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false)
+  const [perfilGuardado, setPerfilGuardado] = useState(false)
+  const [perfilError, setPerfilError] = useState('')
+
+  useEffect(() => {
+    if (user) setPerfilNombre(user.nombre)
+  }, [user])
+
+  async function guardarPerfil() {
+    setPerfilError('')
+    if (!perfilNombre.trim()) { setPerfilError('El nombre no puede quedar vacío'); return }
+    if (passwordNueva && passwordNueva.length < 6) { setPerfilError('La contraseña debe tener al menos 6 caracteres'); return }
+    if (passwordNueva && passwordNueva !== passwordConfirmar) { setPerfilError('Las contraseñas no coinciden'); return }
+
+    setGuardandoPerfil(true)
+    const { error: errNombre } = await supabase.rpc('actualizar_mi_perfil', { nuevo_nombre: perfilNombre.trim() })
+    if (errNombre) {
+      setGuardandoPerfil(false)
+      setPerfilError('No se pudo guardar el nombre: ' + errNombre.message)
+      return
+    }
+
+    if (passwordNueva) {
+      const { error: errPass } = await supabase.auth.updateUser({ password: passwordNueva })
+      if (errPass) {
+        setGuardandoPerfil(false)
+        setPerfilError('El nombre se guardó, pero la contraseña no: ' + errPass.message)
+        return
+      }
+    }
+
+    setGuardandoPerfil(false)
+    setPasswordNueva('')
+    setPasswordConfirmar('')
+    setPerfilGuardado(true)
+    setTimeout(() => setPerfilGuardado(false), 2500)
+    // El nombre en la sesión (sidebar, etc.) se recarga desde user_roles al refrescar
+    setTimeout(() => window.location.reload(), 900)
+  }
 
   useEffect(() => {
     if (loading) return
@@ -141,62 +186,91 @@ export default function MiCuentaPage() {
     )
   }
 
+  const navItem = (id: 'pedidos' | 'datos' | 'perfil', label: string, emoji: string) => {
+    const active = tab === id
+    return (
+      <button onClick={() => setTab(id)} style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', width: '100%',
+        color: NAVY, fontSize: 14, fontWeight: active ? 800 : 700, borderRadius: 999,
+        background: active ? '#fff' : 'transparent', cursor: 'pointer',
+        border: active ? `2px solid ${NAVY}` : '2px solid transparent',
+        boxShadow: active ? '0 6px 16px rgba(37,40,85,0.12)' : 'none',
+        textAlign: 'left',
+      }}>
+        <span style={{ fontSize: 16 }}>{emoji}</span>
+        <span style={{ flex: 1 }}>{label}</span>
+      </button>
+    )
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f9fafb', padding: '32px 20px 60px' }}>
-      <div style={{ width: '100%', maxWidth: 720, margin: '0 auto' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
-        {/* Perfil */}
-        <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ width: 52, height: 52, background: NAVY, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 20, flexShrink: 0 }}>
-            {user.nombre.charAt(0).toUpperCase()}
-          </div>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <h1 style={{ fontSize: 18, fontWeight: 800, color: '#111', margin: 0 }}>{user.nombre}</h1>
-            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>{user.email}</p>
-          </div>
-          <a href="/" style={{ background: '#f3f4f6', color: '#374151', padding: '9px 18px', borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Ir a la tienda</a>
-          <button onClick={signOut} style={{ background: PINK, color: '#fff', border: 'none', padding: '9px 18px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Cerrar sesión</button>
-        </div>
+      {/* ---- Sidebar (mismo patrón que proveedores) ---- */}
+      <aside style={{
+        width: 240, maxWidth: 280, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
+        display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0,
+        zIndex: 100, padding: '16px 12px 16px',
+      }}>
+        <Link href="/" title="Ver tienda" style={{ display: 'flex', justifyContent: 'center', padding: '0 8px', marginBottom: 16 }}>
+          <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 44, width: 'auto' }} />
+        </Link>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button onClick={() => setTab('pedidos')} style={{
-            flex: 1, padding: '11px 0', borderRadius: 10, border: `2px solid ${tab === 'pedidos' ? NAVY : '#e5e7eb'}`,
-            background: tab === 'pedidos' ? NAVY : '#fff', color: tab === 'pedidos' ? '#fff' : '#374151', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-            📦 Mis pedidos {ventas.length > 0 && `(${ventas.length})`}
-          </button>
-          <button onClick={() => setTab('datos')} style={{
-            flex: 1, padding: '11px 0', borderRadius: 10, border: `2px solid ${tab === 'datos' ? NAVY : '#e5e7eb'}`,
-            background: tab === 'datos' ? NAVY : '#fff', color: tab === 'datos' ? '#fff' : '#374151', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-            🧾 Datos de facturación y envío
+        <nav style={{ flex: 1, minHeight: 0, background: '#f1f2f6', borderRadius: 22, padding: '12px 10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>CUENTA</span>
+          {navItem('pedidos', 'Mis pedidos', '📦')}
+          {navItem('datos', 'Datos de facturación', '🧾')}
+          {navItem('perfil', 'Configuración', '⚙️')}
+        </nav>
+
+        <div style={{ paddingTop: 12, borderTop: '1px solid #f3f4f6', marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 10px' }}>
+            <div style={{ width: 34, height: 34, background: NAVY, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
+              {user.nombre.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.nombre}</p>
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#f3f4f6', color: '#374151', padding: '1px 7px', borderRadius: 20 }}>Cliente</span>
+            </div>
+          </div>
+          <button type="button" onClick={signOut}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', border: 'none', borderRadius: 999, background: 'rgba(231,34,109,0.10)', color: PINK, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+            Cerrar sesión
           </button>
         </div>
+      </aside>
+
+      {/* ---- Área principal ---- */}
+      <div style={{ marginLeft: 240, flex: 1, minHeight: '100vh', padding: '32px 32px 60px' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: '0 0 20px' }}>
+          {tab === 'pedidos' ? 'Mis pedidos' : tab === 'datos' ? 'Datos de facturación' : 'Configuración'}
+        </h1>
 
         {tab === 'pedidos' && (
-          <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+          <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', overflow: 'hidden' }}>
             {cargando ? (
               <p style={{ padding: 24, fontSize: 13, color: '#9ca3af' }}>Cargando tus pedidos...</p>
             ) : !cliente ? (
-              <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-                <p style={{ fontSize: 32, marginBottom: 8 }}>🛍️</p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Todavía no tienes compras</p>
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <p style={{ fontSize: 40, marginBottom: 12 }}>🛍️</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Todavía no tienes compras</p>
                 <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16 }}>Cuando hagas tu primer pedido en la tienda usando <strong>{user.email}</strong>, va a aparecer aquí.</p>
                 <a href="/" style={{ display: 'inline-block', background: NAVY, color: '#fff', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Ir a comprar</a>
               </div>
             ) : ventas.length === 0 ? (
-              <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-                <p style={{ fontSize: 32, marginBottom: 8 }}>🛍️</p>
-                <p style={{ fontSize: 14, fontWeight: 700, color: '#374151' }}>Todavía no tienes pedidos</p>
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <p style={{ fontSize: 40, marginBottom: 12 }}>🛍️</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>Todavía no tienes pedidos</p>
                 <a href="/" style={{ display: 'inline-block', marginTop: 12, background: NAVY, color: '#fff', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Ir a comprar</a>
               </div>
             ) : (
-              ventas.map(v => {
+              ventas.map((v, i) => {
                 const abierta = ventaAbierta === v.id
                 const tracking = v.envio?.numero_guia && TRACKING_URL[v.envio.paqueteria]
                 return (
-                  <div key={v.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <div key={v.id} style={{ borderBottom: i < ventas.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
                     <button onClick={() => setVentaAbierta(abierta ? null : v.id)}
-                      style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}>
+                      style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: 0 }}>Pedido #{v.numero}</p>
                         <p style={{ fontSize: 12, color: '#9ca3af', margin: '2px 0 0' }}>{new Date(v.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
@@ -207,7 +281,7 @@ export default function MiCuentaPage() {
                     </button>
 
                     {abierta && (
-                      <div style={{ padding: '0 20px 20px' }}>
+                      <div style={{ padding: '0 24px 20px' }}>
                         <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px', marginBottom: v.envio ? 10 : 0 }}>
                           {v.items.map(it => (
                             <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#374151', padding: '3px 0' }}>
@@ -245,7 +319,7 @@ export default function MiCuentaPage() {
         )}
 
         {tab === 'datos' && (
-          <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', padding: '24px 28px' }}>
+          <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: '24px 28px', maxWidth: 620 }}>
             <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
               Datos de facturación y envío
             </p>
@@ -283,6 +357,49 @@ export default function MiCuentaPage() {
             <button onClick={guardarDatos} disabled={guardando}
               style={{ background: guardado ? '#059669' : NAVY, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
               {guardando ? 'Guardando...' : guardado ? '¡Guardado!' : 'Guardar datos'}
+            </button>
+          </div>
+        )}
+
+        {tab === 'perfil' && (
+          <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: '24px 28px', maxWidth: 480 }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+              Perfil
+            </p>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Nombre completo</label>
+              <input style={inp} value={perfilNombre} onChange={e => setPerfilNombre(e.target.value)} placeholder="Tu nombre" />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={lbl}>Email</label>
+              <input style={{ ...inp, background: '#f3f4f6', color: '#9ca3af', cursor: 'not-allowed' }} value={user.email} disabled readOnly />
+              <p style={{ fontSize: 11, color: '#9ca3af', margin: '4px 0 0' }}>Para cambiar tu email contacta al soporte.</p>
+            </div>
+
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 12px' }}>
+              Cambiar contraseña
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div>
+                <label style={lbl}>Nueva contraseña</label>
+                <input type="password" style={inp} value={passwordNueva} onChange={e => setPasswordNueva(e.target.value)} placeholder="Dejar en blanco para no cambiarla" />
+              </div>
+              <div>
+                <label style={lbl}>Confirmar</label>
+                <input type="password" style={inp} value={passwordConfirmar} onChange={e => setPasswordConfirmar(e.target.value)} placeholder="••••••••" />
+              </div>
+            </div>
+
+            {perfilError && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 16 }}>
+                {perfilError}
+              </div>
+            )}
+
+            <button onClick={guardarPerfil} disabled={guardandoPerfil}
+              style={{ background: perfilGuardado ? '#059669' : NAVY, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+              {guardandoPerfil ? 'Guardando...' : perfilGuardado ? '¡Guardado!' : 'Guardar cambios'}
             </button>
           </div>
         )}

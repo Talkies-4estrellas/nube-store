@@ -17,10 +17,14 @@ type SearchResult = {
 
 type Notif = {
   id: string
-  numero: number
-  nombre: string
-  total: number
+  tipo: 'venta' | 'stock_bajo' | 'solicitud' | 'sugerencia'
+  titulo: string
+  subtitulo: string
+  extra?: string
   at: string
+  href: string
+  icono: string
+  color: string
 }
 
 export default function Topbar() {
@@ -37,6 +41,33 @@ export default function Topbar() {
   const { user } = useAuth()
   const { isMobile, toggle, open } = useSidebar()
 
+  // Avisos persistentes: stock bajo y solicitudes de proveedor pendientes
+  // (estado actual del negocio, no solo eventos de esta sesión).
+  useEffect(() => {
+    async function cargarAvisos() {
+      const [{ data: stockBajo }, { data: solicitudes }] = await Promise.all([
+        supabase.from('productos').select('id, nombre, sku, stock').eq('activo', true).lte('stock', 5).order('stock').limit(5),
+        supabase.from('solicitudes_productos').select('id, producto_nombre, proveedor_nombre, created_at').eq('estado', 'pendiente').order('created_at', { ascending: false }).limit(5),
+      ])
+
+      const avisos: Notif[] = []
+      ;(stockBajo ?? []).forEach(p => avisos.push({
+        id: `stock-${p.id}`, tipo: 'stock_bajo',
+        titulo: p.stock === 0 ? `${p.nombre} sin stock` : `${p.nombre}: quedan ${p.stock}`,
+        subtitulo: `SKU ${p.sku}`, at: new Date().toISOString(), href: '/productos',
+        icono: '📦', color: p.stock === 0 ? '#dc2626' : '#d97706',
+      }))
+      ;(solicitudes ?? []).forEach(s => avisos.push({
+        id: `sol-${s.id}`, tipo: 'solicitud',
+        titulo: `Nueva solicitud: ${s.producto_nombre}`,
+        subtitulo: s.proveedor_nombre, at: s.created_at, href: '/configuracion',
+        icono: '📥', color: '#0049ff',
+      }))
+      setNotifs(prev => [...avisos, ...prev.filter(n => n.tipo === 'venta')])
+    }
+    cargarAvisos()
+  }, [])
+
   // Realtime: nueva venta → badge + dropdown
   useEffect(() => {
     const channel = supabase
@@ -45,12 +76,12 @@ export default function Topbar() {
         const v = payload.new as { id: string; numero: number; total: number; created_at: string; cliente_id: string }
         const { data: cliente } = await supabase.from('clientes').select('nombre').eq('id', v.cliente_id).maybeSingle()
         setNotifs(prev => [{
-          id: v.id,
-          numero: v.numero,
-          nombre: cliente?.nombre ?? 'Cliente',
-          total: Number(v.total),
-          at: v.created_at,
-        }, ...prev].slice(0, 15))
+          id: `venta-${v.id}`, tipo: 'venta' as const,
+          titulo: `Venta #${v.numero}`,
+          subtitulo: cliente?.nombre ?? 'Cliente',
+          extra: `$${Number(v.total).toLocaleString('es-MX')}`,
+          at: v.created_at, href: '/ventas', icono: '🛒', color: '#059669',
+        }, ...prev].slice(0, 20))
         setUnread(n => n + 1)
       })
       .subscribe()
@@ -129,7 +160,7 @@ export default function Topbar() {
       <div ref={notifRef} style={{ position: 'relative' }}>
         <button onClick={() => { setShowNotif(v => !v); setUnread(0) }}
           style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center' }}>
-          <Icon name="warning" size={20} color={unread > 0 ? '#d97706' : '#9ca3af'} />
+          <Icon name="bell" size={20} color={unread > 0 ? '#d97706' : '#9ca3af'} />
           {unread > 0 && (
             <span style={{ position: 'absolute', top: 2, right: 2, background: '#e7226d', color: '#fff', fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
               {unread > 9 ? '9+' : unread}
@@ -137,31 +168,31 @@ export default function Topbar() {
           )}
         </button>
         {showNotif && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: 320, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.14)', zIndex: 300, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: 340, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.14)', zIndex: 300, overflow: 'hidden' }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: 0 }}>Ventas nuevas</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: 0 }}>Notificaciones</p>
               {notifs.length > 0 && (
                 <button onClick={() => setNotifs([])} style={{ background: 'none', border: 'none', fontSize: 11, color: '#9ca3af', cursor: 'pointer', fontWeight: 600 }}>Limpiar</button>
               )}
             </div>
             {notifs.length === 0 ? (
               <div style={{ padding: '28px 16px', textAlign: 'center' }}>
-                <p style={{ fontSize: 13, color: '#9ca3af' }}>Sin ventas nuevas en esta sesión</p>
+                <p style={{ fontSize: 13, color: '#9ca3af' }}>Sin avisos ni sugerencias por ahora</p>
               </div>
             ) : (
-              <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
                 {notifs.map(n => (
-                  <button key={n.id} onClick={() => { router.push('/ventas'); setShowNotif(false) }}
+                  <button key={n.id} onClick={() => { router.push(n.href); setShowNotif(false) }}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', background: 'none', border: 'none', borderBottom: '1px solid #f9fafb', cursor: 'pointer', textAlign: 'left' }}
                     onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                    <div style={{ width: 36, height: 36, background: '#d1fae5', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>🛒</div>
+                    <div style={{ width: 36, height: 36, background: `${n.color}1a`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16 }}>{n.icono}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: '0 0 2px' }}>Venta #{n.numero}</p>
-                      <p style={{ fontSize: 11, color: '#6b7280', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.nombre}</p>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#111', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.titulo}</p>
+                      <p style={{ fontSize: 11, color: '#6b7280', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.subtitulo}</p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: '#059669', margin: '0 0 2px' }}>${n.total.toLocaleString('es-MX')}</p>
+                      {n.extra && <p style={{ fontSize: 13, fontWeight: 700, color: n.color, margin: '0 0 2px' }}>{n.extra}</p>}
                       <p style={{ fontSize: 10, color: '#9ca3af', margin: 0 }}>{new Date(n.at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </button>
@@ -169,9 +200,9 @@ export default function Topbar() {
               </div>
             )}
             <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6' }}>
-              <button onClick={() => { router.push('/ventas'); setShowNotif(false) }}
+              <button onClick={() => { router.push('/dashboard'); setShowNotif(false) }}
                 style={{ width: '100%', background: '#eff6ff', color: '#0049ff', border: 'none', padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                Ver todas las ventas →
+                Ir al dashboard →
               </button>
             </div>
           </div>

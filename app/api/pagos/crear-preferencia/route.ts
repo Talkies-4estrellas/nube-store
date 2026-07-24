@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { MercadoPagoConfig, Preference } from 'mercadopago'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { getPagosConfig } from '@/lib/pagos-config'
 
 export const runtime = 'nodejs'
 
@@ -14,9 +15,9 @@ export const runtime = 'nodejs'
  * datos. Nunca se confía en precios enviados por el navegador.
  */
 export async function POST(req: Request) {
-  const accessToken = process.env.MP_ACCESS_TOKEN
+  const { mpAccessToken: accessToken } = await getPagosConfig()
   if (!accessToken) {
-    return NextResponse.json({ error: 'Falta configurar MP_ACCESS_TOKEN' }, { status: 500 })
+    return NextResponse.json({ error: 'Falta configurar el access token de Mercado Pago' }, { status: 500 })
   }
 
   const supabase = getServerSupabase()

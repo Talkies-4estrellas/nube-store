@@ -446,6 +446,18 @@ drop policy if exists "ventas select propio" on ventas;
 create policy "ventas select propio" on ventas
   for select using (cliente_id in (select id from clientes where email = auth.jwt()->>'email'));
 
+drop policy if exists "ventas select proveedor" on ventas;
+create policy "ventas select proveedor" on ventas
+  for select using (
+    get_my_role() = 'proveedor'
+    and id in (
+      select vi.venta_id from venta_items vi
+      join productos p on p.id = vi.producto_id
+      join solicitudes_productos sp on sp.producto_sku = p.sku
+      where sp.proveedor_email = auth.jwt()->>'email' and sp.estado = 'aprobado'
+    )
+  );
+
 drop policy if exists "ventas update admin vendedor" on ventas;
 create policy "ventas update admin vendedor" on ventas
   for update using (get_my_role() in ('admin', 'vendedor'));
@@ -469,6 +481,17 @@ create policy "venta_items select propio" on venta_items
     where c.email = auth.jwt()->>'email'
   ));
 
+drop policy if exists "venta_items select proveedor" on venta_items;
+create policy "venta_items select proveedor" on venta_items
+  for select using (
+    get_my_role() = 'proveedor'
+    and producto_id in (
+      select p.id from productos p
+      join solicitudes_productos sp on sp.producto_sku = p.sku
+      where sp.proveedor_email = auth.jwt()->>'email' and sp.estado = 'aprobado'
+    )
+  );
+
 drop policy if exists "venta_items update admin vendedor" on venta_items;
 create policy "venta_items update admin vendedor" on venta_items
   for update using (get_my_role() in ('admin', 'vendedor'));
@@ -484,6 +507,18 @@ create policy "envios select propio" on envios
     select v.id from ventas v join clientes c on c.id = v.cliente_id
     where c.email = auth.jwt()->>'email'
   ));
+
+drop policy if exists "envios select proveedor" on envios;
+create policy "envios select proveedor" on envios
+  for select using (
+    get_my_role() = 'proveedor'
+    and venta_id in (
+      select vi.venta_id from venta_items vi
+      join productos p on p.id = vi.producto_id
+      join solicitudes_productos sp on sp.producto_sku = p.sku
+      where sp.proveedor_email = auth.jwt()->>'email' and sp.estado = 'aprobado'
+    )
+  );
 
 drop policy if exists "envios write admin bodega" on envios;
 create policy "envios write admin bodega" on envios for all

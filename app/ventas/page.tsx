@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import VentaModal from '@/components/VentaModal'
 import Icon from '@/components/Icon'
 import { SkeletonTableBody } from '@/components/Skeleton'
+import { paginasVisibles } from '@/lib/pagination'
 
 const PAGE_SIZE = 15
 
@@ -298,17 +299,21 @@ export default function VentasPage() {
           </div>
 
           {totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 12 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 4, marginTop: 12, maxWidth: '100%' }}>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                 style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === 1 ? '#f9fafb' : '#fff', color: page === 1 ? '#d1d5db' : '#374151', cursor: page === 1 ? 'default' : 'pointer', fontSize: 13 }}>
                 ← Anterior
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
-                <button key={n} onClick={() => setPage(n)}
-                  style={{ padding: '6px 11px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === n ? '#0049ff' : '#fff', color: page === n ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: page === n ? 700 : 400 }}>
-                  {n}
-                </button>
-              ))}
+              {paginasVisibles(page, totalPages).map((n, i) =>
+                n === '...' ? (
+                  <span key={`e${i}`} style={{ padding: '6px 4px', fontSize: 13, color: '#9ca3af' }}>…</span>
+                ) : (
+                  <button key={n} onClick={() => setPage(n)}
+                    style={{ padding: '6px 11px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === n ? '#0049ff' : '#fff', color: page === n ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: page === n ? 700 : 400 }}>
+                    {n}
+                  </button>
+                )
+              )}
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
                 style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: page === totalPages ? '#f9fafb' : '#fff', color: page === totalPages ? '#d1d5db' : '#374151', cursor: page === totalPages ? 'default' : 'pointer', fontSize: 13 }}>
                 Siguiente →

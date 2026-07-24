@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase-server'
+import { getPagosConfig } from '@/lib/pagos-config'
 
 export const runtime = 'nodejs'
 
@@ -14,14 +15,14 @@ export const runtime = 'nodejs'
  * de datos. Nunca se confía en precios enviados por el navegador.
  */
 
-function paypalBase() {
-  return process.env.PAYPAL_MODE === 'live'
+function paypalBase(mode: string) {
+  return mode === 'live'
     ? 'https://api-m.paypal.com'
     : 'https://api-m.sandbox.paypal.com'
 }
 
-async function obtenerAccessToken(clientId: string, secret: string) {
-  const res = await fetch(`${paypalBase()}/v1/oauth2/token`, {
+async function obtenerAccessToken(clientId: string, secret: string, mode: string) {
+  const res = await fetch(`${paypalBase(mode)}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString('base64')}`,
@@ -35,10 +36,9 @@ async function obtenerAccessToken(clientId: string, secret: string) {
 }
 
 export async function POST(req: Request) {
-  const clientId = process.env.PAYPAL_CLIENT_ID
-  const secret = process.env.PAYPAL_CLIENT_SECRET
+  const { paypalClientId: clientId, paypalClientSecret: secret, paypalMode } = await getPagosConfig()
   if (!clientId || !secret) {
-    return NextResponse.json({ error: 'Falta configurar PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET' }, { status: 500 })
+    return NextResponse.json({ error: 'Falta configurar las credenciales de PayPal' }, { status: 500 })
   }
 
   const supabase = getServerSupabase()
@@ -81,9 +81,9 @@ export async function POST(req: Request) {
   const origin = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin
 
   try {
-    const accessToken = await obtenerAccessToken(clientId, secret)
+    const accessToken = await obtenerAccessToken(clientId, secret, paypalMode)
 
-    const res = await fetch(`${paypalBase()}/v2/checkout/orders`, {
+    const res = await fetch(`${paypalBase(paypalMode)}/v2/checkout/orders`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,

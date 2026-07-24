@@ -112,6 +112,29 @@ const SINONIMOS: Record<string, string[]> = {
   activo:             ['activo', 'mostrar en mi tienda en línea', 'mostrar en mi tienda en linea'],
   envio_gratis:       ['envio_gratis', 'envío sin cargo', 'envio sin cargo'],
   detalles:           ['detalles'],
+
+  // Campos históricos del control Excel 2023 — tienen su propia columna en
+  // `productos`, pero no se muestran en la vista previa de importación
+  // (son datos congelados de referencia, no información que se administre
+  // desde el panel).
+  proveedor_contacto:                ['proveedor_contacto'],
+  proveedor_telefono:                ['proveedor_telefono'],
+  id_articulo_original:              ['id_articulo_original'],
+  calcula_id_original:               ['calcula_id_original'],
+  numero_control_excel:              ['numero_control_excel'],
+  precio_compra_con_iva:             ['precio_compra_con_iva'],
+  iva_compra:                        ['iva_compra'],
+  porcentaje_a_ganar:                ['porcentaje_a_ganar'],
+  utilidad_excel:                    ['utilidad_excel'],
+  es_compra_interna:                 ['es_compra_interna'],
+  openpay_comision:                  ['openpay_comision'],
+  openpay_iva:                       ['openpay_iva'],
+  comision_tienda_nube:              ['comision_tienda_nube'],
+  total_comisiones:                  ['total_comisiones'],
+  descuento_pago_transferencia_pct:  ['descuento_pago_transferencia_pct'],
+  iva_venta_desglosar:               ['iva_venta_desglosar'],
+  precio_venta_sin_iva:              ['precio_venta_sin_iva'],
+  ganancia_real_excel:               ['ganancia_real_excel'],
 }
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -147,6 +170,15 @@ type Fila = {
   peso_kg: number | null; alto_cm: number | null; ancho_cm: number | null; profundidad_cm: number | null
   ubicacion: string; proveedor: string; activo: boolean; envio_gratis: boolean
   detalles: string
+  // Históricos del control Excel 2023 (ver comentario en SINONIMOS)
+  proveedor_contacto: string; proveedor_telefono: string
+  id_articulo_original: string; calcula_id_original: string; numero_control_excel: string
+  precio_compra_con_iva: number | null; iva_compra: number | null
+  porcentaje_a_ganar: number | null; utilidad_excel: number | null; es_compra_interna: string
+  openpay_comision: number | null; openpay_iva: number | null
+  comision_tienda_nube: number | null; total_comisiones: number | null
+  descuento_pago_transferencia_pct: number | null; iva_venta_desglosar: number | null
+  precio_venta_sin_iva: number | null; ganancia_real_excel: number | null
   valido: boolean; motivo: string; accion: 'nuevo' | 'actualizar'; sinCambios: boolean
 }
 
@@ -190,6 +222,24 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
         activo: esVerdadero(pick(r, 'activo'), true),
         envio_gratis: esVerdadero(pick(r, 'envio_gratis'), false),
         detalles: pick(r, 'detalles'),
+        proveedor_contacto: pick(r, 'proveedor_contacto'),
+        proveedor_telefono: pick(r, 'proveedor_telefono'),
+        id_articulo_original: pick(r, 'id_articulo_original'),
+        calcula_id_original: pick(r, 'calcula_id_original'),
+        numero_control_excel: pick(r, 'numero_control_excel'),
+        precio_compra_con_iva: cleanNumber(pick(r, 'precio_compra_con_iva')),
+        iva_compra: cleanNumber(pick(r, 'iva_compra')),
+        porcentaje_a_ganar: cleanNumber(pick(r, 'porcentaje_a_ganar')),
+        utilidad_excel: cleanNumber(pick(r, 'utilidad_excel')),
+        es_compra_interna: pick(r, 'es_compra_interna'),
+        openpay_comision: cleanNumber(pick(r, 'openpay_comision')),
+        openpay_iva: cleanNumber(pick(r, 'openpay_iva')),
+        comision_tienda_nube: cleanNumber(pick(r, 'comision_tienda_nube')),
+        total_comisiones: cleanNumber(pick(r, 'total_comisiones')),
+        descuento_pago_transferencia_pct: cleanNumber(pick(r, 'descuento_pago_transferencia_pct')),
+        iva_venta_desglosar: cleanNumber(pick(r, 'iva_venta_desglosar')),
+        precio_venta_sin_iva: cleanNumber(pick(r, 'precio_venta_sin_iva')),
+        ganancia_real_excel: cleanNumber(pick(r, 'ganancia_real_excel')),
       }
 
       const faltantes: string[] = []
@@ -327,6 +377,26 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
         if (f.profundidad_cm !== null) p.profundidad_cm = f.profundidad_cm
         if (f.ubicacion) p.ubicacion = f.ubicacion
         if (f.proveedor) { p.proveedor_nombre = f.proveedor; p.origen = 'proveedor' }
+
+        // Históricos del control Excel 2023: columna propia, sin pasar por `detalles`
+        if (f.proveedor_contacto) p.proveedor_contacto = f.proveedor_contacto
+        if (f.proveedor_telefono) p.proveedor_telefono = f.proveedor_telefono
+        if (f.id_articulo_original) p.id_articulo_original = f.id_articulo_original
+        if (f.calcula_id_original) p.calcula_id_original = f.calcula_id_original
+        if (f.numero_control_excel) p.numero_control_excel = f.numero_control_excel
+        if (f.precio_compra_con_iva !== null) p.precio_compra_con_iva = f.precio_compra_con_iva
+        if (f.iva_compra !== null) p.iva_compra = f.iva_compra
+        if (f.porcentaje_a_ganar !== null) p.porcentaje_a_ganar = f.porcentaje_a_ganar
+        if (f.utilidad_excel !== null) p.utilidad_excel = f.utilidad_excel
+        if (f.es_compra_interna) p.es_compra_interna = f.es_compra_interna
+        if (f.openpay_comision !== null) p.openpay_comision = f.openpay_comision
+        if (f.openpay_iva !== null) p.openpay_iva = f.openpay_iva
+        if (f.comision_tienda_nube !== null) p.comision_tienda_nube = f.comision_tienda_nube
+        if (f.total_comisiones !== null) p.total_comisiones = f.total_comisiones
+        if (f.descuento_pago_transferencia_pct !== null) p.descuento_pago_transferencia_pct = f.descuento_pago_transferencia_pct
+        if (f.iva_venta_desglosar !== null) p.iva_venta_desglosar = f.iva_venta_desglosar
+        if (f.precio_venta_sin_iva !== null) p.precio_venta_sin_iva = f.precio_venta_sin_iva
+        if (f.ganancia_real_excel !== null) p.ganancia_real_excel = f.ganancia_real_excel
 
         const img = mapaImg.get(f.sku) || (!bajarImagenes ? f.imagen_url : '')
         if (img) p.imagen_url = img

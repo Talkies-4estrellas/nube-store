@@ -131,9 +131,9 @@ export default function Sidebar() {
 
   return (
     <aside style={sidebarStyle}>
-      <div style={{ padding: '0 8px', marginBottom: 16 }}>
+      <Link href="/" title="Ver tienda" style={{ display: 'flex', justifyContent: 'center', padding: '0 8px', marginBottom: 16 }}>
         <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 44, width: 'auto', maxWidth: '100%' }} />
-      </div>
+      </Link>
 
       <nav className="admin-nav-scroll" style={s.nav}>
         {visibleSections.map(section => (
@@ -182,17 +182,6 @@ export default function Sidebar() {
             ))}
           </div>
         ))}
-        {/* Ver tienda — abre la tienda pública en nueva pestaña */}
-        <a href="/" style={{
-          display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px',
-          color: NAVY, textDecoration: 'none', fontSize: 14, fontWeight: 700,
-          borderRadius: 999, background: 'transparent', border: '2px solid transparent', marginTop: 4,
-        }}>
-          <Icon name="store" size={18} color={NAVY} />
-          <span style={{ flex: 1 }}>Ver tienda</span>
-          <span style={{ fontSize: 12, opacity: 0.8 }}>↗</span>
-        </a>
-
           {showConfig && (
           <div style={{ marginTop: 4, position: 'relative' }}>
             <NavLink href="/configuracion" label="Configuración" icon="settings" active={pathname === '/configuracion'} />
