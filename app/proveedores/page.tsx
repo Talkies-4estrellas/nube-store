@@ -144,9 +144,79 @@ export default function ProveedoresPage() {
   const [misProductos, setMisProductos] = useState<MiSolicitud[]>([])
   const [loadingMisProductos, setLoadingMisProductos] = useState(false)
 
-  // Tab Ajustes — perfil guardado del proveedor
+  // Tab Ajustes — perfil guardado del proveedor (localStorage, para autollenar el formulario)
   const [perfil, setPerfil] = useState({ nombre: '', empresa: '', email: '', telefono: '' })
   const [perfilGuardado, setPerfilGuardado] = useState(false)
+
+  // Tab Ajustes — Mi cuenta (perfil real de la sesión: foto, nombre, contraseña)
+  const [cuentaNombre, setCuentaNombre] = useState('')
+  const [cuentaAvatarPreview, setCuentaAvatarPreview] = useState<string | null>(null)
+  const [cuentaAvatarFile, setCuentaAvatarFile] = useState<File | null>(null)
+  const [cuentaPasswordNueva, setCuentaPasswordNueva] = useState('')
+  const [cuentaPasswordConfirmar, setCuentaPasswordConfirmar] = useState('')
+  const [guardandoCuenta, setGuardandoCuenta] = useState(false)
+  const [cuentaGuardada, setCuentaGuardada] = useState(false)
+  const [cuentaError, setCuentaError] = useState('')
+  const cuentaAvatarInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (user) { setCuentaNombre(user.nombre); setCuentaAvatarPreview(user.avatar_url) }
+  }, [user])
+
+  function elegirCuentaAvatar(file: File | null) {
+    if (!file) return
+    setCuentaAvatarFile(file)
+    setCuentaAvatarPreview(URL.createObjectURL(file))
+  }
+
+  async function guardarCuenta() {
+    setCuentaError('')
+    if (!cuentaNombre.trim()) { setCuentaError('El nombre no puede quedar vacío'); return }
+    if (cuentaPasswordNueva && cuentaPasswordNueva.length < 6) { setCuentaError('La contraseña debe tener al menos 6 caracteres'); return }
+    if (cuentaPasswordNueva && cuentaPasswordNueva !== cuentaPasswordConfirmar) { setCuentaError('Las contraseñas no coinciden'); return }
+    if (!user) return
+
+    setGuardandoCuenta(true)
+
+    let avatarUrl: string | null = null
+    if (cuentaAvatarFile) {
+      try {
+        const webp = await convertToWebp(cuentaAvatarFile)
+        avatarUrl = await uploadToSupabase(webp, supabase, 'productos', `avatars/${user.id}.webp`)
+      } catch (e) {
+        setGuardandoCuenta(false)
+        setCuentaError('No se pudo subir la imagen: ' + (e instanceof Error ? e.message : 'error desconocido'))
+        return
+      }
+    }
+
+    const { error: errNombre } = await supabase.rpc('actualizar_mi_perfil', {
+      nuevo_nombre: cuentaNombre.trim(),
+      ...(avatarUrl ? { nuevo_avatar_url: avatarUrl } : {}),
+    })
+    if (errNombre) {
+      setGuardandoCuenta(false)
+      setCuentaError('No se pudo guardar el nombre: ' + errNombre.message)
+      return
+    }
+
+    if (cuentaPasswordNueva) {
+      const { error: errPass } = await supabase.auth.updateUser({ password: cuentaPasswordNueva })
+      if (errPass) {
+        setGuardandoCuenta(false)
+        setCuentaError('El nombre se guardó, pero la contraseña no: ' + errPass.message)
+        return
+      }
+    }
+
+    setGuardandoCuenta(false)
+    setCuentaAvatarFile(null)
+    setCuentaPasswordNueva('')
+    setCuentaPasswordConfirmar('')
+    setCuentaGuardada(true)
+    setTimeout(() => setCuentaGuardada(false), 2500)
+    setTimeout(() => window.location.reload(), 900)
+  }
 
   // Tab Seguimiento y pagos
   const [seguimiento, setSeguimiento] = useState<SeguimientoFila[]>([])
@@ -1625,6 +1695,68 @@ export default function ProveedoresPage() {
 
         {/* ---- Tab: Ajustes ---- */}
         {tab === 'ajustes' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+          {/* Editar perfil (cuenta real de sesión) */}
+          <div style={{ background: '#fff', borderRadius: 20, padding: '32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', maxWidth: 640 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+              <div style={{ width: 40, height: 40, background: `${NAVY}12`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>👤</div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>Editar perfil</h2>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Foto, nombre y contraseña de tu cuenta</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 20 }}>
+              <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', background: NAVY, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 24, flexShrink: 0 }}>
+                {cuentaAvatarPreview
+                  ? <img src={cuentaAvatarPreview} alt={cuentaNombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : (cuentaNombre.charAt(0).toUpperCase() || '?')}
+              </div>
+              <div>
+                <input ref={cuentaAvatarInputRef} type="file" accept="image/*" hidden
+                  onChange={e => elegirCuentaAvatar(e.target.files?.[0] ?? null)} />
+                <button type="button" onClick={() => cuentaAvatarInputRef.current?.click()}
+                  style={{ background: '#eff6ff', color: '#0049ff', border: 'none', padding: '8px 16px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  Cambiar foto
+                </button>
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '6px 0 0' }}>JPG o PNG</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={labelStyle}>Nombre completo</label>
+                <input style={inputStyle} value={cuentaNombre} onChange={e => setCuentaNombre(e.target.value)} placeholder="Tu nombre" onFocus={focus} onBlur={blur} />
+              </div>
+              <div>
+                <label style={labelStyle}>Email</label>
+                <input style={{ ...inputStyle, background: '#f3f4f6', color: '#9ca3af', cursor: 'not-allowed' }} value={user?.email ?? ''} disabled readOnly />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Nueva contraseña</label>
+                  <input type="password" style={inputStyle} value={cuentaPasswordNueva} onChange={e => setCuentaPasswordNueva(e.target.value)} placeholder="Dejar en blanco para no cambiarla" onFocus={focus} onBlur={blur} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Confirmar</label>
+                  <input type="password" style={inputStyle} value={cuentaPasswordConfirmar} onChange={e => setCuentaPasswordConfirmar(e.target.value)} placeholder="••••••••" onFocus={focus} onBlur={blur} />
+                </div>
+              </div>
+            </div>
+
+            {cuentaError && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 16px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginTop: 16 }}>
+                {cuentaError}
+              </div>
+            )}
+
+            <button type="button" onClick={guardarCuenta} disabled={guardandoCuenta}
+              style={{ marginTop: 20, background: cuentaGuardada ? '#059669' : NAVY, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+              {guardandoCuenta ? 'Guardando...' : cuentaGuardada ? '¡Guardado!' : 'Guardar cambios'}
+            </button>
+          </div>
+
           <div style={{ background: '#fff', borderRadius: 20, padding: '32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', maxWidth: 640 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
               <div style={{ width: 40, height: 40, background: `${NAVY}12`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>⚙️</div>
@@ -1711,6 +1843,8 @@ export default function ProveedoresPage() {
             <p style={{ fontSize: 11, color: '#d1d5db', textAlign: 'center', marginTop: 16 }}>
               💾 Los datos se almacenan solo en este navegador
             </p>
+          </div>
+
           </div>
         )}
 

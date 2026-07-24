@@ -198,8 +198,10 @@ export default function Sidebar() {
       {user && (
         <div style={{ padding: '12px 8px 0', borderTop: '1px solid #f3f4f6', marginTop: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 10px' }}>
-            <div style={{ width: 34, height: 34, background: NAVY, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-              {user.nombre.charAt(0).toUpperCase()}
+            <div style={{ width: 34, height: 34, background: NAVY, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13, flexShrink: 0, overflow: 'hidden' }}>
+              {user.avatar_url
+                ? <img src={user.avatar_url} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : user.nombre.charAt(0).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.nombre}</p>

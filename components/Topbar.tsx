@@ -257,8 +257,10 @@ export default function Topbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {user && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: isMobile ? 0 : 12, borderLeft: isMobile ? 'none' : '1px solid #e5e7eb' }}>
-            <div title={user.nombre} style={{ width: 30, height: 30, background: '#252855', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
-              {user.nombre.charAt(0).toUpperCase()}
+            <div title={user.nombre} style={{ width: 30, height: 30, background: '#252855', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12, flexShrink: 0, overflow: 'hidden' }}>
+              {user.avatar_url
+                ? <img src={user.avatar_url} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : user.nombre.charAt(0).toUpperCase()}
             </div>
             {!isMobile && (
               <div style={{ lineHeight: 1.2 }}>

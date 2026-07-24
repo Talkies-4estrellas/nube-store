@@ -1398,15 +1398,15 @@ export default function Storefront() {
           ))}
         </nav>
 
-        <div className="profile-card">
+        <a href={panelUser ? ROLE_HOME[panelUser.role] : '/login'} title={panelUser?.nombre || 'Iniciar sesión'} className="profile-card" style={{ textDecoration: 'none' }}>
           <span className="profile-avatar" style={{ background: storeConfig.color_acento || '#e7226d' }}>
             {(panelUser?.nombre?.charAt(0) || 'C').toUpperCase()}
           </span>
           <div>
-            <span>{panelUser?.nombre || 'Cuenta demo'}</span>
-            <strong>{panelUser ? (panelUser.role === 'admin' ? 'Administrador' : panelUser.role === 'proveedor' ? 'Proveedor' : 'Cliente') : 'Premium'}</strong>
+            <span>{panelUser?.nombre || 'Iniciar sesión'}</span>
+            <strong>{panelUser ? (panelUser.role === 'admin' ? 'Administrador' : panelUser.role === 'proveedor' ? 'Proveedor' : 'Cliente') : '→ Entrar'}</strong>
           </div>
-        </div>
+        </a>
       </aside>
 
       <main className="page-shell">
@@ -1472,19 +1472,6 @@ export default function Storefront() {
                 )}
               </div>
               <button className="icon-button dark" type="button" aria-label="Carrito" onClick={openCart}><Ic n="shopping-cart" /><span>{cartCount}</span></button>
-
-              {/* Sesión: si no hay cuenta logueada, solo "Iniciar sesión".
-                  Si hay sesión activa, ícono de perfil que lleva al panel de su rol. */}
-              {panelUser ? (
-                <a href={ROLE_HOME[panelUser.role]} title={panelUser.nombre} className="icon-button"
-                  style={{ borderRadius: '50%', background: storeConfig.color_acento || '#e7226d', color: '#fff', fontWeight: 800, fontSize: 16, textDecoration: 'none', border: 'none' }}>
-                  {panelUser.nombre.charAt(0).toUpperCase()}
-                </a>
-              ) : (
-                <a href="/login" style={{ display: 'flex', alignItems: 'center', gap: 6, background: storeConfig.color_acento || '#e7226d', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 16px', borderRadius: 99, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                  → Iniciar sesión
-                </a>
-              )}
             </div>
           </header>
 

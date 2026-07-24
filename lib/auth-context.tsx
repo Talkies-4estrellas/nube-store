@@ -11,6 +11,7 @@ export type AuthUser = {
   email: string
   nombre: string
   role: Role
+  avatar_url: string | null
 }
 
 // Rutas que cada rol puede ver
@@ -53,12 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data } = await supabase
       .from('user_roles')
-      .select('role, nombre')
+      .select('role, nombre, avatar_url')
       .eq('user_id', session.user.id)
       .single()
 
     if (data) {
-      setUser({ id: session.user.id, email: session.user.email ?? '', nombre: data.nombre, role: data.role as Role })
+      setUser({ id: session.user.id, email: session.user.email ?? '', nombre: data.nombre, role: data.role as Role, avatar_url: data.avatar_url ?? null })
     } else {
       // Autenticado pero sin rol asignado — logout automático
       await supabase.auth.signOut()

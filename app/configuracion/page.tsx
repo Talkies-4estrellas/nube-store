@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Icon from '@/components/Icon'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
+import { convertToWebp, uploadToSupabase } from '@/lib/uploadWebp'
 
-type Section = 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 'usuarios' | 'solicitudes'
+type Section = 'perfil' | 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 'usuarios' | 'solicitudes'
 
 type UserRow = { id: string; user_id: string; nombre: string; role: string; created_at: string; email?: string }
 type Solicitud = {
@@ -27,6 +28,7 @@ type Solicitud = {
 }
 
 const ALL_NAV: { id: Section; label: string; icon: string; adminOnly?: boolean }[] = [
+  { id: 'perfil',         label: 'Editar perfil',        icon: 'users'      },
   { id: 'negocio',        label: 'Datos del negocio',    icon: 'store'      },
   { id: 'contacto',       label: 'Contacto',              icon: 'users'      },
   { id: 'pagos',          label: 'Métodos de pago',       icon: 'creditcard' },
@@ -46,7 +48,7 @@ const ROLE_BADGE: Record<string, { bg: string; color: string }> = {
 
 export default function ConfiguracionPage() {
   const { user } = useAuth()
-  const [section, setSection] = useState<Section>('negocio')
+  const [section, setSection] = useState<Section>('perfil')
   const [saved,   setSaved]   = useState(false)
 
   // Estado para sección usuarios
@@ -63,6 +65,76 @@ export default function ConfiguracionPage() {
   const [expandedId,         setExpandedId]         = useState<string | null>(null)
 
   const navItems = ALL_NAV.filter(n => !n.adminOnly || user?.role === 'admin')
+
+  // Estado para sección "Editar perfil"
+  const [perfilNombre,       setPerfilNombre]       = useState('')
+  const [avatarPreview,      setAvatarPreview]      = useState<string | null>(null)
+  const [avatarFile,         setAvatarFile]         = useState<File | null>(null)
+  const [passwordNueva,      setPasswordNueva]      = useState('')
+  const [passwordConfirmar,  setPasswordConfirmar]  = useState('')
+  const [guardandoPerfil,    setGuardandoPerfil]    = useState(false)
+  const [perfilGuardado,     setPerfilGuardado]     = useState(false)
+  const [perfilError,        setPerfilError]        = useState('')
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (user) { setPerfilNombre(user.nombre); setAvatarPreview(user.avatar_url) }
+  }, [user])
+
+  function elegirAvatar(file: File | null) {
+    if (!file) return
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  async function guardarPerfil() {
+    setPerfilError('')
+    if (!perfilNombre.trim()) { setPerfilError('El nombre no puede quedar vacío'); return }
+    if (passwordNueva && passwordNueva.length < 6) { setPerfilError('La contraseña debe tener al menos 6 caracteres'); return }
+    if (passwordNueva && passwordNueva !== passwordConfirmar) { setPerfilError('Las contraseñas no coinciden'); return }
+    if (!user) return
+
+    setGuardandoPerfil(true)
+
+    let avatarUrl: string | null = null
+    if (avatarFile) {
+      try {
+        const webp = await convertToWebp(avatarFile)
+        avatarUrl = await uploadToSupabase(webp, supabase, 'productos', `avatars/${user.id}.webp`)
+      } catch (e) {
+        setGuardandoPerfil(false)
+        setPerfilError('No se pudo subir la imagen: ' + (e instanceof Error ? e.message : 'error desconocido'))
+        return
+      }
+    }
+
+    const { error: errPerfil } = await supabase.rpc('actualizar_mi_perfil', {
+      nuevo_nombre: perfilNombre.trim(),
+      ...(avatarUrl ? { nuevo_avatar_url: avatarUrl } : {}),
+    })
+    if (errPerfil) {
+      setGuardandoPerfil(false)
+      setPerfilError('No se pudo guardar el perfil: ' + errPerfil.message)
+      return
+    }
+
+    if (passwordNueva) {
+      const { error: errPass } = await supabase.auth.updateUser({ password: passwordNueva })
+      if (errPass) {
+        setGuardandoPerfil(false)
+        setPerfilError('El perfil se guardó, pero la contraseña no: ' + errPass.message)
+        return
+      }
+    }
+
+    setGuardandoPerfil(false)
+    setAvatarFile(null)
+    setPasswordNueva('')
+    setPasswordConfirmar('')
+    setPerfilGuardado(true)
+    setTimeout(() => setPerfilGuardado(false), 2500)
+    setTimeout(() => window.location.reload(), 900)
+  }
 
   useEffect(() => {
     if (section === 'usuarios') fetchUsuarios()
@@ -201,9 +273,8 @@ export default function ConfiguracionPage() {
               display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px',
               fontSize: 13, color: active ? '#0049ff' : '#374151', fontWeight: active ? 700 : 400,
               background: active ? '#eff6ff' : 'transparent',
+              border: 'none',
               borderLeft: `3px solid ${active ? '#0049ff' : 'transparent'}`,
-              border: 'none', borderRight: 'none', borderTop: 'none', borderBottom: 'none',
-              borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: active ? '#0049ff' : 'transparent',
               cursor: 'pointer', textAlign: 'left',
             }}>
               <Icon name={item.icon} size={16} color={active ? '#0049ff' : '#9ca3af'} />
@@ -215,6 +286,60 @@ export default function ConfiguracionPage() {
 
       {/* Contenido */}
       <div>
+        {section === 'perfil' && (
+          <Card title="Editar perfil">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ width: 84, height: 84, borderRadius: '50%', overflow: 'hidden', background: '#252855', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 28, flexShrink: 0 }}>
+                {avatarPreview
+                  ? <img src={avatarPreview} alt={perfilNombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : (perfilNombre.charAt(0).toUpperCase() || '?')}
+              </div>
+              <div>
+                <input ref={avatarInputRef} type="file" accept="image/*" hidden
+                  onChange={e => elegirAvatar(e.target.files?.[0] ?? null)} />
+                <button type="button" onClick={() => avatarInputRef.current?.click()}
+                  style={{ background: '#eff6ff', color: '#0049ff', border: 'none', padding: '9px 18px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                  Cambiar foto
+                </button>
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>JPG o PNG. Se guarda al hacer clic en "Guardar cambios".</p>
+              </div>
+            </div>
+
+            <Field label="Nombre completo">
+              <input value={perfilNombre} onChange={e => setPerfilNombre(e.target.value)} style={inputStyle} placeholder="Tu nombre" />
+            </Field>
+            <Field label="Email">
+              <input value={user?.email ?? ''} disabled readOnly style={{ ...inputStyle, background: '#f3f4f6', color: '#9ca3af', cursor: 'not-allowed' }} />
+            </Field>
+            <Field label="Rol">
+              <input value={ROLE_LABEL[user?.role ?? ''] ?? user?.role ?? ''} disabled readOnly style={{ ...inputStyle, background: '#f3f4f6', color: '#9ca3af', cursor: 'not-allowed' }} />
+            </Field>
+
+            <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 18, marginTop: 4 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#111', marginBottom: 14 }}>Cambiar contraseña</p>
+              <Field label="Nueva contraseña">
+                <input type="password" value={passwordNueva} onChange={e => setPasswordNueva(e.target.value)} style={inputStyle} placeholder="Dejar en blanco para no cambiarla" />
+              </Field>
+              <Field label="Confirmar">
+                <input type="password" value={passwordConfirmar} onChange={e => setPasswordConfirmar(e.target.value)} style={inputStyle} placeholder="••••••••" />
+              </Field>
+            </div>
+
+            {perfilError && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+                {perfilError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={guardarPerfil} disabled={guardandoPerfil}
+                style={{ background: perfilGuardado ? '#059669' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                {guardandoPerfil ? 'Guardando...' : perfilGuardado ? '¡Guardado!' : 'Guardar cambios'}
+              </button>
+            </div>
+          </Card>
+        )}
+
         {section === 'negocio' && (
           <Card title="Datos del negocio">
             <Field label="Nombre del negocio">
@@ -478,7 +603,7 @@ export default function ConfiguracionPage() {
           </Card>
         )}
 
-        {section !== 'usuarios' && section !== 'solicitudes' && (
+        {section !== 'usuarios' && section !== 'solicitudes' && section !== 'perfil' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button onClick={handleSave} style={{ background: saved ? '#059669' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'background 0.2s' }}>
             {saved ? '¡Guardado!' : 'Guardar cambios'}

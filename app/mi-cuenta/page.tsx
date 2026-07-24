@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth, ROLE_HOME } from '@/lib/auth-context'
 import { useSidebar } from '@/lib/sidebar-context'
 import { supabase } from '@/lib/supabase'
+import { convertToWebp, uploadToSupabase } from '@/lib/uploadWebp'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -79,26 +80,52 @@ export default function MiCuentaPage() {
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
 
-  // Configuración de perfil (nombre + contraseña)
+  // Configuración de perfil (foto + nombre + contraseña)
   const [perfilNombre, setPerfilNombre] = useState('')
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [passwordNueva, setPasswordNueva] = useState('')
   const [passwordConfirmar, setPasswordConfirmar] = useState('')
   const [guardandoPerfil, setGuardandoPerfil] = useState(false)
   const [perfilGuardado, setPerfilGuardado] = useState(false)
   const [perfilError, setPerfilError] = useState('')
+  const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (user) setPerfilNombre(user.nombre)
+    if (user) { setPerfilNombre(user.nombre); setAvatarPreview(user.avatar_url) }
   }, [user])
+
+  function elegirAvatar(file: File | null) {
+    if (!file) return
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
 
   async function guardarPerfil() {
     setPerfilError('')
     if (!perfilNombre.trim()) { setPerfilError('El nombre no puede quedar vacío'); return }
     if (passwordNueva && passwordNueva.length < 6) { setPerfilError('La contraseña debe tener al menos 6 caracteres'); return }
     if (passwordNueva && passwordNueva !== passwordConfirmar) { setPerfilError('Las contraseñas no coinciden'); return }
+    if (!user) return
 
     setGuardandoPerfil(true)
-    const { error: errNombre } = await supabase.rpc('actualizar_mi_perfil', { nuevo_nombre: perfilNombre.trim() })
+
+    let avatarUrl: string | null = null
+    if (avatarFile) {
+      try {
+        const webp = await convertToWebp(avatarFile)
+        avatarUrl = await uploadToSupabase(webp, supabase, 'productos', `avatars/${user.id}.webp`)
+      } catch (e) {
+        setGuardandoPerfil(false)
+        setPerfilError('No se pudo subir la imagen: ' + (e instanceof Error ? e.message : 'error desconocido'))
+        return
+      }
+    }
+
+    const { error: errNombre } = await supabase.rpc('actualizar_mi_perfil', {
+      nuevo_nombre: perfilNombre.trim(),
+      ...(avatarUrl ? { nuevo_avatar_url: avatarUrl } : {}),
+    })
     if (errNombre) {
       setGuardandoPerfil(false)
       setPerfilError('No se pudo guardar el nombre: ' + errNombre.message)
@@ -115,6 +142,7 @@ export default function MiCuentaPage() {
     }
 
     setGuardandoPerfil(false)
+    setAvatarFile(null)
     setPasswordNueva('')
     setPasswordConfirmar('')
     setPerfilGuardado(true)
@@ -400,6 +428,23 @@ export default function MiCuentaPage() {
             <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
               Perfil
             </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 20 }}>
+              <div style={{ width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', background: NAVY, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 24, flexShrink: 0 }}>
+                {avatarPreview
+                  ? <img src={avatarPreview} alt={perfilNombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : (perfilNombre.charAt(0).toUpperCase() || '?')}
+              </div>
+              <div>
+                <input ref={avatarInputRef} type="file" accept="image/*" hidden
+                  onChange={e => elegirAvatar(e.target.files?.[0] ?? null)} />
+                <button type="button" onClick={() => avatarInputRef.current?.click()}
+                  style={{ background: '#eff6ff', color: '#0049ff', border: 'none', padding: '8px 16px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  Cambiar foto
+                </button>
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '6px 0 0' }}>JPG o PNG</p>
+              </div>
+            </div>
 
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>Nombre completo</label>
