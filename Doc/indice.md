@@ -24,12 +24,14 @@
 | `app/layout.tsx` | — | Root layout: `<AuthProvider>` + `<AppChrome>`. `suppressHydrationWarning` en `<html>` y `<body>`. Metadata del sitio. |
 | `app/page.tsx` | `/` | Redirige a `/dashboard` |
 | `app/login/page.tsx` | `/login` | Login con email + password. Consulta `user_roles` para obtener rol. Redirige según `ROLE_HOME`. Ruta pública. |
+| `app/registro/page.tsx` | `/registro` | Self-signup público (rol `proveedor` o `basico`). El rol se sanitiza en un trigger de servidor (`handle_new_user`), no se puede autoasignar `admin`. Ruta pública. |
+| `app/mi-cuenta/page.tsx` | `/mi-cuenta` | Panel del cliente (`basico`): mis pedidos con seguimiento de envío, datos de facturación, configuración de perfil (nombre/contraseña). Layout sidebar igual al admin/proveedores. Protegida por sesión + rol. |
 | `app/dashboard/page.tsx` | `/dashboard` | Métricas en tiempo real: ventas recientes, stock bajo, top producto/categoría/cliente, gráfica SVG de ventas por período (hoy/semana/mes), toasts realtime de stock. |
 | `app/productos/page.tsx` | `/productos` | CRUD de productos: alta, edición, eliminación, subida de imagen WebP a Supabase Storage. Vista grid/lista, filtro categoría, búsqueda, sort, paginación (12/pág). Usa la VIEW `productos_con_estado`. |
 | `app/ventas/page.tsx` | `/ventas` | Lista de ventas con filtros y búsqueda. Panel lateral de detalle con items. Cambio de estado (Pendiente → Pagado → Enviado / Cancelado). Stepper visual del pipeline. Impresión de comprobante. |
 | `app/clientes/page.tsx` | `/clientes` | Lista de clientes con filtro por tag (Nuevo/Regular/VIP), búsqueda, sort, paginación (15/pág). Panel detalle con historial de pedidos. Soft-delete vía `deleted_at`. Modal para alta/edición. |
 | `app/punto-de-venta/page.tsx` | `/punto-de-venta` | POS táctil: catálogo con búsqueda + filtro categoría, carrito, 3 métodos de pago (Efectivo/Tarjeta/Transferencia), verificación de stock real antes de cobrar, find-or-create cliente, crea venta + items. |
-| `app/proveedores/page.tsx` | `/proveedores` | Portal público para proveedores. Layout dos columnas (sidebar fija igual al admin). Formulario multi-producto con imagen, auto-guardado en localStorage, historial de solicitudes por email. Ruta pública. |
+| `app/proveedores/page.tsx` | `/proveedores` | Portal de proveedores — **protegido por sesión + rol `proveedor`** (desde 23/07/2026; antes era público con solo email). Pestaña "Administración" (primera, panel de pago + seguimiento de envío por producto vendido); registrar producto; mis solicitudes; mis productos; ajustes. |
 | `app/configuracion/page.tsx` | `/configuracion` | Configuración del negocio: datos generales, contacto, pagos, notificaciones (escribe en `config_storefront`). Gestión de usuarios y roles (admin only). Revisión de solicitudes de proveedores (admin only). |
 
 ---
@@ -59,6 +61,8 @@
 | `auth-context.tsx` | `AuthProvider`, `useAuth()`, `canAccess()`, `Role`, `AuthUser`, `ROLE_ROUTES`, `ROLE_HOME` | Context de sesión. Carga usuario y rol desde `user_roles`. Auto-signOut si no tiene rol. |
 | `validation.ts` | `isValidEmail(email): boolean` | Validación de email con regex. Usada en: checkout tienda, registro tienda, formulario proveedores. |
 | `uploadWebp.ts` | `convertToWebp()`, `captureFrameAsWebp()`, `uploadToSupabase()` | Conversión de imagen a WebP vía Canvas API (solo browser). Captura de frame de video. Upload a Supabase Storage. |
+| `pagination.ts` | `paginasVisibles(actual, total)` | Ventana de páginas a mostrar (1, última, actual±1, con "…") — evita listar cientos de botones con catálogos grandes. Usado en Productos, Clientes, Ventas. |
+| `pagos-config.ts` | `getPagosConfig()` (solo servidor) | Lee credenciales de BBVA/PayPal/Mercado Pago desde `config_pagos_secretos`; si no hay valor, cae a variables de entorno. Usado por las Route Handlers de `app/api/pagos/`. |
 
 ---
 
@@ -99,6 +103,7 @@ Un archivo por día, en orden cronológico. Cada entrada documenta un commit: ha
 | `seccion-03-07-2026.md` | 03/07/2026 | Robustez, fixes críticos, rediseño portal de proveedores, migraciones DB, documentación del proyecto. |
 | `seccion-05-07-2026.md` | 05/07/2026 | "Adiós nube-store": consolidación definitiva del nombre Order Express. |
 | `seccion-22-07-2026.md` | 22/07/2026 | Pasarelas de pago (Mercado Pago/PayPal/BBVA), unificación del header duplicado en la ficha de producto, submenú de Tienda en línea en el Sidebar, gestor de categorías en Filtros, carrusel con slides dinámicos. |
+| `seccion-23-07-2026.md` | 23/07/2026 | Roles `proveedor`/`basico` con self-signup, panel `/mi-cuenta` y "Administración" en proveedores, credenciales de pago configurables desde el panel (`config_pagos_secretos`), paginación real de Supabase (bug de límite 1000 filas), notificador general, limpieza definitiva del Excel 2023 a columnas propias de `productos`, ronda de ajustes de logo. |
 
 ---
 
@@ -118,6 +123,7 @@ Punto de entrada central que cruza cada **área de documentación** (columnas) c
 | [03/07](sesiones/seccion-03-07-2026.md) | | ✓ | ✓ | ✓ | ✓ | ✓ |
 | [05/07](sesiones/seccion-05-07-2026.md) | ✓ | | | | ✓ | ✓ |
 | [22/07](sesiones/seccion-22-07-2026.md) | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| [23/07](sesiones/seccion-23-07-2026.md) | ✓ | ✓ | ✓ | ✓ | ✓ | |
 
 > La portada de la documentación por áreas está en [`Doc/documentacion/documento.md`](documentacion/documento.md).
 
@@ -133,18 +139,25 @@ Punto de entrada central que cruza cada **área de documentación** (columnas) c
 
 ---
 
-## Rutas públicas (sin autenticación)
+## Rutas "sin chrome de admin" (`PUBLIC_PATHS` en `AppChrome.tsx`)
+
+⚠️ Desde 23/07/2026 esta lista ya **no** significa "sin autenticación" —
+significa "no envolver con el Sidebar/Topbar del panel admin". `/proveedores`
+y `/mi-cuenta` están aquí porque tienen su propio layout (sidebar propio),
+pero cada una verifica sesión + rol internamente al montar.
 
 ```
-/                  → Storefront (tienda pública)
-/tienda/[slug]     → Ficha de producto pública (slug = SKU en mayúsculas)
-/login             → Login del panel admin
-/proveedores       → Portal de proveedores
+/                  → Storefront (tienda pública, sin auth)
+/tienda/[slug]     → Ficha de producto pública (slug = SKU en mayúsculas), sin auth
+/login             → Login del panel admin, sin auth
+/registro          → Self-signup (proveedor/básico), sin auth
+/proveedores       → Portal de proveedores — requiere sesión + rol proveedor/admin
+/mi-cuenta         → Panel de cliente — requiere sesión + rol basico/admin
 ```
 
 Definidas en `components/AppChrome.tsx`:
 ```ts
-const PUBLIC_PATHS = ['/', '/login', '/proveedores']
+const PUBLIC_PATHS = ['/', '/login', '/registro', '/proveedores', '/mi-cuenta']
 ```
 (`/tienda/[slug]` es pública por patrón de ruta dinámica, no está en esta lista explícita.)
 
