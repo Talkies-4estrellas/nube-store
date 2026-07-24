@@ -560,8 +560,13 @@ export default function Storefront() {
     setCheckoutState('success')
   }
 
+  // En PC el logo colapsa/expande el sidebar (icon rail). En móvil el
+  // sidebar es un drawer aparte controlado por la hamburguesa, así que ahí
+  // el logo solo navega a Inicio — el toggle en mobile rompía el layout.
   const toggleBrand = (e: React.MouseEvent) => {
     e.preventDefault()
+    const esMovil = typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px)').matches
+    if (esMovil) { goView('inicio'); return }
     setNavCollapsed((c) => !c)
   }
 

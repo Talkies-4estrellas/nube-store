@@ -729,6 +729,10 @@ export default function ProveedoresPage() {
               }
             </svg>
           </button>
+          {isMobile && (
+            <img src="/storefront/monograma.svg" alt="OrderExpress"
+              style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 32, width: 'auto' }} />
+          )}
           <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
             {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? 'Administración' : 'Ajustes'}
           </h1>

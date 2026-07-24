@@ -156,6 +156,12 @@ export default function Topbar() {
         </button>
       )}
 
+      {/* Logo centrado (solo mobile — en escritorio ya vive en el Sidebar) */}
+      {isMobile && (
+        <img src="/storefront/monograma.svg" alt="OrderExpress"
+          style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 36, width: 'auto' }} />
+      )}
+
       {/* Campana de notificaciones */}
       <div ref={notifRef} style={{ position: 'relative' }}>
         <button onClick={() => { setShowNotif(v => !v); setUnread(0) }}

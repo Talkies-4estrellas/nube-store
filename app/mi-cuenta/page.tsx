@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth, ROLE_HOME } from '@/lib/auth-context'
+import { useSidebar } from '@/lib/sidebar-context'
 import { supabase } from '@/lib/supabase'
 
 const NAVY = '#252855'
@@ -65,6 +66,8 @@ type Venta = { id: string; numero: number; estado: string; total: number; notas:
 export default function MiCuentaPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
+  const { isMobile } = useSidebar()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [tab, setTab] = useState<'pedidos' | 'datos' | 'perfil'>('pedidos')
   const [cargando, setCargando] = useState(true)
@@ -206,15 +209,29 @@ export default function MiCuentaPage() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
+      {/* Overlay mobile — mismo patrón que proveedores */}
+      {sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99 }} />
+      )}
+
       {/* ---- Sidebar (mismo patrón que proveedores) ---- */}
-      <aside style={{
+      <aside className={`prov-sidebar${sidebarOpen ? ' open' : ''}`} style={{
         width: 240, maxWidth: 280, height: '100vh', background: '#fff', borderRight: '1px solid #e5e7eb',
         display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0,
-        zIndex: 100, padding: '16px 12px 16px',
+        zIndex: 100, padding: '16px 12px 16px', transition: 'transform 0.25s ease, box-shadow 0.25s ease',
       }}>
-        <Link href="/" title="Ver tienda" style={{ display: 'flex', justifyContent: 'center', padding: '0 8px', marginBottom: 16 }}>
-          <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 44, width: 'auto' }} />
-        </Link>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px', marginBottom: 16 }}>
+          <Link href="/" title="Ver tienda" style={{ display: 'flex', alignItems: 'center' }}>
+            <img src="/storefront/logo.svg" alt="OrderExpress" style={{ height: 44, width: 'auto' }} />
+          </Link>
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(false)}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', flexShrink: 0 }}>
+              ×
+            </button>
+          )}
+        </div>
 
         <nav style={{ flex: 1, minHeight: 0, background: '#f1f2f6', borderRadius: 22, padding: '12px 10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>CUENTA</span>
@@ -241,10 +258,27 @@ export default function MiCuentaPage() {
       </aside>
 
       {/* ---- Área principal ---- */}
-      <div style={{ marginLeft: 240, flex: 1, minHeight: '100vh', padding: '32px 32px 60px' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111', margin: '0 0 20px' }}>
-          {tab === 'pedidos' ? 'Mis pedidos' : tab === 'datos' ? 'Datos de facturación' : 'Configuración'}
-        </h1>
+      <div className="prov-main" style={{ marginLeft: 240, flex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <header className="prov-header" style={{ height: 56, background: '#fff', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0 16px' : '0 32px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
+          <button className="prov-hamburger" onClick={() => setSidebarOpen(o => !o)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'none', alignItems: 'center', justifyContent: 'center', marginRight: 8, flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={sidebarOpen ? PINK : NAVY} strokeWidth="2.5" strokeLinecap="round">
+              {sidebarOpen
+                ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+                : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+              }
+            </svg>
+          </button>
+          {isMobile && (
+            <img src="/storefront/monograma.svg" alt="OrderExpress"
+              style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 32, width: 'auto' }} />
+          )}
+          <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
+            {tab === 'pedidos' ? 'Mis pedidos' : tab === 'datos' ? 'Datos de facturación' : 'Configuración'}
+          </h1>
+        </header>
+
+        <main style={{ flex: 1, padding: isMobile ? '16px' : '32px 32px 60px' }}>
 
         {tab === 'pedidos' && (
           <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', overflow: 'hidden' }}>
@@ -403,6 +437,7 @@ export default function MiCuentaPage() {
             </button>
           </div>
         )}
+        </main>
       </div>
     </div>
   )
