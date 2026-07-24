@@ -270,11 +270,17 @@
   transition: opacity calc(var(--nav-dur) * 0.55) var(--nav-ease), transform var(--nav-dur) var(--nav-ease), height var(--nav-dur) var(--nav-ease), margin var(--nav-dur) var(--nav-ease), padding var(--nav-dur) var(--nav-ease);
 }
 
-.oe-store .profile-card img {
+.oe-store .profile-card .profile-avatar {
   width: 44px;
   height: 44px;
+  flex-shrink: 0;
   border-radius: 50%;
-  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
 }
 
 .oe-store .profile-card span,
@@ -317,8 +323,13 @@
   border-radius: 999px;
 }
 
-.oe-store.nav-collapsed .nav-item span,
-.oe-store.nav-collapsed .profile-card {
+.oe-store.nav-collapsed .nav-item span {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.oe-store.nav-collapsed .profile-card > div {
   max-width: 0;
   opacity: 0;
   pointer-events: none;
@@ -352,11 +363,11 @@
 }
 
 .oe-store.nav-collapsed .profile-card {
-  height: 0;
-  margin: 0;
-  padding: 0;
+  justify-content: center;
+  gap: 0;
+  padding: 10px;
   border: 0;
-  transform: translateY(10px);
+  background: transparent;
 }
 
 .oe-store .topbar {
@@ -1029,6 +1040,7 @@
 .oe-store .store-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  align-items: start;
   gap: 14px;
 }
 

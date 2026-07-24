@@ -1399,10 +1399,12 @@ export default function Storefront() {
         </nav>
 
         <div className="profile-card">
-          <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80" alt="Cliente" />
+          <span className="profile-avatar" style={{ background: storeConfig.color_acento || '#e7226d' }}>
+            {(panelUser?.nombre?.charAt(0) || 'C').toUpperCase()}
+          </span>
           <div>
-            <span>Cuenta demo</span>
-            <strong>Premium</strong>
+            <span>{panelUser?.nombre || 'Cuenta demo'}</span>
+            <strong>{panelUser ? (panelUser.role === 'admin' ? 'Administrador' : panelUser.role === 'proveedor' ? 'Proveedor' : 'Cliente') : 'Premium'}</strong>
           </div>
         </div>
       </aside>
