@@ -289,6 +289,7 @@ export default function Storefront() {
     fondo_logo: 'blanco' as 'blanco' | 'azul',
     menu_extra: [] as { id: string; label: string; icono: string; url: string; nueva_pestana: boolean }[],
     filtros_extra: [] as { id: string; label: string; view: string; activo: boolean }[],
+    destacados: null as { imagen: string; kicker?: string; titulo: string; texto: string; cta: string }[] | null,
   })
   const [mostrarGarantias, setMostrarGarantias] = useState(false)
 
@@ -359,6 +360,14 @@ export default function Storefront() {
   const activeSlides = (storeConfig.carrusel && storeConfig.carrusel.length > 0)
     ? storeConfig.carrusel.map(s => ({ ...s, alt: s.kicker }))
     : slides
+
+  /* ---- Tarjetas destacadas del inicio: config DB o fallback hardcoded ---- */
+  const activeDestacados = (storeConfig.destacados && storeConfig.destacados.length > 0)
+    ? storeConfig.destacados
+    : [
+        { imagen: 'https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?auto=format&fit=crop&w=900&q=80', kicker: 'Nuevo drop', titulo: 'TYPE SMARTER.\nPLAY LONGER.', texto: 'Teclados, consolas y accesorios seleccionados para setups compactos con mucha personalidad.', cta: storeConfig.hero_cta || 'Ver catalogo' },
+        { imagen: 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=700&q=80', titulo: 'POCKET-SIZE\nNOSTALGIA.', texto: 'Juega clasicos con diseno moderno.', cta: 'Conocer' },
+      ]
 
   /* ---- Nav items filtrados según nav_ocultar ---- */
   const hiddenViews = new Set(
@@ -1510,24 +1519,21 @@ export default function Storefront() {
         </section>
 
         <section className="hero-grid" aria-label="Productos destacados">
-          <article className="hero-card featured">
-            <div className="hero-copy">
-              <span className="pill live"><Ic n="sparkles" /> Nuevo drop</span>
-              <h2>TYPE SMARTER.<br />PLAY LONGER.</h2>
-              <p>Teclados, consolas y accesorios seleccionados para setups compactos con mucha personalidad.</p>
-              <a className="text-link" href="#" onClick={(e) => { e.preventDefault(); goView('catalogo') }}>{storeConfig.hero_cta || 'Ver catalogo'} <Ic n="arrow-right" /></a>
-            </div>
-            <img src="https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?auto=format&fit=crop&w=900&q=80" alt="Teclado mecanico verde" />
-          </article>
-
-          <article className="hero-card console">
-            <div className="hero-copy">
-              <h2>POCKET-SIZE<br />NOSTALGIA.</h2>
-              <p>Juega clasicos con diseno moderno.</p>
-              <a className="text-link gold" href="#" onClick={(e) => { e.preventDefault(); goView('catalogo') }}>Conocer <Ic n="arrow-right" /></a>
-            </div>
-            <img src="https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=700&q=80" alt="Control de videojuego retro" />
-          </article>
+          {activeDestacados.slice(0, 2).map((d, i) => (
+            <article key={i} className={i === 0 ? 'hero-card featured' : 'hero-card console'}>
+              <div className="hero-copy">
+                {i === 0 && d.kicker && (
+                  <span className="pill live"><Ic n="sparkles" /> {d.kicker}</span>
+                )}
+                <h2>{d.titulo.split('\n').map((linea, j) => (
+                  <span key={j}>{j > 0 && <br />}{linea}</span>
+                ))}</h2>
+                <p>{d.texto}</p>
+                <a className={i === 0 ? 'text-link' : 'text-link gold'} href="#" onClick={(e) => { e.preventDefault(); goView('catalogo') }}>{d.cta} <Ic n="arrow-right" /></a>
+              </div>
+              <img src={d.imagen} alt={d.titulo.replace(/\n/g, ' ')} />
+            </article>
+          ))}
         </section>
 
         <section className={gridClass[view] || 'content-grid'} ref={gridRef} aria-label="Catalogo simulado">

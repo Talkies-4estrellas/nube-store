@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { uploadToSupabase } from '@/lib/uploadWebp'
 
 const NAVY = '#252855'
 const inp: React.CSSProperties = {
@@ -24,23 +25,54 @@ const DEFAULTS: Fields = {
   meta_titulo: '', meta_descripcion: '', og_imagen: '',
 }
 
+type Destacado = { imagen: string; kicker?: string; titulo: string; texto: string; cta: string }
+
+const DEFAULT_DESTACADOS: Destacado[] = [
+  { imagen: 'https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?auto=format&fit=crop&w=900&q=80', kicker: 'Nuevo drop', titulo: 'TYPE SMARTER.\nPLAY LONGER.', texto: 'Teclados, consolas y accesorios seleccionados para setups compactos con mucha personalidad.', cta: 'Ver catalogo' },
+  { imagen: 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=700&q=80', titulo: 'POCKET-SIZE\nNOSTALGIA.', texto: 'Juega clasicos con diseno moderno.', cta: 'Conocer' },
+]
+
 export default function PaginasPage() {
   const [f, setF] = useState<Fields>(DEFAULTS)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [destacados, setDestacados] = useState<Destacado[]>(DEFAULT_DESTACADOS)
+  const [uploadingDest, setUploadingDest] = useState<number | null>(null)
+  const destFileRefs = useRef<Record<number, HTMLInputElement | null>>({})
+
   useEffect(() => {
     supabase.from('config_storefront')
-      .select('hero_titulo,hero_subtitulo,hero_cta,hero_tag1,hero_tag2,hero_tag3,meta_titulo,meta_descripcion,og_imagen')
+      .select('hero_titulo,hero_subtitulo,hero_cta,hero_tag1,hero_tag2,hero_tag3,meta_titulo,meta_descripcion,og_imagen,destacados')
       .eq('id', 1).single()
-      .then(({ data }) => { if (data) setF({ ...DEFAULTS, ...data }) })
+      .then(({ data }) => {
+        if (data) setF({ ...DEFAULTS, ...data })
+        if (data?.destacados && data.destacados.length > 0) setDestacados(data.destacados)
+      })
   }, [])
 
   function set(key: keyof Fields, val: string) { setF(p => ({ ...p, [key]: val })) }
 
+  function setDestacado(i: number, field: keyof Destacado, val: string) {
+    setDestacados(prev => { const d = [...prev]; d[i] = { ...d[i], [field]: val }; return d })
+  }
+
+  async function handleDestacadoUpload(i: number, file: File) {
+    setUploadingDest(i)
+    try {
+      const path = `destacados/card-${i + 1}-${Date.now()}.webp`
+      const url = await uploadToSupabase(file, supabase, 'productos', path)
+      setDestacado(i, 'imagen', url)
+    } catch (e) {
+      console.error('Error subiendo imagen:', e)
+    } finally {
+      setUploadingDest(null)
+    }
+  }
+
   async function guardar() {
     setSaving(true)
-    await supabase.from('config_storefront').upsert({ id: 1, ...f, updated_at: new Date().toISOString() })
+    await supabase.from('config_storefront').upsert({ id: 1, ...f, destacados, updated_at: new Date().toISOString() })
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -91,6 +123,56 @@ export default function PaginasPage() {
               <div key={key}>
                 <label style={lbl}>Badge {i + 1}</label>
                 <input style={inp} value={f[key]} onChange={e => set(key, e.target.value)} placeholder={DEFAULTS[key]} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Destacados del inicio */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Destacados del inicio</p>
+          <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>Las 2 tarjetas grandes debajo del carrusel. Usa un salto de línea en el título para partirlo en dos renglones.</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {destacados.map((d, i) => (
+              <div key={i} style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ height: 120, background: '#e5e7eb', position: 'relative', overflow: 'hidden' }}>
+                  {d.imagen && <img src={d.imagen} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)' }} />
+                  <span style={{ position: 'absolute', top: 10, left: 12, background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20 }}>
+                    Tarjeta {i + 1}
+                  </span>
+                  <button onClick={() => destFileRefs.current[i]?.click()}
+                    style={{ position: 'absolute', top: 10, right: 12, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    {uploadingDest === i ? 'Subiendo…' : '📁 Subir imagen'}
+                  </button>
+                  <input ref={el => { destFileRefs.current[i] = el }} type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { if (e.target.files?.[0]) handleDestacadoUpload(i, e.target.files[0]) }} />
+                </div>
+                <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label style={lbl}>URL de imagen (o sube una arriba)</label>
+                    <input style={inp} value={d.imagen} onChange={e => setDestacado(i, 'imagen', e.target.value)} placeholder="https://..." />
+                  </div>
+                  {i === 0 && (
+                    <div>
+                      <label style={lbl}>Etiqueta (kicker)</label>
+                      <input style={inp} value={d.kicker ?? ''} onChange={e => setDestacado(i, 'kicker', e.target.value)} placeholder="Nuevo drop" />
+                    </div>
+                  )}
+                  <div>
+                    <label style={lbl}>Título</label>
+                    <textarea style={{ ...inp, height: 60, resize: 'vertical' }} value={d.titulo} onChange={e => setDestacado(i, 'titulo', e.target.value)} placeholder="TYPE SMARTER.&#10;PLAY LONGER." />
+                  </div>
+                  <div>
+                    <label style={lbl}>Texto</label>
+                    <input style={inp} value={d.texto} onChange={e => setDestacado(i, 'texto', e.target.value)} placeholder="Teclados, consolas y accesorios..." />
+                  </div>
+                  <div>
+                    <label style={lbl}>Texto del botón</label>
+                    <input style={inp} value={d.cta} onChange={e => setDestacado(i, 'cta', e.target.value)} placeholder="Ver catalogo" />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
