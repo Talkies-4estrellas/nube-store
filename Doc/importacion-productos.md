@@ -22,7 +22,7 @@ se marca en la vista previa y se omite al importar.
 | `precio_promocional` | | número | Si existe, se muestra como oferta |
 | `costo` | | número | Precio de compra; permite calcular utilidad y margen |
 | `stock` | | entero | Si va vacío se asume `0` |
-| `categoria` | | texto | Se crea automáticamente si no existe |
+| `categoria` | | texto | Se crea automáticamente si no existe. Admite jerarquía: `Padre / Hijo` o `Padre > Hijo` crea (o reutiliza) ambos niveles |
 | `marca` | | texto | |
 | `codigo_barras` | | texto | EAN / UPC |
 | `mpn` | | texto | Código del fabricante |
@@ -39,6 +39,24 @@ se marca en la vista previa y se omite al importar.
 | `activo` | | SI/NO | Por defecto `SI` |
 | `envio_gratis` | | SI/NO | Por defecto `NO` |
 | `detalles` | | JSON | Variantes: colores, tallas, etc. |
+
+---
+
+## Categorías con subcategoría (padre / hijo)
+
+La columna `categoria` acepta dos niveles separados por `/` o `>`:
+
+```
+Belleza / Fragancias
+Papel Picado > Pelota Inflable
+```
+
+El primer segmento es la categoría padre y el segundo la subcategoría; ambos se
+crean automáticamente si no existen (o se reutilizan si ya están dadas de alta).
+Si solo escribes un nombre sin separador, el producto queda en esa categoría de
+nivel superior, sin subcategoría. Al exportar el catálogo desde el panel, la
+columna `categoria` ya viene en este mismo formato, así que un archivo exportado
+se puede volver a importar sin ajustes.
 
 ---
 
@@ -69,7 +87,7 @@ Para poder cargar archivos de otras plataformas sin editarlos a mano:
 | Encoding Latin-1 / Windows-1252 | Se detecta y convierte |
 | Precios `$ 139`, `3,500.00`, `1.234,56` | Se limpian símbolos y separadores |
 | Descripciones con HTML y `&oacute;` | Se convierten a texto plano |
-| Categorías jerárquicas `Papel Picado > Pelota` | Se toma el último nivel |
+| Categorías jerárquicas `Papel Picado > Pelota` o `Belleza / Fragancias` | Se crean/usan como padre y subcategoría reales (2 niveles) |
 | Encabezados en mayúsculas o con espacios | Se normalizan |
 | Nombres alternos de columna | Ver tabla de sinónimos abajo |
 

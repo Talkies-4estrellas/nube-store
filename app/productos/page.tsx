@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
 import { toCSV, downloadCSV } from '@/lib/csv'
 import { paginasVisibles } from '@/lib/pagination'
-import { obtenerOcrearCategoriaId } from '@/lib/categorias'
+import { construirArbolCategorias, crearCategoriaConPadre, type CategoriaConHijos, type CategoriaPlana } from '@/lib/categorias'
 import Icon from '@/components/Icon'
 import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
 
@@ -53,6 +53,7 @@ type Product = {
   origen?: string | null
   proveedor_nombre?: string | null
   activo?: boolean | null
+  categoria_id?: number | string | null
 }
 
 const estadoStyle: Record<string, { bg: string; text: string }> = {
@@ -70,7 +71,9 @@ function colorCategoria(nombre: string, lista: string[]) {
 
 export default function ProductosPage() {
   const [products, setProducts] = useState<Product[]>([])
-  const [categorias, setCategorias] = useState<string[]>([])
+  const [categoriasRaw, setCategoriasRaw] = useState<CategoriaPlana[]>([])
+  const categorias = categoriasRaw.map(c => c.nombre)
+  const arbolCategorias: CategoriaConHijos[] = construirArbolCategorias(categoriasRaw)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('Todas')
@@ -97,12 +100,24 @@ export default function ProductosPage() {
     setExportando(true)
     const [prodRes, catRes] = await Promise.all([
       supabase.from('productos').select('*').order('nombre'),
-      supabase.from('categorias').select('id, nombre'),
+      supabase.from('categorias').select('id, nombre, parent_id'),
     ])
     setExportando(false)
     if (prodRes.error || !prodRes.data) { setToast({ msg: 'Error al exportar productos', color: PINK }); return }
 
-    const mapaCat = new Map<number, string>((catRes.data ?? []).map(c => [c.id as number, c.nombre as string]))
+    const categoriasPorId = new Map<number, { nombre: string; parent_id: number | null }>(
+      (catRes.data ?? []).map(c => [c.id as number, { nombre: c.nombre as string, parent_id: c.parent_id as number | null }])
+    )
+    // "Padre / Hijo" si la categoría tiene padre, o solo el nombre si es de nivel superior —
+    // el importador de CSV entiende ese mismo formato al volver a subir el archivo.
+    function categoriaTexto(categoriaId: number | null): string {
+      if (categoriaId == null) return ''
+      const cat = categoriasPorId.get(categoriaId)
+      if (!cat) return ''
+      if (cat.parent_id == null) return cat.nombre
+      const padre = categoriasPorId.get(cat.parent_id)
+      return padre ? `${padre.nombre} / ${cat.nombre}` : cat.nombre
+    }
     const v = (x: unknown) => x ?? ''
     const rows = prodRes.data.map((p: Record<string, unknown>) => ({
       sku: v(p.sku),
@@ -111,7 +126,7 @@ export default function ProductosPage() {
       precio_promocional: v(p.precio_promocional),
       costo: v(p.costo),
       stock: v(p.stock),
-      categoria: p.categoria_id != null ? (mapaCat.get(p.categoria_id as number) ?? '') : '',
+      categoria: categoriaTexto(p.categoria_id as number | null),
       marca: v(p.marca),
       codigo_barras: v(p.codigo_barras),
       mpn: v(p.mpn),
@@ -219,8 +234,8 @@ export default function ProductosPage() {
   }
 
   async function fetchCategorias() {
-    const { data } = await supabase.from('categorias').select('nombre').order('nombre')
-    if (data) setCategorias(data.map(c => c.nombre))
+    const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
+    if (data) setCategoriasRaw(data)
   }
 
   async function fetchProducts() {
@@ -251,7 +266,7 @@ export default function ProductosPage() {
   }, [])
 
   async function handleSave(form: {
-    nombre: string; sku: string; categoria: string; precio: string
+    nombre: string; sku: string; categoria_id: string; precio: string
     stock: string; descripcion: string; imagen: File | null; imagenPreview: string | null
     activo: boolean
     colores: string[]; tallas: string[]; variantes: Array<{ color: string; talla: string; stock: string }>
@@ -281,11 +296,7 @@ export default function ProductosPage() {
       } catch (e) { console.error('Error subiendo imagen extra:', e) }
     }
 
-    // Obtener o crear categoría (sin duplicar por mayúsculas/espacios)
-    const categoria_id = await obtenerOcrearCategoriaId(supabase, form.categoria)
-    if (categoria_id !== null && !categorias.some(c => c.toLowerCase() === form.categoria.trim().toLowerCase())) {
-      await fetchCategorias()
-    }
+    const categoria_id = form.categoria_id ? Number(form.categoria_id) : null
 
     const tieneDetalles = form.colores.length > 0 || form.tallas.length > 0 || form.variantes.length > 0 || form.peso || form.largo || urlsExtra.length > 0
     const detalles = tieneDetalles ? {
@@ -825,18 +836,19 @@ export default function ProductosPage() {
 
       {showModal && (
         <ProductoModal
-          categoriasDisponibles={categorias}
+          arbolCategorias={arbolCategorias}
           onClose={() => { setShowModal(false); setEditando(null) }}
           onSave={handleSave}
-          onNuevaCategoria={async (nombre) => {
-            await obtenerOcrearCategoriaId(supabase, nombre)
+          onCrearCategoria={async (nombre, parentId) => {
+            const nueva = await crearCategoriaConPadre(supabase, nombre, parentId)
             await fetchCategorias()
+            return nueva
           }}
           inicial={editando ? {
             id: editando.id,
             nombre: editando.nombre,
             sku: editando.sku,
-            categoria: editando.categoria,
+            categoria_id: editando.categoria_id != null ? String(editando.categoria_id) : '',
             precio: String(editando.precio),
             stock: String(editando.stock),
             descripcion: '',

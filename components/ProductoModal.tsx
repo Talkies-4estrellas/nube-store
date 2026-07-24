@@ -2,6 +2,7 @@
 
 import { useState, useRef, DragEvent, ChangeEvent } from 'react'
 import { convertToWebp } from '@/lib/uploadWebp'
+import CategoriaSelector, { type CategoriaConHijos } from '@/components/CategoriaSelector'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -55,7 +56,7 @@ export type ProductoExtra = {
 type Producto = {
   nombre: string
   sku: string
-  categoria: string
+  categoria_id: string
   precio: string
   stock: string
   descripcion: string
@@ -69,14 +70,14 @@ const emptyExtra = (): ProductoExtra => ({
   peso: '', largo: '', ancho: '', alto: '', imagenesExtra: [],
 })
 
-const empty: Producto = { nombre: '', sku: '', categoria: '', precio: '', stock: '', descripcion: '', imagen: null, imagenPreview: null, activo: true, ...emptyExtra() }
+const empty: Producto = { nombre: '', sku: '', categoria_id: '', precio: '', stock: '', descripcion: '', imagen: null, imagenPreview: null, activo: true, ...emptyExtra() }
 
 type Props = {
   onClose: () => void
   onSave: (p: Producto) => void
   inicial?: Partial<Producto> & { id?: string }
-  categoriasDisponibles: string[]
-  onNuevaCategoria?: (nombre: string) => Promise<void>
+  arbolCategorias: CategoriaConHijos[]
+  onCrearCategoria: (nombre: string, parentId: number | null) => Promise<{ id: number; nombre: string } | null>
 }
 
 function buildVariantes(
@@ -91,13 +92,11 @@ function buildVariantes(
   return colores.flatMap(c => tallas.map(t => ({ color: c, talla: t, stock: existing.find(v => v.color === c && v.talla === t)?.stock ?? '' })))
 }
 
-export default function ProductoModal({ onClose, onSave, inicial, categoriasDisponibles, onNuevaCategoria }: Props) {
+export default function ProductoModal({ onClose, onSave, inicial, arbolCategorias, onCrearCategoria }: Props) {
   const [form, setForm] = useState<Producto>({ ...empty, ...emptyExtra(), ...inicial })
   const [errors, setErrors] = useState<Partial<Record<keyof Producto, string>>>({})
   const [dragging, setDragging] = useState(false)
   const [convirtiendo, setConvirtiendo] = useState(false)
-  const [catQuery, setCatQuery] = useState('')
-  const [nuevaCatMode, setNuevaCatMode] = useState(false)
   const [mostrarOpcionales, setMostrarOpcionales] = useState(false)
   const [colorInput, setColorInput] = useState('')
   const [tallaInput, setTallaInput] = useState('')
@@ -160,10 +159,6 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
   }
 
   /* ---- Imagen principal ---- */
-  function seleccionarCategoria(cat: string) {
-    setForm(f => ({ ...f, categoria: cat }))
-    setErrors(e => ({ ...e, categoria: '' }))
-  }
   function set(key: keyof Producto, value: string) {
     setForm(f => ({ ...f, [key]: value }))
     setErrors(e => ({ ...e, [key]: '' }))
@@ -193,7 +188,7 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
     const errs: typeof errors = {}
     if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido'
     if (!form.sku.trim()) errs.sku = 'El SKU es requerido'
-    if (!form.categoria?.trim()) errs.categoria = 'Escribe o selecciona una categoría'
+    if (!form.categoria_id) errs.categoria_id = 'Selecciona una categoría'
     if (!form.precio || isNaN(Number(form.precio))) errs.precio = 'Precio inválido'
     if (!form.stock || isNaN(Number(form.stock))) errs.stock = 'Stock inválido'
     if (!form.imagen && !inicial?.imagenPreview) errs.imagen = 'Sube una imagen del producto'
@@ -267,29 +262,13 @@ export default function ProductoModal({ onClose, onSave, inicial, categoriasDisp
           </div>
 
           {/* Categoría */}
-          <Field label="Categoría" error={errors.categoria}>
-            {!nuevaCatMode ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select value={form.categoria} onChange={e => seleccionarCategoria(e.target.value)} style={{ ...inputStyle(!!errors.categoria), flex: 1, cursor: 'pointer' }}>
-                  <option value="">Selecciona una categoría</option>
-                  {categoriasDisponibles.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-                <button onClick={() => setNuevaCatMode(true)} style={{ padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f3f4f6', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', color: '#374151' }}>+ Nueva</button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input autoFocus value={catQuery} onChange={e => { setCatQuery(e.target.value); setForm(f => ({ ...f, categoria: e.target.value })) }}
-                  onKeyDown={async e => {
-                    if (e.key === 'Enter' && catQuery.trim()) { if (onNuevaCategoria) await onNuevaCategoria(catQuery.trim()); seleccionarCategoria(catQuery.trim()); setNuevaCatMode(false); setCatQuery('') }
-                    if (e.key === 'Escape') setNuevaCatMode(false)
-                  }}
-                  placeholder="Nombre de la nueva categoría..." style={{ ...inputStyle(!!errors.categoria), flex: 1 }} />
-                <button onClick={async () => { const n = catQuery.trim(); if (n) { if (onNuevaCategoria) await onNuevaCategoria(n); seleccionarCategoria(n) } setNuevaCatMode(false); setCatQuery('') }}
-                  style={{ padding: '9px 14px', border: 'none', borderRadius: 8, background: '#0049ff', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Guardar</button>
-                <button onClick={() => { setNuevaCatMode(false); setCatQuery('') }} style={{ padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f3f4f6', fontSize: 13, cursor: 'pointer', color: '#374151' }}>×</button>
-              </div>
-            )}
-          </Field>
+          <CategoriaSelector
+            arbol={arbolCategorias}
+            value={form.categoria_id}
+            onChange={id => set('categoria_id', id)}
+            onCrear={onCrearCategoria}
+            error={errors.categoria_id}
+          />
 
           {/* Precio y Stock */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation'
 import './storefront.css'
 import {
   Home, ShoppingBag, Sparkles, Heart, BadgePercent, ShoppingCart, Headphones, LifeBuoy,
-  Search, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight, Plus, SlidersHorizontal,
+  Search, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Plus, SlidersHorizontal,
   Keyboard, Gamepad2, Speaker, Watch, Check, PackageCheck, ShieldCheck, Truck, Send,
   Grid2x2, SearchX, MessageCircle, LogIn, type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isValidEmail } from '@/lib/validation'
 import { useAuth, ROLE_HOME } from '@/lib/auth-context'
+import { construirArbolCategorias, type CategoriaPlana, type CategoriaConHijos } from '@/lib/categorias'
 
 type CheckoutState = 'form' | 'loading' | 'success' | 'error'
 
@@ -19,7 +20,7 @@ const ICONS: Record<string, LucideIcon> = {
   home: Home, 'shopping-bag': ShoppingBag, sparkles: Sparkles, heart: Heart,
   'badge-percent': BadgePercent, 'shopping-cart': ShoppingCart, headphones: Headphones, 'life-buoy': LifeBuoy,
   search: Search, 'arrow-right': ArrowRight, 'arrow-left': ArrowLeft,
-  'chevron-left': ChevronLeft, 'chevron-right': ChevronRight, plus: Plus,
+  'chevron-left': ChevronLeft, 'chevron-right': ChevronRight, 'chevron-down': ChevronDown, plus: Plus,
   'sliders-horizontal': SlidersHorizontal, keyboard: Keyboard, 'gamepad-2': Gamepad2,
   speaker: Speaker, watch: Watch, check: Check, 'package-check': PackageCheck,
   'shield-check': ShieldCheck, truck: Truck, send: Send, 'grid-2x2': Grid2x2,
@@ -190,7 +191,10 @@ export default function Storefront() {
   const [productIdMap, setProductIdMap] = useState<Record<string, string>>({})
   const [productSkuMap, setProductSkuMap] = useState<Record<string, string>>({})
   const [productStockMap, setProductStockMap] = useState<Record<string, number>>({})
-  const [categorias, setCategorias] = useState<string[]>([])
+  const [categoriasRaw, setCategoriasRaw] = useState<CategoriaPlana[]>([])
+  const categorias = categoriasRaw.map(c => c.nombre)
+  const arbolCategorias: CategoriaConHijos[] = construirArbolCategorias(categoriasRaw)
+  const [catsExpandidas, setCatsExpandidas] = useState<Set<number>>(new Set())
   const [activeCat, setActiveCat] = useState('Todo')
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [searchSuggestions, setSearchSuggestions] = useState<Product[]>([])
@@ -354,7 +358,7 @@ export default function Storefront() {
           .eq('activo', true)
           .gt('stock', 0)
           .order('created_at', { ascending: false }),
-        supabase.from('categorias').select('nombre').eq('activo', true).order('nombre'),
+        supabase.from('categorias').select('id, nombre, parent_id, activo').eq('activo', true).order('nombre'),
       ])
       if (prods) {
         const typed = prods as unknown as SupabaseProduct[]
@@ -367,7 +371,7 @@ export default function Storefront() {
         setProductSkuMap(skuMap)
         setProductStockMap(stockMap)
       }
-      if (cats) setCategorias(cats.map((c: { nombre: string }) => c.nombre))
+      if (cats) setCategoriasRaw(cats)
       setLoadingProducts(false)
     }
     fetchData()
@@ -409,10 +413,16 @@ export default function Storefront() {
     startCarousel()
   }
 
-  /* ---- Productos filtrados por categoría ---- */
-  const filteredProducts = activeCat === 'Todo'
+  /* ---- Productos filtrados por categoría (si es un padre, incluye sus subcategorías) ---- */
+  const nombresCatActiva = (() => {
+    if (activeCat === 'Todo') return null
+    const comoPadre = arbolCategorias.find(p => p.nombre === activeCat)
+    if (comoPadre) return new Set([comoPadre.nombre, ...comoPadre.hijos.map(h => h.nombre)])
+    return new Set([activeCat])
+  })()
+  const filteredProducts = !nombresCatActiva
     ? dbProducts
-    : dbProducts.filter(p => p[4] === activeCat)
+    : dbProducts.filter(p => nombresCatActiva.has(p[4]))
 
   const findProduct = (title: string) => dbProducts.find(p => p[0] === title)
 
@@ -866,6 +876,16 @@ export default function Storefront() {
   const renderCatalog = () => {
     const catCounts: Record<string, number> = {}
     dbProducts.forEach(p => { catCounts[p[4]] = (catCounts[p[4]] ?? 0) + 1 })
+    const countConHijos = (padre: CategoriaConHijos) =>
+      (catCounts[padre.nombre] ?? 0) + padre.hijos.reduce((s, h) => s + (catCounts[h.nombre] ?? 0), 0)
+
+    function toggleExpandido(id: number) {
+      setCatsExpandidas(prev => {
+        const next = new Set(prev)
+        next.has(id) ? next.delete(id) : next.add(id)
+        return next
+      })
+    }
 
     return (
       <>
@@ -887,8 +907,13 @@ export default function Storefront() {
               }}
             >
               <option value="Todo">Todo ({dbProducts.length})</option>
-              {categorias.map(cat => (
-                <option key={cat} value={cat}>{cat} ({catCounts[cat] ?? 0})</option>
+              {arbolCategorias.map(padre => (
+                <optgroup key={padre.id} label={padre.nombre}>
+                  <option value={padre.nombre}>{padre.nombre} ({countConHijos(padre)})</option>
+                  {padre.hijos.map(hijo => (
+                    <option key={hijo.id} value={hijo.nombre}>— {hijo.nombre} ({catCounts[hijo.nombre] ?? 0})</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <svg style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', width: 14, height: 14 }}
@@ -908,16 +933,42 @@ export default function Storefront() {
             >
               <Ic n="grid-2x2" /><span>Todo</span><b>{dbProducts.length}</b>
             </button>
-            {categorias.map(cat => (
-              <button
-                key={cat}
-                className={`category cat-sm${activeCat === cat ? ' active' : ''}`}
-                type="button"
-                onClick={() => setActiveCat(cat)}
-              >
-                <Ic n="shopping-bag" /><span>{cat}</span><b>{catCounts[cat] ?? 0}</b>
-              </button>
-            ))}
+            {arbolCategorias.map(padre => {
+              const expandido = catsExpandidas.has(padre.id)
+              return (
+                <div key={padre.id}>
+                  <button
+                    className={`category cat-sm${activeCat === padre.nombre ? ' active' : ''}`}
+                    type="button"
+                    onClick={() => setActiveCat(padre.nombre)}
+                  >
+                    <Ic n="shopping-bag" /><span>{padre.nombre}</span><b>{countConHijos(padre)}</b>
+                    {padre.hijos.length > 0 && (
+                      <span
+                        role="button"
+                        aria-label={expandido ? 'Contraer' : 'Expandir'}
+                        onClick={e => { e.stopPropagation(); toggleExpandido(padre.id) }}
+                        style={{ display: 'inline-flex', marginLeft: 4, transform: expandido ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+                      >
+                        <Ic n="chevron-down" />
+                      </span>
+                    )}
+                  </button>
+                  {expandido && padre.hijos.map(hijo => (
+                    <button
+                      key={hijo.id}
+                      className={`category cat-sm${activeCat === hijo.nombre ? ' active' : ''}`}
+                      type="button"
+                      onClick={() => setActiveCat(hijo.nombre)}
+                      style={{ paddingLeft: 28 }}
+                    >
+                      <span aria-hidden="true" />
+                      <span>{hijo.nombre}</span><b>{catCounts[hijo.nombre] ?? 0}</b>
+                    </button>
+                  ))}
+                </div>
+              )
+            })}
           </div>
           <div className="range-card">
             <span>Rango de precio</span>

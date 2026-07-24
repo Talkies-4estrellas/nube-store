@@ -3,7 +3,7 @@
 import { useState, useRef, type DragEvent } from 'react'
 import { supabase } from '@/lib/supabase'
 import { parseCSV, readFileSmart, cleanNumber, stripHtml } from '@/lib/csv'
-import { mapearCategorias } from '@/lib/categorias'
+import { mapearCategorias, mapearSubcategorias } from '@/lib/categorias'
 
 const NAVY = '#252855'
 const BLUE = '#0049ff'
@@ -151,10 +151,14 @@ function pick(row: Record<string, string>, campo: string): string {
   return ''
 }
 
-/** "Papel Picado > Pelota Inflable" -> "Pelota Inflable" */
-function categoriaFinal(raw: string): string {
-  if (!raw) return ''
-  return raw.split('>').pop()!.trim()
+/** "Papel Picado > Pelota Inflable" o "Belleza / Fragancias" -> { padre: "Papel Picado", hijo: "Pelota Inflable" } */
+function parsearCategoria(raw: string): { padre: string; hijo: string } {
+  if (!raw) return { padre: '', hijo: '' }
+  const sep = raw.includes('>') ? '>' : raw.includes('/') ? '/' : ''
+  if (!sep) return { padre: raw.trim(), hijo: '' }
+  const partes = raw.split(sep).map(p => p.trim()).filter(Boolean)
+  if (partes.length <= 1) return { padre: partes[0] ?? '', hijo: '' }
+  return { padre: partes[0], hijo: partes.slice(1).join(` ${sep} `) }
 }
 
 function esVerdadero(raw: string, porDefecto: boolean): boolean {
@@ -165,7 +169,7 @@ function esVerdadero(raw: string, porDefecto: boolean): boolean {
 type Fila = {
   sku: string; nombre: string; precio: number | null
   precio_promocional: number | null; costo: number | null; stock: number
-  categoria: string; marca: string; codigo_barras: string; mpn: string
+  categoria: string; categoria_padre: string; categoria_hijo: string; marca: string; codigo_barras: string; mpn: string
   descripcion: string; imagen_url: string; slug: string; tags: string
   seo_titulo: string; seo_descripcion: string
   peso_kg: number | null; alto_cm: number | null; ancho_cm: number | null; profundidad_cm: number | null
@@ -197,6 +201,7 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
 
   function analizar(rows: Record<string, string>[]): Fila[] {
     return rows.map(r => {
+      const { padre: categoria_padre, hijo: categoria_hijo } = parsearCategoria(pick(r, 'categoria'))
       const campos = {
         sku: pick(r, 'sku'),
         nombre: pick(r, 'nombre'),
@@ -204,7 +209,9 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
         precio_promocional: cleanNumber(pick(r, 'precio_promocional')),
         costo: cleanNumber(pick(r, 'costo')),
         stock: Math.max(0, Math.round(cleanNumber(pick(r, 'stock')) ?? 0)),
-        categoria: categoriaFinal(pick(r, 'categoria')),
+        categoria_padre,
+        categoria_hijo,
+        categoria: categoria_hijo || categoria_padre,
         marca: pick(r, 'marca'),
         codigo_barras: pick(r, 'codigo_barras'),
         mpn: pick(r, 'mpn'),
@@ -326,10 +333,26 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
     setErrorMsg('')
 
     try {
-      // 1. Categorías: buscar o crear (sin duplicar por mayúsculas/espacios)
+      // 1. Categorías: buscar o crear, respetando la jerarquía padre/subcategoría
+      //    (sin duplicar por mayúsculas/espacios, y una subcategoría con el mismo
+      //    nombre bajo dos padres distintos no se confunde entre sí).
       setProgreso({ fase: 'Preparando categorías', hecho: 0, total: 1 })
-      const nombresCat = Array.from(new Set(aEscribir.map(f => f.categoria).filter(Boolean)))
-      const mapaCat = await mapearCategorias(supabase, nombresCat)
+      const nombresPadre = Array.from(new Set(aEscribir.map(f => f.categoria_padre).filter(Boolean)))
+      const mapaPadres = await mapearCategorias(supabase, nombresPadre)
+
+      const paresHijo = aEscribir
+        .filter(f => f.categoria_padre && f.categoria_hijo)
+        .map(f => ({ padreId: mapaPadres.get(f.categoria_padre), hijo: f.categoria_hijo }))
+        .filter((p): p is { padreId: number; hijo: string } => p.padreId != null)
+      const mapaHijos = await mapearSubcategorias(supabase, paresHijo)
+
+      function categoriaIdDe(f: Fila): number | null {
+        if (!f.categoria_padre) return null
+        const padreId = mapaPadres.get(f.categoria_padre) ?? null
+        if (!padreId) return null
+        if (!f.categoria_hijo) return padreId
+        return mapaHijos.get(`${padreId}:::${f.categoria_hijo}`) ?? padreId
+      }
 
       // 2. Imágenes: descargar y alojar en nuestro Storage
       let mapaImg = new Map<string, string>()
@@ -348,7 +371,7 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
           nombre: f.nombre,
           precio: f.precio,
           stock: f.stock,
-          categoria_id: f.categoria ? (mapaCat.get(f.categoria) ?? null) : null,
+          categoria_id: categoriaIdDe(f),
           descripcion: f.descripcion || null,
           activo: f.activo,
           envio_gratis: f.envio_gratis,
@@ -529,7 +552,9 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
                         <td style={{ padding: '7px 12px', color: '#374151', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nombre || '—'}</td>
                         <td style={{ padding: '7px 12px', textAlign: 'right', color: '#374151' }}>{f.precio !== null ? `$${f.precio}` : '—'}</td>
                         <td style={{ padding: '7px 12px', textAlign: 'right', color: '#374151' }}>{f.stock}</td>
-                        <td style={{ padding: '7px 12px', color: '#6b7280', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.categoria || '—'}</td>
+                        <td style={{ padding: '7px 12px', color: '#6b7280', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.categoria_padre && f.categoria_hijo ? `${f.categoria_padre} / ${f.categoria_hijo}` : f.categoria}>
+                          {f.categoria_padre && f.categoria_hijo ? `${f.categoria_padre} / ${f.categoria_hijo}` : (f.categoria || '—')}
+                        </td>
                         <td style={{ padding: '7px 12px' }}>
                           {!f.valido
                             ? <span style={{ color: AMBER, fontWeight: 700 }}>⚠️ {f.motivo}</span>

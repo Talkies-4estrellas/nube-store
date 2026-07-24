@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
+import { construirArbolCategorias } from '@/lib/categorias'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -14,7 +15,7 @@ const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#37415
 type Fields = { topbar_btn1: string; topbar_btn2: string; topbar_btn1_activo: boolean; topbar_btn2_activo: boolean }
 const DEFAULTS: Fields = { topbar_btn1: 'Nuevo', topbar_btn2: 'Ofertas', topbar_btn1_activo: true, topbar_btn2_activo: true }
 
-type Categoria = { id: number; nombre: string; activo: boolean }
+type Categoria = { id: number; nombre: string; activo: boolean; parent_id: number | null }
 
 type BotonFiltro = { id: string; label: string; view: string; activo: boolean }
 const VISTAS_DISPONIBLES = [
@@ -36,10 +37,25 @@ export default function FiltrosPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [cargandoCategorias, setCargandoCategorias] = useState(true)
   const [nuevaCategoria, setNuevaCategoria] = useState('')
+  const [nuevaCategoriaPadre, setNuevaCategoriaPadre] = useState('')
   const [creando, setCreando] = useState(false)
   const [errorCategoria, setErrorCategoria] = useState('')
   const [paginaCategorias, setPaginaCategorias] = useState(1)
   const POR_PAGINA = 10
+
+  const arbolCategorias = useMemo(() => construirArbolCategorias(categorias), [categorias])
+
+  // Lista ordenada: cada padre seguido de sus hijos, para paginar sin romper la jerarquía visual.
+  const categoriasOrdenadas = useMemo(() => {
+    const porId = new Map(categorias.map(c => [c.id, c]))
+    const out: Categoria[] = []
+    arbolCategorias.forEach(p => {
+      const padre = porId.get(p.id)
+      if (padre) out.push(padre)
+      p.hijos.forEach(h => { const hijo = porId.get(h.id); if (hijo) out.push(hijo) })
+    })
+    return out
+  }, [categorias, arbolCategorias])
 
   useEffect(() => {
     supabase.from('config_storefront').select('topbar_btn1,topbar_btn2,topbar_btn1_activo,topbar_btn2_activo,filtros_extra').eq('id', 1).single()
@@ -62,12 +78,12 @@ export default function FiltrosPage() {
 
   function cargarCategorias() {
     setCargandoCategorias(true)
-    supabase.from('categorias').select('id, nombre, activo').order('nombre')
+    supabase.from('categorias').select('id, nombre, activo, parent_id').order('nombre')
       .then(({ data }) => { setCategorias(data || []); setCargandoCategorias(false) })
   }
 
-  const totalPaginasCategorias = Math.max(1, Math.ceil(categorias.length / POR_PAGINA))
-  const categoriasPagina = categorias.slice((paginaCategorias - 1) * POR_PAGINA, paginaCategorias * POR_PAGINA)
+  const totalPaginasCategorias = Math.max(1, Math.ceil(categoriasOrdenadas.length / POR_PAGINA))
+  const categoriasPagina = categoriasOrdenadas.slice((paginaCategorias - 1) * POR_PAGINA, paginaCategorias * POR_PAGINA)
 
   function set<K extends keyof Fields>(key: K, val: Fields[K]) { setF(p => ({ ...p, [key]: val })) }
 
@@ -83,18 +99,20 @@ export default function FiltrosPage() {
     const nombre = nuevaCategoria.trim().replace(/\s+/g, ' ')
     if (!nombre) return
     setErrorCategoria('')
-    if (categorias.some(c => c.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
-      setErrorCategoria('Esa categoría ya existe.')
+    const parentId = nuevaCategoriaPadre ? Number(nuevaCategoriaPadre) : null
+    if (categorias.some(c => c.parent_id === parentId && c.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
+      setErrorCategoria(parentId ? 'Esa subcategoría ya existe en ese padre.' : 'Esa categoría ya existe.')
       return
     }
     setCreando(true)
-    const { error } = await supabase.from('categorias').insert({ nombre })
+    const { error } = await supabase.from('categorias').insert({ nombre, parent_id: parentId })
     setCreando(false)
     if (error) {
       setErrorCategoria(error.code === '23505' ? 'Esa categoría ya existe.' : 'Error al crear la categoría.')
       return
     }
     setNuevaCategoria('')
+    setNuevaCategoriaPadre('')
     setPaginaCategorias(1)
     cargarCategorias()
   }
@@ -105,7 +123,11 @@ export default function FiltrosPage() {
   }
 
   async function eliminarCategoria(cat: Categoria) {
-    if (!confirm(`¿Eliminar la categoría "${cat.nombre}"? Los productos que la usan quedarán sin categoría.`)) return
+    const tieneHijos = categorias.some(c => c.parent_id === cat.id)
+    const advertencia = tieneHijos
+      ? `¿Eliminar la categoría "${cat.nombre}"? Sus subcategorías pasarán a ser categorías principales, y los productos que la usan quedarán sin categoría.`
+      : `¿Eliminar la categoría "${cat.nombre}"? Los productos que la usan quedarán sin categoría.`
+    if (!confirm(advertencia)) return
     setCategorias(prev => {
       const restantes = prev.filter(c => c.id !== cat.id)
       const ultimaPagina = Math.max(1, Math.ceil(restantes.length / POR_PAGINA))
@@ -234,9 +256,14 @@ export default function FiltrosPage() {
             Las categorías inactivas dejan de aparecer en el filtro de la tienda, pero sus productos y el historial no se ven afectados.
           </p>
 
-          <form onSubmit={crearCategoria} style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            <input style={{ ...inp, flex: 1 }} value={nuevaCategoria} onChange={e => setNuevaCategoria(e.target.value)}
+          <form onSubmit={crearCategoria} style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <input style={{ ...inp, flex: '1 1 200px' }} value={nuevaCategoria} onChange={e => setNuevaCategoria(e.target.value)}
               placeholder="Nombre de la nueva categoría" disabled={creando} />
+            <select style={{ ...inp, flex: '0 1 220px', cursor: 'pointer' }} value={nuevaCategoriaPadre}
+              onChange={e => setNuevaCategoriaPadre(e.target.value)} disabled={creando}>
+              <option value="">— Categoría padre (ninguna) —</option>
+              {arbolCategorias.map(p => <option key={p.id} value={p.id}>Subcategoría de: {p.nombre}</option>)}
+            </select>
             <button type="submit" disabled={creando || !nuevaCategoria.trim()} style={{
               background: NAVY, color: '#fff', border: 'none', padding: '0 20px', borderRadius: 8,
               fontWeight: 700, fontSize: 14, cursor: creando ? 'default' : 'pointer', whiteSpace: 'nowrap',
@@ -258,15 +285,16 @@ export default function FiltrosPage() {
               {categoriasPagina.map(cat => (
                 <div key={cat.id} style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  marginLeft: cat.parent_id ? 24 : 0,
                   border: '1px solid #e5e7eb', borderRadius: 8,
                   background: cat.activo ? '#fff' : '#f9fafb',
                 }}>
                   <span style={{
-                    flex: 1, fontSize: 14, fontWeight: 600,
+                    flex: 1, fontSize: 14, fontWeight: cat.parent_id ? 500 : 600,
                     color: cat.activo ? '#111' : '#9ca3af',
                     textDecoration: cat.activo ? 'none' : 'line-through',
                   }}>
-                    {cat.nombre}
+                    {cat.parent_id ? '↳ ' : ''}{cat.nombre}
                   </span>
                   <span style={{
                     fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,

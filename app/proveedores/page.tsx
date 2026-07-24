@@ -7,7 +7,8 @@ import { supabase } from '@/lib/supabase'
 import { convertToWebp, captureFrameAsWebp, uploadToSupabase } from '@/lib/uploadWebp'
 import { useSidebar } from '@/lib/sidebar-context'
 import { useAuth } from '@/lib/auth-context'
-import { obtenerOcrearCategoriaId } from '@/lib/categorias'
+import { construirArbolCategorias, crearCategoriaConPadre, type CategoriaPlana } from '@/lib/categorias'
+import CategoriaSelector from '@/components/CategoriaSelector'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -32,7 +33,7 @@ const DRAFT_KEY    = 'proveedor_draft_v1'
 const EMAIL_KEY    = 'proveedor_email_saved'
 const PERFIL_KEY   = 'proveedor_perfil_v1'
 
-type Categoria = { id: number; nombre: string }
+type Categoria = CategoriaPlana
 
 type MiSolicitud = {
   id: string
@@ -124,11 +125,9 @@ export default function ProveedoresPage() {
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [categorias, setCategorias] = useState<Categoria[]>([])
+  const arbolCategorias = construirArbolCategorias(categorias)
   const [dragging, setDragging] = useState(false)
   const [convirtiendo, setConvirtiendo] = useState(false)
-  const [nuevaCatMode, setNuevaCatMode] = useState(false)
-  const [nuevaCatNombre, setNuevaCatNombre] = useState('')
-  const [savingCat, setSavingCat] = useState(false)
 
   // Lista acumulada de productos
   const [productos, setProductos] = useState<ProductoLocal[]>([])
@@ -508,7 +507,7 @@ export default function ProveedoresPage() {
   }, [proveedor, prod])
 
   useEffect(() => {
-    supabase.from('categorias').select('id, nombre').order('nombre')
+    supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
       .then(({ data }) => { if (data) setCategorias(data) })
   }, [])
 
@@ -545,19 +544,6 @@ export default function ProveedoresPage() {
     if (file) handleFile(file)
   }
 
-  // ---- Nueva categoría (sin duplicar por mayúsculas/espacios) ----
-  async function guardarNuevaCat() {
-    if (!nuevaCatNombre.trim()) return
-    setSavingCat(true)
-    const id = await obtenerOcrearCategoriaId(supabase, nuevaCatNombre)
-    setSavingCat(false)
-    if (id === null) { alert('Error al crear la categoría'); return }
-    const { data } = await supabase.from('categorias').select('id, nombre').order('nombre')
-    if (data) setCategorias(data)
-    setProd(p => ({ ...p, categoria_id: String(id) }))
-    setNuevaCatNombre('')
-    setNuevaCatMode(false)
-  }
 
   // ---- Agregar producto a la lista ----
   function agregarProducto() {
@@ -1079,51 +1065,29 @@ export default function ProveedoresPage() {
                       placeholder="Ej: Teclado mecánico TKL RGB" onFocus={focus} onBlur={blur} />
                   </div>
 
-                  {/* SKU + Categoría en fila */}
-                  <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div>
-                      <label style={labelStyle}>
-                        SKU / Código <span style={{ color: PINK }}>*</span>
-                        <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Identificador único</span>
-                      </label>
-                      <input style={{ ...inputStyle, textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '0.05em' }}
-                        value={prod.sku} onChange={e => setPR('sku', e.target.value.toUpperCase())}
-                        placeholder="TEC-001" onFocus={focus} onBlur={blur} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Categoría</label>
-                      {!nuevaCatMode ? (
-                        <select style={{ ...inputStyle, cursor: 'pointer' }} value={prod.categoria_id}
-                          onChange={e => {
-                            if (e.target.value === '__nueva__') { setNuevaCatMode(true) }
-                            else { setPR('categoria_id', e.target.value) }
-                          }}
-                          onFocus={focus} onBlur={blur}>
-                          <option value="">Sin categoría</option>
-                          {categorias.map(c => (
-                            <option key={c.id} value={c.id}>{c.nombre}</option>
-                          ))}
-                          <option value="__nueva__">➕ Nueva categoría...</option>
-                        </select>
-                      ) : (
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <input style={{ ...inputStyle, flex: 1 }} value={nuevaCatNombre}
-                            onChange={e => setNuevaCatNombre(e.target.value)}
-                            placeholder="Nombre"
-                            onFocus={focus} onBlur={blur}
-                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarNuevaCat() } }} />
-                          <button type="button" onClick={guardarNuevaCat} disabled={savingCat}
-                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 10px', borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>
-                            {savingCat ? '...' : '✓'}
-                          </button>
-                          <button type="button" onClick={() => setNuevaCatMode(false)}
-                            style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '0 8px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                            ✕
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                  {/* SKU */}
+                  <div>
+                    <label style={labelStyle}>
+                      SKU / Código <span style={{ color: PINK }}>*</span>
+                      <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Identificador único</span>
+                    </label>
+                    <input style={{ ...inputStyle, textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                      value={prod.sku} onChange={e => setPR('sku', e.target.value.toUpperCase())}
+                      placeholder="TEC-001" onFocus={focus} onBlur={blur} />
                   </div>
+
+                  {/* Categoría (padre / subcategoría) */}
+                  <CategoriaSelector
+                    arbol={arbolCategorias}
+                    value={prod.categoria_id}
+                    onChange={id => setPR('categoria_id', id)}
+                    onCrear={async (nombre, parentId) => {
+                      const nueva = await crearCategoriaConPadre(supabase, nombre, parentId)
+                      const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
+                      if (data) setCategorias(data)
+                      return nueva
+                    }}
+                  />
 
                   {/* Precio + Stock en fila */}
                   <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

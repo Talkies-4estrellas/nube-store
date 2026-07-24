@@ -1995,6 +1995,7 @@
     width: 100%;
     height: auto;
     padding: 0 18px 18px;
+    border: none;
     border-radius: 0 0 28px 28px;
     transition: transform 0.32s ease;
     will-change: transform;

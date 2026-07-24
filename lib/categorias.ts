@@ -33,6 +33,8 @@ export async function obtenerOcrearCategoriaId(
  * Versión en lote: recibe muchos nombres crudos (por ejemplo, de un CSV) y devuelve
  * un mapa nombre-original -> id de categoría, creando solo las que de verdad faltan
  * y sin duplicar por diferencias de mayúsculas/espacios entre filas.
+ * Solo busca/crea categorías de nivel superior (sin padre) — para subcategorías
+ * usa `mapearSubcategorias`.
  */
 export async function mapearCategorias(
   supabase: SupabaseClient,
@@ -42,7 +44,7 @@ export async function mapearCategorias(
   const limpiosUnicos = Array.from(new Set(nombresCrudos.map(normalizarCategoria).filter(Boolean)))
   if (limpiosUnicos.length === 0) return resultado
 
-  const { data: existentes } = await supabase.from('categorias').select('id, nombre')
+  const { data: existentes } = await supabase.from('categorias').select('id, nombre').is('parent_id', null)
   const porClave = new Map<string, number>()
   existentes?.forEach(c => porClave.set(c.nombre.trim().toLowerCase(), c.id))
 
@@ -53,7 +55,7 @@ export async function mapearCategorias(
     for (const nombre of faltan) {
       const { data, error } = await supabase.from('categorias').insert({ nombre }).select('id').single()
       if (!error && data) { porClave.set(nombre.toLowerCase(), data.id); continue }
-      const { data: retry } = await supabase.from('categorias').select('id').ilike('nombre', nombre).maybeSingle()
+      const { data: retry } = await supabase.from('categorias').select('id').is('parent_id', null).ilike('nombre', nombre).maybeSingle()
       if (retry) porClave.set(nombre.toLowerCase(), retry.id)
     }
   }
@@ -64,4 +66,83 @@ export async function mapearCategorias(
     if (id) resultado.set(original, id)
   }
   return resultado
+}
+
+/**
+ * Igual que `mapearCategorias` pero para subcategorías: cada par trae el id de su
+ * padre ya resuelto, y la búsqueda/creación queda acotada a ese padre — así dos
+ * padres distintos pueden tener cada uno una subcategoría con el mismo nombre.
+ * Devuelve un mapa `padreId:::hijo` (nombre original) -> id de la subcategoría.
+ */
+export async function mapearSubcategorias(
+  supabase: SupabaseClient,
+  pares: Array<{ padreId: number; hijo: string }>,
+): Promise<Map<string, number>> {
+  const resultado = new Map<string, number>()
+  const limpios = pares
+    .map(p => ({ padreId: p.padreId, hijoOriginal: p.hijo, hijo: normalizarCategoria(p.hijo) }))
+    .filter(p => p.hijo)
+  if (limpios.length === 0) return resultado
+
+  const padresIds = Array.from(new Set(limpios.map(p => p.padreId)))
+  const { data: existentes } = await supabase.from('categorias').select('id, nombre, parent_id').in('parent_id', padresIds)
+  const porClave = new Map<string, number>()
+  existentes?.forEach(c => { if (c.parent_id != null) porClave.set(`${c.parent_id}:::${c.nombre.trim().toLowerCase()}`, c.id) })
+
+  const paresUnicos = Array.from(new Set(limpios.map(p => `${p.padreId}:::${p.hijo}`)))
+  for (const clave of paresUnicos) {
+    const sep = clave.indexOf(':::')
+    const padreId = Number(clave.slice(0, sep))
+    const hijo = clave.slice(sep + 3)
+    const claveBusqueda = `${padreId}:::${hijo.toLowerCase()}`
+    if (porClave.has(claveBusqueda)) continue
+    const { data, error } = await supabase.from('categorias').insert({ nombre: hijo, parent_id: padreId }).select('id').single()
+    if (!error && data) { porClave.set(claveBusqueda, data.id); continue }
+    const { data: retry } = await supabase.from('categorias').select('id').eq('parent_id', padreId).ilike('nombre', hijo).maybeSingle()
+    if (retry) porClave.set(claveBusqueda, retry.id)
+  }
+
+  for (const p of limpios) {
+    const id = porClave.get(`${p.padreId}:::${p.hijo.toLowerCase()}`)
+    if (id) resultado.set(`${p.padreId}:::${p.hijoOriginal}`, id)
+  }
+  return resultado
+}
+
+/* ---- Jerarquía padre/hijo (2 niveles) ---- */
+
+export type CategoriaPlana = { id: number; nombre: string; parent_id: number | null; activo?: boolean }
+export type CategoriaHijo = { id: number; nombre: string }
+export type CategoriaConHijos = { id: number; nombre: string; hijos: CategoriaHijo[] }
+
+/** Agrupa la lista plana (como viene de Supabase) en padres con su array de hijos. */
+export function construirArbolCategorias(planas: CategoriaPlana[]): CategoriaConHijos[] {
+  const padres = planas.filter(c => c.parent_id === null)
+  return padres
+    .map(p => ({
+      id: p.id,
+      nombre: p.nombre,
+      hijos: planas
+        .filter(c => c.parent_id === p.id)
+        .map(h => ({ id: h.id, nombre: h.nombre }))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
+/** Crea una categoría (padre si parentId es null, subcategoría si no) y la devuelve. */
+export async function crearCategoriaConPadre(
+  supabase: SupabaseClient,
+  nombreCrudo: string,
+  parentId: number | null,
+): Promise<{ id: number; nombre: string } | null> {
+  const nombre = normalizarCategoria(nombreCrudo)
+  if (!nombre) return null
+  const { data, error } = await supabase
+    .from('categorias')
+    .insert({ nombre, parent_id: parentId })
+    .select('id, nombre')
+    .single()
+  if (error || !data) return null
+  return data
 }
