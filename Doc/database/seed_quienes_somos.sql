@@ -14,6 +14,16 @@ A nivel internacional, Order Express Paquetería y Mensajería ha realizado vari
 Contamos con un servicio telefónico de atención al cliente y diez centros operativos que ofrecen asistencia y soporte técnico a nuestros clientes empresariales e individuales, y a nuestra red de más de 350 agentes que participan en el proceso de recolección, traslado, empaque, rastreo y logística de paquetería y mensajería.
 
 Una empresa más de la familia Order Express.
+
+Visitanos o Contactanos:
+
+Dirección: Leona Vicario #235  Colonia Los Herreros, Maravatio, Mich , C.P 61250
+
+Email: soporte@operadoraloft.com
+
+Teléfono: 447 116 37 50
+
+Horario De Atención: De Lunes a Viernes de 9:00 a.m. a 6:00 p.m.
 $QS$,
 updated_at = now()
 where id = 1;
