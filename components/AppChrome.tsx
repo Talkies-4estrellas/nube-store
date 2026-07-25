@@ -10,7 +10,7 @@ import { useSidebar } from '@/lib/sidebar-context'
 const NAVY = '#252855'
 const PINK = '#e7226d'
 
-const PUBLIC_PATHS = ['/', '/login', '/registro', '/proveedores', '/mi-cuenta']
+const PUBLIC_PATHS = ['/', '/login', '/registro', '/proveedores', '/mi-cuenta', '/terminos', '/quienes-somos', '/preguntas-frecuentes']
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

@@ -72,7 +72,7 @@ export default function StorefrontFooter({ config }: Props) {
     <footer className="oe-footer" style={{ background: config.color_acento || '#a51d5c' }}>
       <div className="oe-footer-top">
         <div className="oe-footer-col">
-          <p className="oe-footer-brand">{config.nombre_tienda}</p>
+          <img src="/logos%20blanco.svg" alt={config.nombre_tienda} className="oe-footer-logo" />
 
           {(config.instagram || config.facebook || config.youtube) && (
             <div className="oe-footer-social">

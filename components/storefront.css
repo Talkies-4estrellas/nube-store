@@ -2417,10 +2417,12 @@
   min-width: 0;
 }
 
-.oe-store .oe-footer-brand {
-  font-size: 18px;
-  font-weight: 800;
-  margin: 0 0 4px;
+.oe-store .oe-footer-logo {
+  display: block;
+  height: 52px;
+  width: auto;
+  margin: 0 0 10px;
+  align-self: flex-start;
 }
 
 .oe-store .oe-footer-heading {
