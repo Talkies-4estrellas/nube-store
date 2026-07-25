@@ -10,8 +10,8 @@ const inp: React.CSSProperties = {
 }
 const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }
 
-type Fields = { whatsapp: string; email_contacto: string; instagram: string; telefono: string; facebook: string }
-const DEFAULTS: Fields = { whatsapp: '', email_contacto: '', instagram: '', telefono: '', facebook: '' }
+type Fields = { whatsapp: string; email_contacto: string; instagram: string; telefono: string; facebook: string; horario_atencion: string }
+const DEFAULTS: Fields = { whatsapp: '', email_contacto: '', instagram: '', telefono: '', facebook: '', horario_atencion: '' }
 
 export default function RedesSocialesPage() {
   const [f, setF] = useState<Fields>(DEFAULTS)
@@ -19,7 +19,7 @@ export default function RedesSocialesPage() {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    supabase.from('config_storefront').select('whatsapp,email_contacto,instagram,telefono,facebook').eq('id', 1).single()
+    supabase.from('config_storefront').select('whatsapp,email_contacto,instagram,telefono,facebook,horario_atencion').eq('id', 1).single()
       .then(({ data }) => { if (data) setF({ ...DEFAULTS, ...data }) })
   }, [])
 
@@ -38,6 +38,7 @@ export default function RedesSocialesPage() {
     { key: 'email_contacto' as const, label: 'Email de contacto',icon: '✉️', placeholder: 'hola@tienda.com',    hint: 'Email visible en la sección de soporte' },
     { key: 'instagram'      as const, label: 'Instagram',         icon: '📸', placeholder: '@tutienda',          hint: 'Incluye el @' },
     { key: 'facebook'       as const, label: 'Facebook',          icon: '👍', placeholder: 'facebook.com/tutienda', hint: 'URL completa o nombre de página' },
+    { key: 'horario_atencion' as const, label: 'Horario de atención', icon: '🕘', placeholder: 'Lunes a Viernes de 9:00 a.m. - 6:00 p.m.', hint: 'Se muestra en la página de Contacto' },
   ]
 
   return (

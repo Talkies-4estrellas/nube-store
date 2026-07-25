@@ -20,9 +20,12 @@ type Fields = {
   footer_direccion: string
   footer_copyright: string
   footer_newsletter_activo: boolean
+  razon_social: string
+  jurisdiccion: string
 }
 const DEFAULTS: Fields = {
   youtube: '', footer_telefono_2: '', footer_direccion: '', footer_copyright: '', footer_newsletter_activo: true,
+  razon_social: '', jurisdiccion: '',
 }
 
 export default function FooterPage() {
@@ -36,7 +39,7 @@ export default function FooterPage() {
 
   useEffect(() => {
     supabase.from('config_storefront')
-      .select('youtube,footer_telefono_2,footer_direccion,footer_copyright,footer_newsletter_activo,footer_paginas,footer_envios_logos')
+      .select('youtube,footer_telefono_2,footer_direccion,footer_copyright,footer_newsletter_activo,footer_paginas,footer_envios_logos,razon_social,jurisdiccion')
       .eq('id', 1).single()
       .then(({ data }) => {
         if (!data) return
@@ -117,6 +120,25 @@ export default function FooterPage() {
             <div>
               <label style={lbl}>Domicilio fiscal</label>
               <input style={inp} value={f.footer_direccion} onChange={e => set('footer_direccion', e.target.value)} placeholder="Calle y número, colonia, municipio, estado" />
+            </div>
+          </div>
+        </div>
+
+        {/* Razón social y jurisdicción — usadas dentro del texto de Términos y condiciones */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Datos legales</p>
+          <p style={{ fontSize: 12, color: '#9ca3af', margin: '4px 0 16px' }}>
+            Se insertan automáticamente dentro del texto de "Términos y condiciones" (Legal/Envíos), donde aparecen como
+            "{f.razon_social || '________________'}" y "{f.jurisdiccion || '________________'}".
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={lbl}>Razón social</label>
+              <input style={inp} value={f.razon_social} onChange={e => set('razon_social', e.target.value)} placeholder="Ej: Order Express S.A. de C.V." />
+            </div>
+            <div>
+              <label style={lbl}>Jurisdicción (estado)</label>
+              <input style={inp} value={f.jurisdiccion} onChange={e => set('jurisdiccion', e.target.value)} placeholder="Ej: Michoacán" />
             </div>
           </div>
         </div>

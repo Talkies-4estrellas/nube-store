@@ -9,8 +9,17 @@ export default function TerminosPage() {
   const [texto, setTexto] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.from('config_storefront').select('terminos').eq('id', 1).single()
-      .then(({ data }) => setTexto(data?.terminos ?? ''))
+    supabase.from('config_storefront').select('terminos, razon_social, jurisdiccion').eq('id', 1).single()
+      .then(({ data }) => {
+        const crudo = data?.terminos ?? ''
+        const razonSocial = data?.razon_social?.trim() || '________________'
+        const jurisdiccion = data?.jurisdiccion?.trim() || '________________'
+        setTexto(
+          crudo
+            .replaceAll('{{RAZON_SOCIAL}}', razonSocial)
+            .replaceAll('{{JURISDICCION}}', jurisdiccion)
+        )
+      })
   }, [])
 
   return (
