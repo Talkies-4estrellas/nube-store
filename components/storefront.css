@@ -52,7 +52,7 @@
 .oe-store .sidebar {
   position: fixed;
   top: 24px;
-  bottom: 24px;
+  bottom: var(--sidebar-bottom, 24px);
   left: 20px;
   width: var(--nav-width);
   padding: 0 16px 16px;
@@ -1980,6 +1980,11 @@
 }
 
 @media (max-width: 1180px) {
+  /* Footer: por ahora solo se prueba en escritorio. */
+  .oe-store .oe-footer {
+    display: none;
+  }
+
   /* La lista larga de botones de categoría (uno por cada categoría, con
      conteo) ocupa demasiado espacio en móvil y ya existe el <select>
      desplegable justo arriba que hace lo mismo. Se oculta solo la lista;
@@ -2389,4 +2394,170 @@
     width: 100%;
     height: 170px;
   }
+}
+
+.oe-store .oe-footer {
+  color: #fff;
+  margin: 24px -32px -42px;
+  padding: 28px 32px 0;
+  border-radius: 24px 24px 0 0;
+}
+
+.oe-store .oe-footer-top {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 24px;
+  padding-bottom: 20px;
+}
+
+.oe-store .oe-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.oe-store .oe-footer-brand {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.oe-store .oe-footer-heading {
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.oe-store .oe-footer-social {
+  display: flex;
+  gap: 12px;
+}
+
+.oe-store .oe-footer-social a {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.oe-store .oe-footer-social a:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.oe-store .oe-footer-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.oe-store .oe-footer-contact p {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.5;
+}
+
+.oe-store .oe-footer-contact svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.oe-store .oe-footer-col a,
+.oe-store .oe-footer-col button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.oe-store .oe-footer-col a:hover,
+.oe-store .oe-footer-col button:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.oe-store .oe-footer-newsletter {
+  display: flex;
+  gap: 8px;
+}
+
+.oe-store .oe-footer-newsletter input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+}
+
+.oe-store .oe-footer-newsletter input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.oe-store .oe-footer-newsletter button {
+  background: #fff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  width: auto;
+}
+
+.oe-store .oe-footer-newsletter-msg {
+  font-size: 12px;
+  margin: 0;
+  color: #fff;
+}
+
+.oe-store .oe-footer-newsletter-msg.error {
+  color: #ffd1d1;
+}
+
+.oe-store .oe-footer-envios {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  flex-wrap: wrap;
+}
+
+.oe-store .oe-footer-envios img {
+  height: 22px;
+  width: auto;
+  border-radius: 4px;
+  background: #fff;
+  padding: 2px 6px;
+}
+
+.oe-store .oe-footer-bottom {
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
 }

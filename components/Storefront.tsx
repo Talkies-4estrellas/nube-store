@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { isValidEmail } from '@/lib/validation'
 import { useAuth, ROLE_HOME } from '@/lib/auth-context'
 import { construirArbolCategorias, type CategoriaPlana, type CategoriaConHijos } from '@/lib/categorias'
+import StorefrontFooter from '@/components/StorefrontFooter'
 
 type CheckoutState = 'form' | 'loading' | 'success' | 'error'
 
@@ -295,6 +296,15 @@ export default function Storefront() {
     whatsapp: '',
     email_contacto: '',
     instagram: '',
+    facebook: '',
+    youtube: '',
+    telefono: '',
+    footer_telefono_2: '',
+    footer_direccion: '',
+    footer_copyright: '',
+    footer_newsletter_activo: true,
+    footer_paginas: [] as { label: string; url: string }[],
+    footer_envios_logos: [] as { nombre: string; logo_url: string }[],
     hero_tag1: 'Entrega rapida',
     hero_tag2: 'Stock limitado',
     hero_tag3: 'Garantia incluida',
@@ -450,6 +460,33 @@ export default function Storefront() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [mobileNavOpen])
+
+  // El sidebar es fixed (flota sobre el contenido al hacer scroll). En el
+  // Inicio ahora hay un footer al final: sin esto, el sidebar seguiría
+  // tapándolo. Se mide la posición real del footer y se acorta el borde
+  // inferior del sidebar para que nunca lo cubra.
+  useEffect(() => {
+    if (view !== 'inicio') {
+      document.documentElement.style.removeProperty('--sidebar-bottom')
+      return
+    }
+    const MARGEN = 24
+    function actualizar() {
+      const footer = document.querySelector('.oe-footer')
+      if (!footer) { document.documentElement.style.removeProperty('--sidebar-bottom'); return }
+      const top = footer.getBoundingClientRect().top
+      const espacioNecesario = window.innerHeight - top + MARGEN
+      document.documentElement.style.setProperty('--sidebar-bottom', `${Math.max(MARGEN, espacioNecesario)}px`)
+    }
+    actualizar()
+    window.addEventListener('scroll', actualizar, { passive: true })
+    window.addEventListener('resize', actualizar)
+    return () => {
+      window.removeEventListener('scroll', actualizar)
+      window.removeEventListener('resize', actualizar)
+      document.documentElement.style.removeProperty('--sidebar-bottom')
+    }
+  }, [view])
 
   const addToCart = (title: string) => {
     const product = findProduct(title)
@@ -1607,7 +1644,10 @@ export default function Storefront() {
         <section className={gridClass[view] || 'content-grid'} ref={gridRef} aria-label="Catalogo simulado">
           {renderContent()}
         </section>
+
+        {view === 'inicio' && <StorefrontFooter config={storeConfig} />}
       </main>
+
       {/* Modal de checkout */}
       {showCheckout && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20 }}

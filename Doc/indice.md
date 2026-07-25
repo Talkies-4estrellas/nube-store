@@ -44,7 +44,9 @@
 | `Sidebar.tsx` | `AppChrome.tsx` | Barra lateral fija 240px. Navegación filtrada por `ROLE_ROUTES[user.role]`. Badge PINK con contador de solicitudes pendientes sobre Configuración. Logout al fondo. Estilo activo: borde NAVY + sombra. |
 | `Topbar.tsx` | `AppChrome.tsx` | Barra superior fija 56px. Buscador expandible inline con debounce 280ms (productos, clientes, ventas). Avatar del usuario con nombre y rol. |
 | `GlobalSearch.tsx` | `AppChrome.tsx` | Modal de búsqueda global activado con `Ctrl+K`. Busca en productos, ventas y clientes. Navegación con ↑↓↵. Debounce 250ms. Se activa desde `q.length >= 2`. |
-| `Storefront.tsx` | `app/page.tsx` (ruta `/`) | Tienda pública completa: 7 secciones (inicio, catálogo, novedades, favoritos, ofertas, carrito, soporte), carrusel hero, carrito persistido en `localStorage oe_cart`, checkout real (crea cliente + venta + items en Supabase), login/registro con tabla `registros`, config dinámica desde `config_storefront`. |
+| `Storefront.tsx` | `app/page.tsx` (ruta `/`) | Tienda pública completa: 7 secciones (inicio, catálogo, novedades, favoritos, ofertas, carrito, soporte), carrusel hero, carrito persistido en `localStorage oe_cart`, checkout real (crea cliente + venta + items en Supabase), login/registro con tabla `registros`, config dinámica desde `config_storefront`. Footer solo en Inicio/escritorio (24/07). |
+| `StorefrontFooter.tsx` | `Storefront.tsx` | Footer de la tienda (solo vista Inicio, solo escritorio): marca+redes+contacto, enlaces institucionales, newsletter (sin backend, solo valida formato), logos de paquetería, copyright. Config desde `config_storefront` (columnas `footer_*`, `youtube`). Nuevo 24/07/2026. |
+| `CategoriaSelector.tsx` | `ProductoModal.tsx`, `app/proveedores/page.tsx` | Selector de categoría en 2 niveles (padre + subcategoría opcional), con alta inline en cada nivel vía `onCrear`. Recibe el árbol ya armado con `construirArbolCategorias()`. Nuevo 24/07/2026. |
 | `ProductoModal.tsx` | `app/productos/page.tsx` | Modal alta/edición de producto. Drag & drop de imagen. Selección de categoría. Usa `convertToWebp` para preview local. |
 | `ClienteModal.tsx` | `app/clientes/page.tsx` | Modal alta/edición de cliente. Campos: nombre, email, teléfono, tag. |
 | `VentaModal.tsx` | `app/ventas/page.tsx` | Modal nueva venta. Errors inline (sin `alert()`). |
@@ -63,6 +65,7 @@
 | `uploadWebp.ts` | `convertToWebp()`, `captureFrameAsWebp()`, `uploadToSupabase()` | Conversión de imagen a WebP vía Canvas API (solo browser). Captura de frame de video. Upload a Supabase Storage. |
 | `pagination.ts` | `paginasVisibles(actual, total)` | Ventana de páginas a mostrar (1, última, actual±1, con "…") — evita listar cientos de botones con catálogos grandes. Usado en Productos, Clientes, Ventas. |
 | `pagos-config.ts` | `getPagosConfig()` (solo servidor) | Lee credenciales de BBVA/PayPal/Mercado Pago desde `config_pagos_secretos`; si no hay valor, cae a variables de entorno. Usado por las Route Handlers de `app/api/pagos/`. |
+| `categorias.ts` | `normalizarCategoria()`, `obtenerOcrearCategoriaId()`, `mapearCategorias()`, `mapearSubcategorias()`, `construirArbolCategorias()`, `crearCategoriaConPadre()` | Categorías padre/hijo (2 niveles): búsqueda/creación case-insensitive, jerarquía vía `parent_id`. Usado en Productos, Proveedores, Filtros, ImportCSVModal. Nuevo 24/07/2026. |
 
 ---
 
@@ -104,6 +107,7 @@ Un archivo por día, en orden cronológico. Cada entrada documenta un commit: ha
 | `seccion-05-07-2026.md` | 05/07/2026 | "Adiós nube-store": consolidación definitiva del nombre Order Express. |
 | `seccion-22-07-2026.md` | 22/07/2026 | Pasarelas de pago (Mercado Pago/PayPal/BBVA), unificación del header duplicado en la ficha de producto, submenú de Tienda en línea en el Sidebar, gestor de categorías en Filtros, carrusel con slides dinámicos. |
 | `seccion-23-07-2026.md` | 23/07/2026 | Roles `proveedor`/`basico` con self-signup, panel `/mi-cuenta` y "Administración" en proveedores, credenciales de pago configurables desde el panel (`config_pagos_secretos`), paginación real de Supabase (bug de límite 1000 filas), notificador general, limpieza definitiva del Excel 2023 a columnas propias de `productos`, ronda de ajustes de logo. |
+| `seccion-24-07-2026.md` | 24/07/2026 | Pestaña Proveedores en Clientes, botones extra de menú/topbar, fix de tarjetas estiradas en catálogo, perfil real en sidebar de tienda, "Editar perfil" (foto+nombre+contraseña) en los 3 paneles, Destacados del inicio editables, fix de límite 1000 filas en Dashboard, fix de flash de contenido viejo al recargar, **categorías padre/hijo** con `CategoriaSelector` y CSV jerárquico, fix de categorías duplicadas por mayúsculas, footer de la tienda (solo Inicio/escritorio) con su editor. |
 
 ---
 
@@ -124,6 +128,7 @@ Punto de entrada central que cruza cada **área de documentación** (columnas) c
 | [05/07](sesiones/seccion-05-07-2026.md) | ✓ | | | | ✓ | ✓ |
 | [22/07](sesiones/seccion-22-07-2026.md) | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | [23/07](sesiones/seccion-23-07-2026.md) | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| [24/07](sesiones/seccion-24-07-2026.md) | | ✓ | ✓ | | ✓ | |
 
 > La portada de la documentación por áreas está en [`Doc/documentacion/documento.md`](documentacion/documento.md).
 
