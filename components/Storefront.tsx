@@ -7,7 +7,7 @@ import {
   Home, ShoppingBag, Sparkles, Heart, BadgePercent, ShoppingCart, Headphones, LifeBuoy,
   Search, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Plus, SlidersHorizontal,
   Keyboard, Gamepad2, Speaker, Watch, Check, PackageCheck, ShieldCheck, Truck, Send,
-  Grid2x2, SearchX, MessageCircle, LogIn, type LucideIcon,
+  Grid2x2, SearchX, MessageCircle, LogIn, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isValidEmail } from '@/lib/validation'
@@ -25,7 +25,7 @@ const ICONS: Record<string, LucideIcon> = {
   'sliders-horizontal': SlidersHorizontal, keyboard: Keyboard, 'gamepad-2': Gamepad2,
   speaker: Speaker, watch: Watch, check: Check, 'package-check': PackageCheck,
   'shield-check': ShieldCheck, truck: Truck, send: Send, 'grid-2x2': Grid2x2,
-  'search-x': SearchX, 'message-circle': MessageCircle, 'log-in': LogIn,
+  'search-x': SearchX, 'message-circle': MessageCircle, 'log-in': LogIn, trash: Trash2,
 }
 function SupportAgentIcon() {
   return (
@@ -1147,9 +1147,11 @@ export default function Storefront() {
                     <strong>{formatPrice(priceValue(price) * quantity)}</strong>
                     <button
                       type="button"
-                      style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}
+                      aria-label="Quitar del carrito"
+                      title="Quitar del carrito"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6 }}
                       onClick={() => setCart(prev => prev.filter(i => i.product[0] !== title))}
-                    >Quitar</button>
+                    ><Ic n="trash" /></button>
                   </div>
                 </article>
               )
