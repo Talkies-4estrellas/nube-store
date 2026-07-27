@@ -49,6 +49,7 @@ function createMockClient() {
       getUser:     () => Promise.resolve({ data: { user: null }, error: null }),
       getSession:  () => Promise.resolve({ data: { session: null }, error: null }),
       signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: null }),
+      signInWithOAuth:    () => Promise.resolve({ data: { provider: '', url: null }, error: null }),
       signOut:     () => Promise.resolve({ error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     },
