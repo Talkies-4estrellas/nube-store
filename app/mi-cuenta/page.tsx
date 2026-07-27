@@ -98,6 +98,10 @@ export default function MiCuentaPage() {
   const [cargandoConv, setCargandoConv] = useState(false)
   const [conversacionActiva, setConversacionActiva] = useState<string | null>(null)
   const [contactando, setContactando] = useState<string | null>(null)
+  const [soporteAbierto, setSoporteAbierto] = useState(false)
+
+  const conversacionesProveedor = conversaciones.filter(c => c.tipo === 'cliente_proveedor')
+  const conversacionSoporte = conversaciones.find(c => c.tipo === 'cliente_admin') ?? null
 
   useEffect(() => {
     if (user) { setPerfilNombre(user.nombre); setAvatarPreview(user.avatar_url) }
@@ -112,7 +116,7 @@ export default function MiCuentaPage() {
   }
 
   useEffect(() => {
-    if (tab === 'mensajes') cargarConversaciones()
+    if (tab === 'mensajes' || tab === 'perfil') cargarConversaciones()
   }, [tab, user?.email])
 
   async function contactarProveedor(item: VentaItem, ventaId: string) {
@@ -137,10 +141,12 @@ export default function MiCuentaPage() {
 
   async function contactarSoporte() {
     if (!user?.email) return
-    const convId = await obtenerOcrearConversacionAdmin(supabase, { clienteEmail: user.email, clienteNombre: user.nombre })
-    if (!convId) return
-    await cargarConversaciones()
-    setConversacionActiva(convId)
+    if (!conversacionSoporte) {
+      const convId = await obtenerOcrearConversacionAdmin(supabase, { clienteEmail: user.email, clienteNombre: user.nombre })
+      if (!convId) return
+      await cargarConversaciones()
+    }
+    setSoporteAbierto(true)
   }
 
   function elegirAvatar(file: File | null) {
@@ -481,23 +487,18 @@ export default function MiCuentaPage() {
         {tab === 'mensajes' && (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 16, alignItems: 'start' }}>
             <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', overflow: 'hidden' }}>
-              <button type="button" onClick={contactarSoporte}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '14px 18px', background: '#eff6ff', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', color: BLUE, fontWeight: 700, fontSize: 13, textAlign: 'left' }}>
-                🎧 Contactar a soporte
-              </button>
               {cargandoConv ? (
                 <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Cargando conversaciones...</p>
-              ) : conversaciones.length === 0 ? (
-                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Todavía no tienes conversaciones. Escríbele a soporte o contacta a un proveedor desde "Mis pedidos".</p>
+              ) : conversacionesProveedor.length === 0 ? (
+                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Todavía no tienes conversaciones con proveedores. Contacta a uno desde "Mis pedidos".</p>
               ) : (
-                conversaciones.map(c => {
+                conversacionesProveedor.map(c => {
                   const activa = conversacionActiva === c.id
-                  const titulo = c.tipo === 'cliente_admin' ? 'Soporte Order Express' : (c.producto_nombre || c.proveedor_email || 'Proveedor')
                   return (
                     <button key={c.id} type="button" onClick={() => setConversacionActiva(c.id)}
                       style={{ width: '100%', display: 'block', padding: '12px 18px', background: activa ? '#f1f5ff' : 'none', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', textAlign: 'left' }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}</p>
-                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{c.tipo === 'cliente_admin' ? 'Soporte' : `Proveedor · ${c.proveedor_email}`}</p>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.producto_nombre || c.proveedor_email || 'Proveedor'}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{`Proveedor · ${c.proveedor_email}`}</p>
                     </button>
                   )
                 })
@@ -524,14 +525,15 @@ export default function MiCuentaPage() {
               )
             })() : (
               <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                Selecciona una conversación o contacta a soporte para empezar.
+                Selecciona una conversación para verla.
               </div>
             )}
           </div>
         )}
 
         {tab === 'perfil' && (
-          <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: '24px 28px', maxWidth: 480 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 480 }}>
+          <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: '24px 28px' }}>
             <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
               Perfil
             </p>
@@ -587,6 +589,28 @@ export default function MiCuentaPage() {
               style={{ background: perfilGuardado ? '#059669' : NAVY, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
               {guardandoPerfil ? 'Guardando...' : perfilGuardado ? '¡Guardado!' : 'Guardar cambios'}
             </button>
+          </div>
+
+          {/* Soporte — hilo único con el administrador */}
+          <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: '24px 28px' }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+              Soporte
+            </p>
+            <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 16px' }}>
+              ¿Alguna duda o comentario para el equipo de Order Express? Escríbenos directo.
+            </p>
+
+            {!soporteAbierto ? (
+              <button type="button" onClick={contactarSoporte}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#eff6ff', color: BLUE, border: 'none', padding: '11px 20px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                🎧 {conversacionSoporte ? 'Ver conversación con soporte' : 'Contactar a soporte'}
+              </button>
+            ) : conversacionSoporte ? (
+              <ChatPanel supabase={supabase} conversacionId={conversacionSoporte.id} remitenteTipo="cliente" remitenteEmail={user.email} remitenteNombre={user.nombre} accent={BLUE} />
+            ) : (
+              <p style={{ fontSize: 13, color: '#9ca3af' }}>Cargando...</p>
+            )}
+          </div>
           </div>
         )}
         </main>
