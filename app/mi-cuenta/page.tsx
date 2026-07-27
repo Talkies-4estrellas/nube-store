@@ -7,6 +7,8 @@ import { useAuth, ROLE_HOME } from '@/lib/auth-context'
 import { useSidebar } from '@/lib/sidebar-context'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp, uploadToSupabase } from '@/lib/uploadWebp'
+import ChatPanel from '@/components/ChatPanel'
+import { resolverProveedorDeVentaItem, obtenerOcrearConversacionProveedor, obtenerOcrearConversacionAdmin, type Conversacion } from '@/lib/mensajeria'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -60,7 +62,7 @@ type Cliente = {
   direccion: string | null; ciudad: string | null; codigo_postal: string | null
   estado_region: string | null; pais: string | null
 }
-type VentaItem = { id: string; nombre: string; precio: number; cantidad: number; subtotal: number }
+type VentaItem = { id: string; producto_id: string | null; nombre: string; precio: number; cantidad: number; subtotal: number }
 type Envio = { id: string; paqueteria: string; numero_guia: string | null; estado_envio: string }
 type Venta = { id: string; numero: number; estado: string; total: number; notas: string | null; created_at: string; items: VentaItem[]; envio: Envio | null }
 
@@ -70,7 +72,7 @@ export default function MiCuentaPage() {
   const { isMobile } = useSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const [tab, setTab] = useState<'pedidos' | 'datos' | 'perfil'>('pedidos')
+  const [tab, setTab] = useState<'pedidos' | 'datos' | 'mensajes' | 'perfil'>('pedidos')
   const [cargando, setCargando] = useState(true)
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [ventas, setVentas] = useState<Venta[]>([])
@@ -91,9 +93,55 @@ export default function MiCuentaPage() {
   const [perfilError, setPerfilError] = useState('')
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
+  // Mensajería (con proveedores por producto/pedido, y un hilo con soporte)
+  const [conversaciones, setConversaciones] = useState<Conversacion[]>([])
+  const [cargandoConv, setCargandoConv] = useState(false)
+  const [conversacionActiva, setConversacionActiva] = useState<string | null>(null)
+  const [contactando, setContactando] = useState<string | null>(null)
+
   useEffect(() => {
     if (user) { setPerfilNombre(user.nombre); setAvatarPreview(user.avatar_url) }
   }, [user])
+
+  async function cargarConversaciones() {
+    if (!user?.email) return
+    setCargandoConv(true)
+    const { data } = await supabase.from('conversaciones').select('*').eq('cliente_email', user.email).order('updated_at', { ascending: false })
+    setConversaciones(data ?? [])
+    setCargandoConv(false)
+  }
+
+  useEffect(() => {
+    if (tab === 'mensajes') cargarConversaciones()
+  }, [tab, user?.email])
+
+  async function contactarProveedor(item: VentaItem, ventaId: string) {
+    if (!user?.email || !item.producto_id) return
+    setContactando(item.id)
+    const proveedor = await resolverProveedorDeVentaItem(supabase, item.id)
+    if (!proveedor) {
+      setContactando(null)
+      alert('No se pudo identificar al proveedor de este producto.')
+      return
+    }
+    const convId = await obtenerOcrearConversacionProveedor(supabase, {
+      clienteEmail: user.email, clienteNombre: user.nombre,
+      proveedorEmail: proveedor.email, ventaId, ventaItemId: item.id, productoNombre: item.nombre,
+    })
+    setContactando(null)
+    if (!convId) { alert('No se pudo iniciar la conversación.'); return }
+    setTab('mensajes')
+    await cargarConversaciones()
+    setConversacionActiva(convId)
+  }
+
+  async function contactarSoporte() {
+    if (!user?.email) return
+    const convId = await obtenerOcrearConversacionAdmin(supabase, { clienteEmail: user.email, clienteNombre: user.nombre })
+    if (!convId) return
+    await cargarConversaciones()
+    setConversacionActiva(convId)
+  }
 
   function elegirAvatar(file: File | null) {
     if (!file) return
@@ -180,7 +228,7 @@ export default function MiCuentaPage() {
         if (vts && vts.length > 0) {
           const ids = vts.map(v => v.id)
           const [{ data: items }, { data: envios }] = await Promise.all([
-            supabase.from('venta_items').select('id, venta_id, nombre, precio, cantidad, subtotal').in('venta_id', ids),
+            supabase.from('venta_items').select('id, venta_id, producto_id, nombre, precio, cantidad, subtotal').in('venta_id', ids),
             supabase.from('envios').select('id, venta_id, paqueteria, numero_guia, estado_envio').in('venta_id', ids),
           ])
           if (!cancelado) {
@@ -217,7 +265,7 @@ export default function MiCuentaPage() {
     )
   }
 
-  const navItem = (id: 'pedidos' | 'datos' | 'perfil', label: string, emoji: string) => {
+  const navItem = (id: 'pedidos' | 'datos' | 'mensajes' | 'perfil', label: string, emoji: string) => {
     const active = tab === id
     return (
       <button onClick={() => setTab(id)} style={{
@@ -265,6 +313,7 @@ export default function MiCuentaPage() {
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>CUENTA</span>
           {navItem('pedidos', 'Mis pedidos', '📦')}
           {navItem('datos', 'Datos de facturación', '🧾')}
+          {navItem('mensajes', 'Mensajes', '💬')}
           {navItem('perfil', 'Configuración', '⚙️')}
         </nav>
 
@@ -302,7 +351,7 @@ export default function MiCuentaPage() {
               style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 32, width: 'auto' }} />
           )}
           <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'pedidos' ? 'Mis pedidos' : tab === 'datos' ? 'Datos de facturación' : 'Configuración'}
+            {tab === 'pedidos' ? 'Mis pedidos' : tab === 'datos' ? 'Datos de facturación' : tab === 'mensajes' ? 'Mensajes' : 'Configuración'}
           </h1>
         </header>
 
@@ -346,8 +395,14 @@ export default function MiCuentaPage() {
                       <div style={{ padding: '0 24px 20px' }}>
                         <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px', marginBottom: v.envio ? 10 : 0 }}>
                           {v.items.map(it => (
-                            <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#374151', padding: '3px 0' }}>
-                              <span>{it.nombre} ×{it.cantidad}</span>
+                            <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#374151', padding: '3px 0', gap: 8 }}>
+                              <span style={{ flex: 1 }}>{it.nombre} ×{it.cantidad}</span>
+                              {it.producto_id && (
+                                <button type="button" onClick={() => contactarProveedor(it, v.id)} disabled={contactando === it.id}
+                                  style={{ background: 'none', border: 'none', color: BLUE, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', padding: 0 }}>
+                                  {contactando === it.id ? 'Buscando proveedor...' : '💬 Contactar al proveedor'}
+                                </button>
+                              )}
                               <span style={{ fontWeight: 600 }}>{formatPrice(it.subtotal)}</span>
                             </div>
                           ))}
@@ -420,6 +475,42 @@ export default function MiCuentaPage() {
               style={{ background: guardado ? '#059669' : NAVY, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
               {guardando ? 'Guardando...' : guardado ? '¡Guardado!' : 'Guardar datos'}
             </button>
+          </div>
+        )}
+
+        {tab === 'mensajes' && (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 16, alignItems: 'start' }}>
+            <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', overflow: 'hidden' }}>
+              <button type="button" onClick={contactarSoporte}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '14px 18px', background: '#eff6ff', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', color: BLUE, fontWeight: 700, fontSize: 13, textAlign: 'left' }}>
+                🎧 Contactar a soporte
+              </button>
+              {cargandoConv ? (
+                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Cargando conversaciones...</p>
+              ) : conversaciones.length === 0 ? (
+                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Todavía no tienes conversaciones. Escríbele a soporte o contacta a un proveedor desde "Mis pedidos".</p>
+              ) : (
+                conversaciones.map(c => {
+                  const activa = conversacionActiva === c.id
+                  const titulo = c.tipo === 'cliente_admin' ? 'Soporte Order Express' : (c.producto_nombre || c.proveedor_email || 'Proveedor')
+                  return (
+                    <button key={c.id} type="button" onClick={() => setConversacionActiva(c.id)}
+                      style={{ width: '100%', display: 'block', padding: '12px 18px', background: activa ? '#f1f5ff' : 'none', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', textAlign: 'left' }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{c.tipo === 'cliente_admin' ? 'Soporte' : `Proveedor · ${c.proveedor_email}`}</p>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+
+            {conversacionActiva ? (
+              <ChatPanel supabase={supabase} conversacionId={conversacionActiva} remitenteTipo="cliente" remitenteEmail={user.email} remitenteNombre={user.nombre} accent={NAVY} />
+            ) : (
+              <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                Selecciona una conversación o contacta a soporte para empezar.
+              </div>
+            )}
           </div>
         )}
 

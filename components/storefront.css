@@ -1980,11 +1980,6 @@
 }
 
 @media (max-width: 1180px) {
-  /* Footer: por ahora solo se prueba en escritorio. */
-  .oe-store .oe-footer {
-    display: none;
-  }
-
   /* La lista larga de botones de categoría (uno por cada categoría, con
      conteo) ocupa demasiado espacio en móvil y ya existe el <select>
      desplegable justo arriba que hace lo mismo. Se oculta solo la lista;
@@ -2562,4 +2557,45 @@
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
   text-align: center;
+}
+
+/* Footer en móvil/tablet — mismas reglas base de arriba, ajustadas. Van
+   después de las reglas base a propósito: al tener igual especificidad
+   (.oe-store .oe-footer...), si quedaran antes en el archivo el bloque base
+   las pisaría sin importar el media query. */
+@media (max-width: 1180px) {
+  /* El sidebar en esta franja ya es la barra superior sticky (no fixed),
+     así que no hay riesgo de que tape el footer — solo se acomoda a 2
+     columnas porque 3 ya no caben cómodas. */
+  .oe-store .oe-footer-top {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 840px) {
+  /* El sangrado lateral/inferior debe cancelar el padding de .page-shell
+     de esta franja (14px/34px), no el de escritorio (32px/42px). */
+  .oe-store .oe-footer {
+    margin: 20px -14px -34px;
+    padding: 24px 14px 0;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .oe-store .oe-footer-top {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding-bottom: 16px;
+  }
+
+  .oe-store .oe-footer-newsletter {
+    flex-direction: column;
+  }
+
+  .oe-store .oe-footer-newsletter button {
+    width: 100%;
+  }
+
+  .oe-store .oe-footer-logo {
+    height: 40px;
+  }
 }

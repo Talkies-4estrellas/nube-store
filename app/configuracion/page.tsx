@@ -5,8 +5,10 @@ import Icon from '@/components/Icon'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 import { convertToWebp, uploadToSupabase } from '@/lib/uploadWebp'
+import ChatPanel from '@/components/ChatPanel'
+import type { Conversacion } from '@/lib/mensajeria'
 
-type Section = 'perfil' | 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 'usuarios' | 'solicitudes'
+type Section = 'perfil' | 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 'usuarios' | 'solicitudes' | 'comentarios'
 
 type UserRow = { id: string; user_id: string; nombre: string; role: string; created_at: string; email?: string }
 type Solicitud = {
@@ -35,6 +37,7 @@ const ALL_NAV: { id: Section; label: string; icon: string; adminOnly?: boolean }
   { id: 'notificaciones', label: 'Notificaciones',         icon: 'warning'    },
   { id: 'solicitudes',    label: 'Solicitudes proveedor',  icon: 'box',       adminOnly: true },
   { id: 'usuarios',       label: 'Usuarios y roles',       icon: 'settings',  adminOnly: true },
+  { id: 'comentarios',    label: 'Comentarios',            icon: 'clipboard', adminOnly: true },
 ]
 
 const monedas = ['MXN — Peso mexicano', 'USD — Dólar estadounidense', 'ARS — Peso argentino', 'COP — Peso colombiano', 'CLP — Peso chileno']
@@ -139,7 +142,20 @@ export default function ConfiguracionPage() {
   useEffect(() => {
     if (section === 'usuarios') fetchUsuarios()
     if (section === 'solicitudes') fetchSolicitudes()
+    if (section === 'comentarios') fetchComentarios()
   }, [section])
+
+  // ---- Comentarios (mensajería cliente ↔ admin) ----
+  const [comentarios, setComentarios] = useState<Conversacion[]>([])
+  const [cargandoComentarios, setCargandoComentarios] = useState(false)
+  const [comentarioActivo, setComentarioActivo] = useState<string | null>(null)
+
+  async function fetchComentarios() {
+    setCargandoComentarios(true)
+    const { data } = await supabase.from('conversaciones').select('*').eq('tipo', 'cliente_admin').order('updated_at', { ascending: false })
+    setComentarios(data ?? [])
+    setCargandoComentarios(false)
+  }
 
   async function fetchUsuarios() {
     setLoadingUsuarios(true)
@@ -603,7 +619,38 @@ export default function ConfiguracionPage() {
           </Card>
         )}
 
-        {section !== 'usuarios' && section !== 'solicitudes' && section !== 'perfil' && (
+        {section === 'comentarios' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16, alignItems: 'start' }}>
+            <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+              {cargandoComentarios ? (
+                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Cargando...</p>
+              ) : comentarios.length === 0 ? (
+                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Ningún cliente te ha escrito todavía.</p>
+              ) : (
+                comentarios.map(c => {
+                  const activo = comentarioActivo === c.id
+                  return (
+                    <button key={c.id} type="button" onClick={() => setComentarioActivo(c.id)}
+                      style={{ width: '100%', display: 'block', padding: '12px 18px', background: activo ? '#eff6ff' : 'none', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', textAlign: 'left' }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente_nombre || c.cliente_email}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente_email}</p>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+
+            {comentarioActivo && user ? (
+              <ChatPanel supabase={supabase} conversacionId={comentarioActivo} remitenteTipo="admin" remitenteEmail={user.email} remitenteNombre={user.nombre} accent="#0049ff" />
+            ) : (
+              <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                Selecciona una conversación para verla.
+              </div>
+            )}
+          </div>
+        )}
+
+        {section !== 'usuarios' && section !== 'solicitudes' && section !== 'perfil' && section !== 'comentarios' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button onClick={handleSave} style={{ background: saved ? '#059669' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'background 0.2s' }}>
             {saved ? '¡Guardado!' : 'Guardar cambios'}

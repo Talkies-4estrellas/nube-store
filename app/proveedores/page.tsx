@@ -9,6 +9,8 @@ import { useSidebar } from '@/lib/sidebar-context'
 import { useAuth } from '@/lib/auth-context'
 import { construirArbolCategorias, crearCategoriaConPadre, type CategoriaPlana } from '@/lib/categorias'
 import CategoriaSelector from '@/components/CategoriaSelector'
+import ChatPanel from '@/components/ChatPanel'
+import type { Conversacion } from '@/lib/mensajeria'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -118,9 +120,21 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 export default function ProveedoresPage() {
   const { user, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
-  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'ajustes'>('registro')
+  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'ajustes'>('registro')
   const { isMobile } = useSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Mensajería con clientes
+  const [conversaciones, setConversaciones] = useState<Conversacion[]>([])
+  const [cargandoConv, setCargandoConv] = useState(false)
+  const [conversacionActiva, setConversacionActiva] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (tab !== 'mensajes' || !user?.email) return
+    setCargandoConv(true)
+    supabase.from('conversaciones').select('*').eq('proveedor_email', user.email).order('updated_at', { ascending: false })
+      .then(({ data }) => { setConversaciones(data ?? []); setCargandoConv(false) })
+  }, [tab, user?.email])
   const [savedEmail, setSavedEmail] = useState('')
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -682,7 +696,7 @@ export default function ProveedoresPage() {
 
   const catNombre = (id: string) => categorias.find(c => String(c.id) === id)?.nombre ?? '—'
 
-  const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'ajustes', label: string, emoji: string) => {
+  const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'ajustes', label: string, emoji: string) => {
     const active = tab === id
     return (
       <button onClick={() => {
@@ -747,6 +761,7 @@ export default function ProveedoresPage() {
           {navItem('registro',  'Registrar producto', '📦')}
           {navItem('historial', 'Mis solicitudes',    '🔍')}
           {navItem('misEnviados', 'Mis productos', '📋')}
+          {navItem('mensajes', 'Mensajes', '💬')}
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '20px 14px 6px', display: 'block' }}>ACCESO</span>
           {navItem('ajustes', 'Ajustes', '⚙️')}
         </nav>
@@ -788,7 +803,7 @@ export default function ProveedoresPage() {
               style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 32, width: 'auto' }} />
           )}
           <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? 'Administración' : 'Ajustes'}
+            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? 'Administración' : tab === 'mensajes' ? 'Mensajes' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
             <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1654,6 +1669,38 @@ export default function ProveedoresPage() {
             </div>
           )
         })()}
+
+        {/* ---- Tab: Mensajes ---- */}
+        {tab === 'mensajes' && user && (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 16, alignItems: 'start' }}>
+            <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', overflow: 'hidden' }}>
+              {cargandoConv ? (
+                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Cargando conversaciones...</p>
+              ) : conversaciones.length === 0 ? (
+                <p style={{ padding: 20, fontSize: 13, color: '#9ca3af' }}>Todavía no tienes conversaciones. Cuando un cliente te escriba sobre uno de tus productos, aparecerá aquí.</p>
+              ) : (
+                conversaciones.map(c => {
+                  const activa = conversacionActiva === c.id
+                  return (
+                    <button key={c.id} type="button" onClick={() => setConversacionActiva(c.id)}
+                      style={{ width: '100%', display: 'block', padding: '12px 18px', background: activa ? '#f1f5ff' : 'none', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', textAlign: 'left' }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.producto_nombre || 'Producto'}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente_nombre || c.cliente_email}</p>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+
+            {conversacionActiva ? (
+              <ChatPanel supabase={supabase} conversacionId={conversacionActiva} remitenteTipo="proveedor" remitenteEmail={user.email} remitenteNombre={user.nombre} accent={NAVY} />
+            ) : (
+              <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                Selecciona una conversación para verla.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ---- Tab: Ajustes ---- */}
         {tab === 'ajustes' && (
