@@ -11,6 +11,7 @@ export type Conversacion = {
   proveedor_email: string | null
   venta_id: string | null
   venta_item_id: string | null
+  producto_id: string | null
   producto_nombre: string | null
   created_at: string
   updated_at: string
@@ -86,6 +87,57 @@ export async function obtenerOcrearConversacionProveedor(
       proveedor_email: params.proveedorEmail,
       venta_id: params.ventaId,
       venta_item_id: params.ventaItemId,
+      producto_nombre: params.productoNombre,
+    })
+    .select('id')
+    .single()
+  if (error) return null
+  return nueva.id
+}
+
+/**
+ * A partir de un producto (sin depender de un pedido ya hecho — ej. desde la
+ * ficha pública del producto), busca qué proveedor lo subió, mismo mecanismo
+ * de `resolverProveedorDeVentaItem` pero arrancando directo del SKU.
+ */
+export async function resolverProveedorDeProducto(
+  supabase: SupabaseClient,
+  sku: string,
+): Promise<{ email: string; nombre: string } | null> {
+  const { data: solicitud } = await supabase
+    .from('solicitudes_productos')
+    .select('proveedor_email, proveedor_nombre')
+    .eq('producto_sku', sku)
+    .eq('estado', 'aprobado')
+    .maybeSingle()
+  if (!solicitud?.proveedor_email) return null
+  return { email: solicitud.proveedor_email, nombre: solicitud.proveedor_nombre ?? solicitud.proveedor_email }
+}
+
+/** Igual que `obtenerOcrearConversacionProveedor`, pero arrancando desde un producto suelto (sin pedido de por medio). */
+export async function obtenerOcrearConversacionProveedorProducto(
+  supabase: SupabaseClient,
+  params: { clienteEmail: string; clienteNombre: string; proveedorEmail: string; productoId: string; productoNombre: string },
+): Promise<string | null> {
+  const { data: existente } = await supabase
+    .from('conversaciones')
+    .select('id')
+    .eq('tipo', 'cliente_proveedor')
+    .eq('cliente_email', params.clienteEmail)
+    .eq('proveedor_email', params.proveedorEmail)
+    .eq('producto_id', params.productoId)
+    .is('venta_item_id', null)
+    .maybeSingle()
+  if (existente) return existente.id
+
+  const { data: nueva, error } = await supabase
+    .from('conversaciones')
+    .insert({
+      tipo: 'cliente_proveedor',
+      cliente_email: params.clienteEmail,
+      cliente_nombre: params.clienteNombre,
+      proveedor_email: params.proveedorEmail,
+      producto_id: params.productoId,
       producto_nombre: params.productoNombre,
     })
     .select('id')

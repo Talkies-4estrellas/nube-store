@@ -10,6 +10,7 @@ create table if not exists conversaciones (
   proveedor_email text,                                    -- solo para tipo = 'cliente_proveedor'
   venta_id        uuid references ventas(id) on delete set null,
   venta_item_id   uuid references venta_items(id) on delete set null,
+  producto_id     uuid references productos(id) on delete set null,  -- conversación iniciada desde la ficha del producto (sin pedido de por medio)
   producto_nombre text,                                    -- snapshot, para mostrar contexto aunque cambie el pedido
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
@@ -20,9 +21,16 @@ create unique index if not exists idx_conv_admin_unico
   on conversaciones (cliente_email) where tipo = 'cliente_admin';
 
 -- Evita duplicar el hilo si el cliente vuelve a dar clic en "Contactar proveedor"
--- del mismo producto/pedido
-create unique index if not exists idx_conv_prov_unico
-  on conversaciones (cliente_email, proveedor_email, venta_item_id) where tipo = 'cliente_proveedor';
+-- del mismo producto dentro de un pedido ya hecho
+create unique index if not exists idx_conv_prov_unico_pedido
+  on conversaciones (cliente_email, proveedor_email, venta_item_id)
+  where tipo = 'cliente_proveedor' and venta_item_id is not null;
+
+-- Mismo caso pero cuando el hilo nace desde la ficha pública del producto
+-- (sin pedido todavía)
+create unique index if not exists idx_conv_prov_unico_producto
+  on conversaciones (cliente_email, proveedor_email, producto_id)
+  where tipo = 'cliente_proveedor' and venta_item_id is null and producto_id is not null;
 
 create index if not exists idx_conv_cliente   on conversaciones(cliente_email);
 create index if not exists idx_conv_proveedor on conversaciones(proveedor_email);

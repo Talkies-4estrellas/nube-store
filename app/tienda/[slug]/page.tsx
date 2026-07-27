@@ -5,6 +5,9 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { use } from 'react'
 import { ArrowLeft, Search, ShoppingCart } from 'lucide-react'
+import { useAuth } from '@/lib/auth-context'
+import ChatPanel from '@/components/ChatPanel'
+import { resolverProveedorDeProducto, obtenerOcrearConversacionProveedorProducto } from '@/lib/mensajeria'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -41,8 +44,13 @@ function SkeletonBox({ w, h, r = 8 }: { w: string; h: number; r?: number }) {
 export default function TiendaProductoPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const sku = slug.toUpperCase()
+  const { user } = useAuth()
 
   const [producto, setProducto] = useState<Producto | null>(null)
+  const [chatAbierto, setChatAbierto] = useState(false)
+  const [conversacionId, setConversacionId] = useState<string | null>(null)
+  const [contactando, setContactando] = useState(false)
+  const [errorContacto, setErrorContacto] = useState('')
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [added, setAdded] = useState(false)
@@ -116,6 +124,30 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
       setAdded(true)
       setTimeout(() => setAdded(false), 2000)
     } catch {}
+  }
+
+  async function contactarProveedor() {
+    if (!producto) return
+    if (!user?.email) {
+      window.location.href = `/login?redirect=${encodeURIComponent(`/tienda/${sku}`)}`
+      return
+    }
+    setErrorContacto('')
+    setContactando(true)
+    const proveedor = await resolverProveedorDeProducto(supabase, producto.sku)
+    if (!proveedor) {
+      setContactando(false)
+      setErrorContacto('No se pudo identificar al proveedor de este producto.')
+      return
+    }
+    const convId = await obtenerOcrearConversacionProveedorProducto(supabase, {
+      clienteEmail: user.email, clienteNombre: user.nombre,
+      proveedorEmail: proveedor.email, productoId: producto.id, productoNombre: producto.nombre,
+    })
+    setContactando(false)
+    if (!convId) { setErrorContacto('No se pudo iniciar la conversación.'); return }
+    setConversacionId(convId)
+    setChatAbierto(true)
   }
 
   // Todas las imágenes del producto (principal + extras)
@@ -383,6 +415,15 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
                   <Link href="/" style={{ display: 'block', textAlign: 'center', background: `${NAVY}10`, color: NAVY, border: `1.5px solid ${NAVY}20`, padding: '13px 0', borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
                     Ver más productos
                   </Link>
+                  <button onClick={contactarProveedor} disabled={contactando} style={{
+                    background: 'none', color: NAVY, border: `1.5px solid #e5e7eb`, padding: '12px 0', borderRadius: 12,
+                    fontWeight: 700, fontSize: 14, cursor: contactando ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}>
+                    💬 {contactando ? 'Buscando proveedor...' : 'Contactar al proveedor'}
+                  </button>
+                  {errorContacto && (
+                    <p style={{ fontSize: 12, color: '#dc2626', textAlign: 'center', margin: 0 }}>{errorContacto}</p>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -449,6 +490,19 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
       <footer style={{ background: NAVY, padding: '20px 32px', textAlign: 'center', marginTop: 60 }}>
         <p style={{ color: '#ffffff50', fontSize: 12, margin: 0 }}>© 2026 OrderExpress · Todos los derechos reservados</p>
       </footer>
+
+      {chatAbierto && conversacionId && user && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20 }}
+          onClick={e => { if (e.target === e.currentTarget) setChatAbierto(false) }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 460, boxShadow: '0 24px 64px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #f3f4f6' }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: NAVY }}>Chat con el proveedor</p>
+              <button onClick={() => setChatAbierto(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af' }}>×</button>
+            </div>
+            <ChatPanel supabase={supabase} conversacionId={conversacionId} remitenteTipo="cliente" remitenteEmail={user.email} remitenteNombre={user.nombre} accent={PINK} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
