@@ -504,9 +504,25 @@ export default function MiCuentaPage() {
               )}
             </div>
 
-            {conversacionActiva ? (
-              <ChatPanel supabase={supabase} conversacionId={conversacionActiva} remitenteTipo="cliente" remitenteEmail={user.email} remitenteNombre={user.nombre} accent={NAVY} />
-            ) : (
+            {conversacionActiva ? (() => {
+              const c = conversaciones.find(x => x.id === conversacionActiva)
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {c && (
+                    <div style={{ background: '#fff', borderRadius: 12, padding: '10px 16px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>{c.tipo === 'cliente_admin' ? 'Soporte Order Express' : (c.proveedor_email || 'Proveedor')}</span>
+                      {c.tipo === 'cliente_proveedor' && (
+                        <>
+                          <span style={{ fontSize: 12, color: '#9ca3af' }}>· sobre</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.producto_nombre || 'Producto'}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <ChatPanel supabase={supabase} conversacionId={conversacionActiva} remitenteTipo="cliente" remitenteEmail={user.email} remitenteNombre={user.nombre} accent={NAVY} />
+                </div>
+              )
+            })() : (
               <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
                 Selecciona una conversación o contacta a soporte para empezar.
               </div>
