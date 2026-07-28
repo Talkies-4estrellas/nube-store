@@ -14,13 +14,50 @@ const NAVY = '#252855'
 const PINK = '#e7226d'
 const BLUE = '#0049ff'
 
-const TRACKING_URL: Record<string, (guia: string) => string> = {
-  'DHL':          g => `https://www.dhl.com/mx-es/home/rastreo.html?tracking-id=${g}`,
-  'FedEx':        g => `https://www.fedex.com/apps/fedextrack/?trknbr=${g}`,
-  'Estafeta':     g => `https://rastreo.estafeta.com/Index.aspx?internationalAirGuide=${g}`,
-  'Redpack':      g => `https://www.redpack.com.mx/es/rastreo/?guias=${g}`,
-  'J&T Express':  g => `https://www.jtexpress.mx/trajectoryQuery?expressList=${g}`,
-  'Paquetexpress':g => `https://www.paquetexpress.com.mx/rastreo/?guide=${g}`,
+const PASOS_RASTREO = [
+  { key: 'Pendiente',   label: 'Pedido recibido', icon: '🧾' },
+  { key: 'En tránsito', label: 'En camino',        icon: '🚚' },
+  { key: 'Entregado',   label: 'Entregado',        icon: '📦' },
+] as const
+
+function pasoActual(estado: string) {
+  if (estado === 'En camino') return 1
+  const idx = PASOS_RASTREO.findIndex(p => p.key === estado)
+  return idx === -1 ? 0 : idx
+}
+
+// Mapa de rastreo — vista de prueba con mapa real (OpenStreetMap, sin
+// API key). El origen/destino son coordenadas de ejemplo (CDMX); el
+// marcador se mueve entre ambos puntos según el progreso del envío —
+// todavía no está conectado al GPS real del transportista.
+// Origen: centro de Maravatío, Michoacán (sede de Order Express)
+const MAPA_ORIGEN = { lat: 19.8926, lon: -100.4433 }
+const MAPA_DESTINO = { lat: 19.9200, lon: -100.4100 }
+
+function MapaRastreo({ progreso }: { progreso: number }) {
+  const lat = MAPA_ORIGEN.lat + (MAPA_DESTINO.lat - MAPA_ORIGEN.lat) * progreso
+  const lon = MAPA_ORIGEN.lon + (MAPA_DESTINO.lon - MAPA_ORIGEN.lon) * progreso
+  const pad = 0.02
+  const minLat = Math.min(MAPA_ORIGEN.lat, MAPA_DESTINO.lat) - pad
+  const maxLat = Math.max(MAPA_ORIGEN.lat, MAPA_DESTINO.lat) + pad
+  const minLon = Math.min(MAPA_ORIGEN.lon, MAPA_DESTINO.lon) - pad
+  const maxLon = Math.max(MAPA_ORIGEN.lon, MAPA_DESTINO.lon) + pad
+  const bbox = `${minLon},${minLat},${maxLon},${maxLat}`
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lon}`
+
+  return (
+    <div style={{ marginTop: 14, borderRadius: 10, overflow: 'hidden', border: '1px solid #bfdbfe' }}>
+      <iframe
+        title="Mapa de rastreo"
+        src={src}
+        style={{ width: '100%', height: 220, border: 'none', display: 'block' }}
+        loading="lazy"
+      />
+      <p style={{ fontSize: 10, color: '#9ca3af', margin: 0, padding: '6px 10px', background: '#fff', borderTop: '1px solid #eef2ff' }}>
+        Vista de prueba (OpenStreetMap) — la ubicación es de ejemplo, todavía no está conectada al GPS real del transportista.
+      </p>
+    </div>
+  )
 }
 
 const ESTADO_VENTA_STYLE: Record<string, { bg: string; text: string }> = {
@@ -63,7 +100,7 @@ type Cliente = {
   estado_region: string | null; pais: string | null
 }
 type VentaItem = { id: string; producto_id: string | null; nombre: string; precio: number; cantidad: number; subtotal: number }
-type Envio = { id: string; paqueteria: string; numero_guia: string | null; estado_envio: string }
+type Envio = { id: string; paqueteria: string; numero_guia: string | null; estado_envio: string; fecha_envio: string | null; fecha_entrega: string | null }
 type Venta = { id: string; numero: number; estado: string; total: number; notas: string | null; created_at: string; items: VentaItem[]; envio: Envio | null }
 
 export default function MiCuentaPage() {
@@ -235,7 +272,7 @@ export default function MiCuentaPage() {
           const ids = vts.map(v => v.id)
           const [{ data: items }, { data: envios }] = await Promise.all([
             supabase.from('venta_items').select('id, venta_id, producto_id, nombre, precio, cantidad, subtotal').in('venta_id', ids),
-            supabase.from('envios').select('id, venta_id, paqueteria, numero_guia, estado_envio').in('venta_id', ids),
+            supabase.from('envios').select('id, venta_id, paqueteria, numero_guia, estado_envio, fecha_envio, fecha_entrega').in('venta_id', ids),
           ])
           if (!cancelado) {
             setVentas(vts.map(v => ({
@@ -383,7 +420,6 @@ export default function MiCuentaPage() {
             ) : (
               ventas.map((v, i) => {
                 const abierta = ventaAbierta === v.id
-                const tracking = v.envio?.numero_guia && TRACKING_URL[v.envio.paqueteria]
                 return (
                   <div key={v.id} style={{ borderBottom: i < ventas.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
                     <button onClick={() => setVentaAbierta(abierta ? null : v.id)}
@@ -416,19 +452,51 @@ export default function MiCuentaPage() {
                         </div>
 
                         {v.envio && (
-                          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 14px' }}>
+                          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '14px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                               <span style={{ fontSize: 12, fontWeight: 800, color: NAVY }}>📍 Seguimiento de envío</span>
                               {badge(v.envio.estado_envio, ESTADO_ENVIO_STYLE)}
                             </div>
-                            <p style={{ fontSize: 12, color: '#374151', margin: 0 }}>
+                            <p style={{ fontSize: 12, color: '#374151', margin: '0 0 12px' }}>
                               {v.envio.paqueteria}{v.envio.numero_guia ? ` · Guía ${v.envio.numero_guia}` : ' · Sin número de guía todavía'}
                             </p>
-                            {tracking && (
-                              <a href={TRACKING_URL[v.envio.paqueteria](v.envio.numero_guia!)} target="_blank" rel="noopener noreferrer"
-                                style={{ display: 'inline-block', marginTop: 6, fontSize: 12, fontWeight: 700, color: BLUE, textDecoration: 'none' }}>
-                                Rastrear paquete ↗
-                              </a>
+
+                            {v.envio.estado_envio === 'Cancelado' || v.envio.estado_envio === 'Devuelto' ? (
+                              <p style={{ fontSize: 12, fontWeight: 700, color: '#991b1b', margin: 0 }}>
+                                {v.envio.estado_envio === 'Cancelado' ? '❌ El envío fue cancelado.' : '↩️ El paquete fue devuelto.'}
+                              </p>
+                            ) : (
+                              <div style={{ display: 'flex' }}>
+                                {PASOS_RASTREO.map((paso, idx) => {
+                                  const actual = pasoActual(v.envio!.estado_envio)
+                                  const completado = idx <= actual
+                                  const fecha = idx === 1 ? v.envio!.fecha_envio : idx === 2 ? v.envio!.fecha_entrega : v.created_at
+                                  return (
+                                    <div key={paso.key} style={{ flex: 1, textAlign: 'center', position: 'relative' }}>
+                                      {idx > 0 && (
+                                        <div style={{ position: 'absolute', top: 15, left: '-50%', width: '100%', height: 2, background: idx <= actual ? BLUE : '#dbeafe', zIndex: 0 }} />
+                                      )}
+                                      <div style={{
+                                        width: 30, height: 30, borderRadius: '50%', margin: '0 auto', position: 'relative', zIndex: 1,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
+                                        background: completado ? BLUE : '#fff', border: `2px solid ${completado ? BLUE : '#bfdbfe'}`,
+                                      }}>
+                                        <span style={{ filter: completado ? 'grayscale(0)' : 'grayscale(1) opacity(0.6)' }}>{paso.icon}</span>
+                                      </div>
+                                      <p style={{ fontSize: 10, fontWeight: 700, color: completado ? NAVY : '#9ca3af', margin: '6px 0 0' }}>{paso.label}</p>
+                                      {completado && fecha && (
+                                        <p style={{ fontSize: 9, color: '#9ca3af', margin: '1px 0 0' }}>
+                                          {new Date(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {v.envio.estado_envio !== 'Cancelado' && v.envio.estado_envio !== 'Devuelto' && (
+                              <MapaRastreo progreso={pasoActual(v.envio.estado_envio) / (PASOS_RASTREO.length - 1)} />
                             )}
                           </div>
                         )}
