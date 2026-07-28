@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import Icon from '@/components/Icon'
+import { fetchPaquetesPorVentaItems } from '@/lib/paquetes'
 
 const PAQUETERIAS = ['DHL', 'FedEx', 'Estafeta', 'Redpack', 'J&T Express', 'Paquetexpress']
 
@@ -48,16 +49,92 @@ type VentaPagada = {
   clientes: { nombre: string } | null
 }
 
+type PaqueteFila = {
+  itemId: string
+  productoNombre: string
+  productoSku: string
+  proveedorNombre: string
+  proveedorEmail: string
+  ventaNumero: number
+  ventaFecha: string
+  cantidad: number
+  altoCm: number | null
+  anchoCm: number | null
+  pesoKg: number | null
+  actualizado: string | null
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export default function EnvioNubePage() {
-  const [tab, setTab] = useState<'pendientes' | 'activos'>('pendientes')
+  const [tab, setTab] = useState<'pendientes' | 'activos' | 'paquetes'>('pendientes')
   const [envios, setEnvios] = useState<Envio[]>([])
   const [ventasPagadas, setVentasPagadas] = useState<VentaPagada[]>([])
   const [loading, setLoading] = useState(true)
   const [actualizando, setActualizando] = useState<string | null>(null)
+
+  // Tab: Paquetes por proveedor
+  const [paquetes, setPaquetes] = useState<PaqueteFila[]>([])
+  const [loadingPaquetes, setLoadingPaquetes] = useState(false)
+  const [proveedorFiltroPaquetes, setProveedorFiltroPaquetes] = useState('')
+
+  async function fetchPaquetes() {
+    setLoadingPaquetes(true)
+    const { data: aprobadas } = await supabase
+      .from('solicitudes_productos').select('producto_sku, proveedor_email, proveedor_nombre, proveedor_empresa')
+      .eq('estado', 'aprobado')
+    const proveedorPorSku = new Map(
+      (aprobadas ?? []).map(s => [s.producto_sku, { email: s.proveedor_email, nombre: s.proveedor_empresa || s.proveedor_nombre }])
+    )
+    const skus = [...proveedorPorSku.keys()]
+    if (skus.length === 0) { setPaquetes([]); setLoadingPaquetes(false); return }
+
+    const { data: productos } = await supabase.from('productos').select('id, nombre, sku').in('sku', skus)
+    const productoPorId = new Map((productos ?? []).map(p => [p.id, p]))
+    const productoIds = (productos ?? []).map(p => p.id)
+    if (productoIds.length === 0) { setPaquetes([]); setLoadingPaquetes(false); return }
+
+    const { data: items } = await supabase
+      .from('venta_items').select('id, venta_id, producto_id, cantidad').in('producto_id', productoIds)
+    if (!items || items.length === 0) { setPaquetes([]); setLoadingPaquetes(false); return }
+
+    const ventaIds = [...new Set(items.map(i => i.venta_id))]
+    const [{ data: ventas }, paquetesPorItem] = await Promise.all([
+      supabase.from('ventas').select('id, numero, created_at').in('id', ventaIds),
+      fetchPaquetesPorVentaItems(items.map(i => i.id)),
+    ])
+    const ventaPorId = new Map((ventas ?? []).map(v => [v.id, v]))
+
+    const filas: PaqueteFila[] = items
+      .map(item => {
+        const producto = productoPorId.get(item.producto_id)
+        const venta = ventaPorId.get(item.venta_id)
+        const proveedor = producto ? proveedorPorSku.get(producto.sku) : null
+        const paquete = paquetesPorItem.get(item.id)
+        if (!producto || !venta || !proveedor) return null
+        return {
+          itemId: item.id,
+          productoNombre: producto.nombre,
+          productoSku: producto.sku,
+          proveedorNombre: proveedor.nombre,
+          proveedorEmail: proveedor.email,
+          ventaNumero: venta.numero,
+          ventaFecha: venta.created_at,
+          cantidad: item.cantidad,
+          altoCm: paquete?.alto_cm ?? null,
+          anchoCm: paquete?.ancho_cm ?? null,
+          pesoKg: paquete?.peso_kg ?? null,
+          actualizado: paquete?.updated_at ?? null,
+        }
+      })
+      .filter((f): f is PaqueteFila => f !== null)
+      .sort((a, b) => new Date(b.ventaFecha).getTime() - new Date(a.ventaFecha).getTime())
+
+    setPaquetes(filas)
+    setLoadingPaquetes(false)
+  }
 
   // Modal nuevo envío
   const [modalVenta, setModalVenta] = useState<VentaPagada | null>(null)
@@ -85,6 +162,12 @@ export default function EnvioNubePage() {
   }
 
   useEffect(() => { fetchData() }, [])
+  useEffect(() => { if (tab === 'paquetes' && paquetes.length === 0) fetchPaquetes() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const proveedoresPaquetes = [...new Set(paquetes.map(p => p.proveedorNombre))].sort()
+  const paquetesFiltrados = proveedorFiltroPaquetes
+    ? paquetes.filter(p => p.proveedorNombre === proveedorFiltroPaquetes)
+    : paquetes
 
   async function crearEnvio() {
     if (!modalVenta) return
@@ -120,7 +203,7 @@ export default function EnvioNubePage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Envíos</h1>
         <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', padding: 4, borderRadius: 10 }}>
-          {([['pendientes', `Por enviar (${pendientesCount})`], ['activos', `Envíos (${envios.length})`]] as const).map(([id, label]) => (
+          {([['pendientes', `Por enviar (${pendientesCount})`], ['activos', `Envíos (${envios.length})`], ['paquetes', 'Paquetes por proveedor']] as const).map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ padding: '7px 16px', borderRadius: 7, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: tab === id ? '#fff' : 'transparent', color: tab === id ? '#111' : '#6b7280', boxShadow: tab === id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
               {label}
@@ -249,6 +332,70 @@ export default function EnvioNubePage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Tab: Paquetes por proveedor */}
+      {tab === 'paquetes' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+            <select value={proveedorFiltroPaquetes} onChange={e => setProveedorFiltroPaquetes(e.target.value)}
+              style={{ padding: '9px 14px', border: `1px solid ${proveedorFiltroPaquetes ? '#252855' : '#e5e7eb'}`, borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: proveedorFiltroPaquetes ? '#252855' : '#374151', cursor: 'pointer', minWidth: 220, fontWeight: proveedorFiltroPaquetes ? 700 : 400 }}>
+              <option value="">📦 Todos los proveedores</option>
+              {proveedoresPaquetes.map(p => <option key={p} value={p}>📦 {p}</option>)}
+            </select>
+          </div>
+          <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+            {loadingPaquetes ? (
+              <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
+                <p style={{ fontSize: 14 }}>Cargando...</p>
+              </div>
+            ) : paquetesFiltrados.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 0', color: '#9ca3af' }}>
+                <Icon name="box" size={36} color="#d1d5db" style={{ marginBottom: 8 }} />
+                <p style={{ fontSize: 14 }}>No hay productos de proveedores vendidos todavía</p>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    {['Producto', 'Proveedor', 'Pedido', 'Alto', 'Ancho', 'Peso', 'Actualizado'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '14px 20px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paquetesFiltrados.map(p => {
+                    const registrado = p.altoCm != null || p.anchoCm != null || p.pesoKg != null
+                    return (
+                      <tr key={p.itemId} style={{ borderBottom: '1px solid #f9fafb' }}>
+                        <td style={{ padding: '14px 20px' }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#111' }}>{p.productoNombre} <span style={{ color: '#9ca3af', fontWeight: 400 }}>×{p.cantidad}</span></p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{p.productoSku}</p>
+                        </td>
+                        <td style={{ padding: '14px 20px' }}>
+                          <span style={{ background: '#ede9fe', color: '#7c3aed', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>📦 {p.proveedorNombre}</span>
+                        </td>
+                        <td style={{ padding: '14px 20px', fontSize: 13, fontWeight: 700, color: '#0049ff' }}>#{p.ventaNumero}</td>
+                        {registrado ? (
+                          <>
+                            <td style={{ padding: '14px 20px', fontSize: 13, color: '#374151' }}>{p.altoCm != null ? `${p.altoCm} cm` : '—'}</td>
+                            <td style={{ padding: '14px 20px', fontSize: 13, color: '#374151' }}>{p.anchoCm != null ? `${p.anchoCm} cm` : '—'}</td>
+                            <td style={{ padding: '14px 20px', fontSize: 13, color: '#374151' }}>{p.pesoKg != null ? `${p.pesoKg} kg` : '—'}</td>
+                            <td style={{ padding: '14px 20px', fontSize: 12, color: '#9ca3af' }}>{p.actualizado ? formatDate(p.actualizado) : '—'}</td>
+                          </>
+                        ) : (
+                          <td colSpan={4} style={{ padding: '14px 20px' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706' }}>⚠️ El proveedor todavía no registró el paquete</span>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       )}
 

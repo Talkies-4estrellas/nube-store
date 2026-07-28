@@ -12,6 +12,7 @@ import CategoriaSelector from '@/components/CategoriaSelector'
 import ChatPanel from '@/components/ChatPanel'
 import type { Conversacion } from '@/lib/mensajeria'
 import { fetchTransferenciasPendientes, aceptarTransferencia, rechazarTransferencia, type Transferencia } from '@/lib/transferencias'
+import { fetchPaquetesPorVentaItems, guardarPaquete } from '@/lib/paquetes'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -64,6 +65,9 @@ type SeguimientoFila = {
   estadoEnvio: string | null
   fechaEnvio: string | null
   fechaEntrega: string | null
+  altoCm: number | null
+  anchoCm: number | null
+  pesoKg: number | null
 }
 
 const TRACKING_URL_PROV: Record<string, (guia: string) => string> = {
@@ -262,6 +266,36 @@ export default function ProveedoresPage() {
   const [seguimiento, setSeguimiento] = useState<SeguimientoFila[]>([])
   const [loadingSeguimiento, setLoadingSeguimiento] = useState(false)
 
+  // Medidas del paquete por línea de venta (edición inline)
+  const [paqueteAbierto, setPaqueteAbierto] = useState<string | null>(null)
+  const [paqueteForm, setPaqueteForm] = useState({ alto: '', ancho: '', peso: '' })
+  const [guardandoPaquete, setGuardandoPaquete] = useState(false)
+
+  function abrirPaquete(f: SeguimientoFila) {
+    setPaqueteAbierto(f.itemId)
+    setPaqueteForm({
+      alto: f.altoCm != null ? String(f.altoCm) : '',
+      ancho: f.anchoCm != null ? String(f.anchoCm) : '',
+      peso: f.pesoKg != null ? String(f.pesoKg) : '',
+    })
+  }
+
+  async function guardarPaqueteItem(itemId: string) {
+    if (!user?.email) return
+    setGuardandoPaquete(true)
+    const { error } = await guardarPaquete(itemId, user.email, {
+      alto_cm: paqueteForm.alto ? Number(paqueteForm.alto) : null,
+      ancho_cm: paqueteForm.ancho ? Number(paqueteForm.ancho) : null,
+      peso_kg: paqueteForm.peso ? Number(paqueteForm.peso) : null,
+    })
+    setGuardandoPaquete(false)
+    if (error) return
+    setSeguimiento(prev => prev.map(f => f.itemId === itemId
+      ? { ...f, altoCm: paqueteForm.alto ? Number(paqueteForm.alto) : null, anchoCm: paqueteForm.ancho ? Number(paqueteForm.ancho) : null, pesoKg: paqueteForm.peso ? Number(paqueteForm.peso) : null }
+      : f))
+    setPaqueteAbierto(null)
+  }
+
   async function cargarSeguimiento(email: string) {
     if (!email) return
     setLoadingSeguimiento(true)
@@ -283,9 +317,10 @@ export default function ProveedoresPage() {
     if (!items || items.length === 0) { setSeguimiento([]); setLoadingSeguimiento(false); return }
 
     const ventaIds = [...new Set(items.map(i => i.venta_id))]
-    const [{ data: ventas }, { data: envios }] = await Promise.all([
+    const [{ data: ventas }, { data: envios }, paquetesPorItem] = await Promise.all([
       supabase.from('ventas').select('id, numero, estado, created_at').in('id', ventaIds),
       supabase.from('envios').select('venta_id, paqueteria, numero_guia, estado_envio, fecha_envio, fecha_entrega').in('venta_id', ventaIds),
+      fetchPaquetesPorVentaItems(items.map(i => i.id)),
     ])
 
     const productoPorId = new Map((productos ?? []).map(p => [p.id, p]))
@@ -297,6 +332,7 @@ export default function ProveedoresPage() {
         const producto = productoPorId.get(item.producto_id)
         const venta = ventaPorId.get(item.venta_id)
         const envio = envioPorVenta.get(item.venta_id)
+        const paquete = paquetesPorItem.get(item.id)
         if (!producto || !venta) return null
         return {
           itemId: item.id,
@@ -314,6 +350,9 @@ export default function ProveedoresPage() {
           estadoEnvio: envio?.estado_envio ?? null,
           fechaEnvio: envio?.fecha_envio ?? null,
           fechaEntrega: envio?.fecha_entrega ?? null,
+          altoCm: paquete?.alto_cm ?? null,
+          anchoCm: paquete?.ancho_cm ?? null,
+          pesoKg: paquete?.peso_kg ?? null,
         }
       })
       .filter((f): f is SeguimientoFila => f !== null)
@@ -1647,11 +1686,15 @@ export default function ProveedoresPage() {
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {seguimiento.map((f, i) => {
                       const tracking = f.numeroGuia && f.paqueteria && TRACKING_URL_PROV[f.paqueteria]
+                      const tienePaquete = f.altoCm != null || f.anchoCm != null || f.pesoKg != null
+                      const editandoPaquete = paqueteAbierto === f.itemId
                       return (
                         <div key={f.itemId} style={{
+                          borderBottom: i < seguimiento.length - 1 ? '1px solid #f3f4f6' : 'none',
+                          background: i % 2 === 0 ? '#fff' : '#fafafa', padding: '16px 28px',
+                        }}>
+                        <div style={{
                           display: 'grid', gridTemplateColumns: '56px 1fr auto', gap: 16, alignItems: 'center',
-                          padding: '16px 28px', borderBottom: i < seguimiento.length - 1 ? '1px solid #f3f4f6' : 'none',
-                          background: i % 2 === 0 ? '#fff' : '#fafafa',
                         }}>
                           <div style={{ width: 56, height: 56, borderRadius: 12, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid #e5e7eb', flexShrink: 0 }}>
                             {f.productoImagen ? <img src={f.productoImagen} alt={f.productoNombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📦'}
@@ -1692,6 +1735,55 @@ export default function ProveedoresPage() {
                           <span style={{ fontSize: 14, fontWeight: 800, color: '#059669', whiteSpace: 'nowrap' }}>
                             ${((f.costo ?? 0) * f.cantidad).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                           </span>
+                        </div>
+
+                        {/* Medidas del paquete */}
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e5e7eb' }}>
+                          {!editandoPaquete ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                              {tienePaquete ? (
+                                <span style={{ fontSize: 12, color: '#374151' }}>
+                                  📐 {f.altoCm ?? '—'}×{f.anchoCm ?? '—'} cm · ⚖️ {f.pesoKg ?? '—'} kg
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 12, color: '#d97706', fontWeight: 700 }}>⚠️ Falta registrar el tamaño del paquete</span>
+                              )}
+                              <button type="button" onClick={() => abrirPaquete(f)}
+                                style={{ fontSize: 11, fontWeight: 700, color: '#0049ff', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                                {tienePaquete ? 'Editar' : 'Registrar paquete'}
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <label style={{ fontSize: 11, color: '#6b7280' }}>
+                                Alto (cm)
+                                <input type="number" min="0" step="0.1" value={paqueteForm.alto}
+                                  onChange={e => setPaqueteForm(p => ({ ...p, alto: e.target.value }))}
+                                  style={{ display: 'block', width: 80, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, marginTop: 2 }} />
+                              </label>
+                              <label style={{ fontSize: 11, color: '#6b7280' }}>
+                                Ancho (cm)
+                                <input type="number" min="0" step="0.1" value={paqueteForm.ancho}
+                                  onChange={e => setPaqueteForm(p => ({ ...p, ancho: e.target.value }))}
+                                  style={{ display: 'block', width: 80, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, marginTop: 2 }} />
+                              </label>
+                              <label style={{ fontSize: 11, color: '#6b7280' }}>
+                                Peso (kg)
+                                <input type="number" min="0" step="0.1" value={paqueteForm.peso}
+                                  onChange={e => setPaqueteForm(p => ({ ...p, peso: e.target.value }))}
+                                  style={{ display: 'block', width: 80, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, marginTop: 2 }} />
+                              </label>
+                              <button type="button" onClick={() => guardarPaqueteItem(f.itemId)} disabled={guardandoPaquete}
+                                style={{ alignSelf: 'flex-end', background: NAVY, color: '#fff', border: 'none', padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: guardandoPaquete ? 'wait' : 'pointer' }}>
+                                {guardandoPaquete ? '...' : 'Guardar'}
+                              </button>
+                              <button type="button" onClick={() => setPaqueteAbierto(null)}
+                                style={{ alignSelf: 'flex-end', background: '#f3f4f6', color: '#374151', border: 'none', padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                Cancelar
+                              </button>
+                            </div>
+                          )}
+                        </div>
                         </div>
                       )
                     })}
