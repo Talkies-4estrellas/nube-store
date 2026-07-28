@@ -1135,13 +1135,36 @@ export default function Storefront() {
               <p style={{ color: '#9ca3af', fontSize: 14, padding: '20px 0', textAlign: 'center' }}>El carrito está vacío</p>
             ) : cart.map(({ product, quantity }) => {
               const [title, , price, image, category] = product
+              const maxStock = productStockMap[title] ?? 0
               return (
-                <article key={title} className="cart-item">
+                <article
+                  key={title}
+                  className="cart-item"
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => { if ((e.target as HTMLElement).closest('button')) return; openDetail(title) }}
+                >
                   <img src={image} alt={title} />
                   <div>
                     <span>{category}</span>
                     <h3>{title}</h3>
-                    <p>Cantidad {quantity} x {price}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        aria-label="Disminuir cantidad"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, color: '#374151', background: '#f3f4f6', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
+                        onClick={() => setCart(prev => prev
+                          .map(i => i.product[0] === title ? { ...i, quantity: i.quantity - 1 } : i)
+                          .filter(i => i.quantity > 0))}
+                      >−</button>
+                      <span>Cantidad {quantity} x {price}</span>
+                      <button
+                        type="button"
+                        aria-label="Aumentar cantidad"
+                        disabled={quantity >= maxStock}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, color: quantity >= maxStock ? '#d1d5db' : '#374151', background: '#f3f4f6', border: 'none', borderRadius: 6, cursor: quantity >= maxStock ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: 1 }}
+                        onClick={() => setCart(prev => prev.map(i => i.product[0] === title && i.quantity < maxStock ? { ...i, quantity: i.quantity + 1 } : i))}
+                      >+</button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                     <strong>{formatPrice(priceValue(price) * quantity)}</strong>

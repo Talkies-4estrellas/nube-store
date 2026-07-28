@@ -13,7 +13,7 @@
 | `next.config.ts` | Configuración de Next.js |
 | `tsconfig.json` | Configuración de TypeScript |
 | `package.json` | Dependencias: `next`, `@supabase/ssr`, `lucide-react` |
-| `middleware.ts` | Protege rutas admin — redirige a `/login` si no hay sesión (actualmente comentado) |
+| `middleware.ts` | Protege rutas por rol (`ROLE_ROUTES`/`ROLE_HOME`) — redirige a `/login?redirect=` sin sesión, o al home del rol si la ruta no corresponde. Reactivado 27/07/2026 tras el bug de OAuth aterrizando en el panel admin. |
 
 ---
 
@@ -23,16 +23,17 @@
 |---------|-----|---------|
 | `app/layout.tsx` | — | Root layout: `<AuthProvider>` + `<AppChrome>`. `suppressHydrationWarning` en `<html>` y `<body>`. Metadata del sitio. |
 | `app/page.tsx` | `/` | Redirige a `/dashboard` |
-| `app/login/page.tsx` | `/login` | Login con email + password. Consulta `user_roles` para obtener rol. Redirige según `ROLE_HOME`. Ruta pública. |
+| `app/login/page.tsx` | `/login` | Login con email + password, y botones Google/Facebook (`signInWithOAuth`). Consulta `user_roles` para obtener rol. Redirige según `ROLE_HOME` vía `irSegunRol()`. Muestra `?error=oauth`. Ruta pública. |
+| `app/auth/callback/route.ts` | `/auth/callback` | Route Handler: recibe el `code` de OAuth (Google/Facebook), lo intercambia por sesión (`exchangeCodeForSession`) y redirige a `/login`. Nuevo 27/07/2026. |
 | `app/registro/page.tsx` | `/registro` | Self-signup público (rol `proveedor` o `basico`). El rol se sanitiza en un trigger de servidor (`handle_new_user`), no se puede autoasignar `admin`. Ruta pública. |
-| `app/mi-cuenta/page.tsx` | `/mi-cuenta` | Panel del cliente (`basico`): mis pedidos con seguimiento de envío, datos de facturación, configuración de perfil (nombre/contraseña). Layout sidebar igual al admin/proveedores. Protegida por sesión + rol. |
+| `app/mi-cuenta/page.tsx` | `/mi-cuenta` | Panel del cliente (`basico`): mis pedidos con seguimiento de envío, datos de facturación, configuración de perfil (nombre/contraseña). Pestaña "Mensajes" (chat con proveedores por pedido). "Contactar a soporte" como submenú dentro de Configuración. Layout sidebar igual al admin/proveedores. Protegida por sesión + rol. |
 | `app/dashboard/page.tsx` | `/dashboard` | Métricas en tiempo real: ventas recientes, stock bajo, top producto/categoría/cliente, gráfica SVG de ventas por período (hoy/semana/mes), toasts realtime de stock. |
 | `app/productos/page.tsx` | `/productos` | CRUD de productos: alta, edición, eliminación, subida de imagen WebP a Supabase Storage. Vista grid/lista, filtro categoría, búsqueda, sort, paginación (12/pág). Usa la VIEW `productos_con_estado`. |
 | `app/ventas/page.tsx` | `/ventas` | Lista de ventas con filtros y búsqueda. Panel lateral de detalle con items. Cambio de estado (Pendiente → Pagado → Enviado / Cancelado). Stepper visual del pipeline. Impresión de comprobante. |
 | `app/clientes/page.tsx` | `/clientes` | Lista de clientes con filtro por tag (Nuevo/Regular/VIP), búsqueda, sort, paginación (15/pág). Panel detalle con historial de pedidos. Soft-delete vía `deleted_at`. Modal para alta/edición. |
 | `app/punto-de-venta/page.tsx` | `/punto-de-venta` | POS táctil: catálogo con búsqueda + filtro categoría, carrito, 3 métodos de pago (Efectivo/Tarjeta/Transferencia), verificación de stock real antes de cobrar, find-or-create cliente, crea venta + items. |
 | `app/proveedores/page.tsx` | `/proveedores` | Portal de proveedores — **protegido por sesión + rol `proveedor`** (desde 23/07/2026; antes era público con solo email). Pestaña "Administración" (primera, panel de pago + seguimiento de envío por producto vendido); registrar producto; mis solicitudes; mis productos; ajustes. |
-| `app/configuracion/page.tsx` | `/configuracion` | Configuración del negocio: datos generales, contacto, pagos, notificaciones (escribe en `config_storefront`). Gestión de usuarios y roles (admin only). Revisión de solicitudes de proveedores (admin only). |
+| `app/configuracion/page.tsx` | `/configuracion` | Configuración del negocio: datos generales, contacto, pagos, notificaciones (escribe en `config_storefront`). Gestión de usuarios y roles (admin only). Revisión de solicitudes de proveedores (admin only). Sección oculta "Comentarios" (mensajería cliente↔admin, no aparece en `Sidebar.tsx`). Nuevo 27/07/2026. |
 
 ---
 
@@ -44,7 +45,8 @@
 | `Sidebar.tsx` | `AppChrome.tsx` | Barra lateral fija 240px. Navegación filtrada por `ROLE_ROUTES[user.role]`. Badge PINK con contador de solicitudes pendientes sobre Configuración. Logout al fondo. Estilo activo: borde NAVY + sombra. |
 | `Topbar.tsx` | `AppChrome.tsx` | Barra superior fija 56px. Buscador expandible inline con debounce 280ms (productos, clientes, ventas). Avatar del usuario con nombre y rol. |
 | `GlobalSearch.tsx` | `AppChrome.tsx` | Modal de búsqueda global activado con `Ctrl+K`. Busca en productos, ventas y clientes. Navegación con ↑↓↵. Debounce 250ms. Se activa desde `q.length >= 2`. |
-| `Storefront.tsx` | `app/page.tsx` (ruta `/`) | Tienda pública completa: 7 secciones (inicio, catálogo, novedades, favoritos, ofertas, carrito, soporte), carrusel hero, carrito persistido en `localStorage oe_cart`, checkout real (crea cliente + venta + items en Supabase), login/registro con tabla `registros`, config dinámica desde `config_storefront`. Footer solo en Inicio/escritorio (24/07). |
+| `Storefront.tsx` | `app/page.tsx` (ruta `/`) | Tienda pública completa: 7 secciones (inicio, catálogo, novedades, favoritos, ofertas, carrito, soporte), carrusel hero, carrito persistido en `localStorage oe_cart`, checkout real (crea cliente + venta + items en Supabase), login/registro con tabla `registros`, config dinámica desde `config_storefront`. Footer solo en Inicio/escritorio (24/07). Carrito: botón quitar con ícono `Trash2`, cantidad editable +/- respetando stock, clic en el artículo abre el detalle del producto (27/07). |
+| `ChatPanel.tsx` | `mi-cuenta`, `proveedores`, `configuracion`, `tienda/[slug]` | UI de chat reutilizable — mensajes en tiempo real (`supabase.channel().on('postgres_changes', ...)`) sobre una `conversacionId`. Props: `supabase`, `conversacionId`, `remitenteTipo`, `remitenteEmail`, `remitenteNombre`, `accent`. Nuevo 27/07/2026. |
 | `StorefrontFooter.tsx` | `Storefront.tsx` | Footer de la tienda (solo vista Inicio, solo escritorio): marca+redes+contacto, enlaces institucionales, newsletter (sin backend, solo valida formato), logos de paquetería, copyright. Config desde `config_storefront` (columnas `footer_*`, `youtube`). Nuevo 24/07/2026. |
 | `CategoriaSelector.tsx` | `ProductoModal.tsx`, `app/proveedores/page.tsx` | Selector de categoría en 2 niveles (padre + subcategoría opcional), con alta inline en cada nivel vía `onCrear`. Recibe el árbol ya armado con `construirArbolCategorias()`. Nuevo 24/07/2026. |
 | `ProductoModal.tsx` | `app/productos/page.tsx` | Modal alta/edición de producto. Drag & drop de imagen. Selección de categoría. Usa `convertToWebp` para preview local. |
@@ -66,6 +68,7 @@
 | `pagination.ts` | `paginasVisibles(actual, total)` | Ventana de páginas a mostrar (1, última, actual±1, con "…") — evita listar cientos de botones con catálogos grandes. Usado en Productos, Clientes, Ventas. |
 | `pagos-config.ts` | `getPagosConfig()` (solo servidor) | Lee credenciales de BBVA/PayPal/Mercado Pago desde `config_pagos_secretos`; si no hay valor, cae a variables de entorno. Usado por las Route Handlers de `app/api/pagos/`. |
 | `categorias.ts` | `normalizarCategoria()`, `obtenerOcrearCategoriaId()`, `mapearCategorias()`, `mapearSubcategorias()`, `construirArbolCategorias()`, `crearCategoriaConPadre()` | Categorías padre/hijo (2 niveles): búsqueda/creación case-insensitive, jerarquía vía `parent_id`. Usado en Productos, Proveedores, Filtros, ImportCSVModal. Nuevo 24/07/2026. |
+| `mensajeria.ts` | `Conversacion`, `Mensaje`, `resolverProveedorDeVentaItem()`, `obtenerOcrearConversacionProveedor()`, `resolverProveedorDeProducto()`, `obtenerOcrearConversacionProveedorProducto()`, `obtenerOcrearConversacionAdmin()`, `enviarMensaje()`, `marcarLeidos()` | Sistema de mensajería cliente↔proveedor↔admin. Resolución proveedor↔producto por SKU contra `solicitudes_productos` (mismo patrón que la pestaña "Administración" de Proveedores). Nuevo 27/07/2026. |
 
 ---
 
@@ -108,6 +111,7 @@ Un archivo por día, en orden cronológico. Cada entrada documenta un commit: ha
 | `seccion-22-07-2026.md` | 22/07/2026 | Pasarelas de pago (Mercado Pago/PayPal/BBVA), unificación del header duplicado en la ficha de producto, submenú de Tienda en línea en el Sidebar, gestor de categorías en Filtros, carrusel con slides dinámicos. |
 | `seccion-23-07-2026.md` | 23/07/2026 | Roles `proveedor`/`basico` con self-signup, panel `/mi-cuenta` y "Administración" en proveedores, credenciales de pago configurables desde el panel (`config_pagos_secretos`), paginación real de Supabase (bug de límite 1000 filas), notificador general, limpieza definitiva del Excel 2023 a columnas propias de `productos`, ronda de ajustes de logo. |
 | `seccion-24-07-2026.md` | 24/07/2026 | Pestaña Proveedores en Clientes, botones extra de menú/topbar, fix de tarjetas estiradas en catálogo, perfil real en sidebar de tienda, "Editar perfil" (foto+nombre+contraseña) en los 3 paneles, Destacados del inicio editables, fix de límite 1000 filas en Dashboard, fix de flash de contenido viejo al recargar, **categorías padre/hijo** con `CategoriaSelector` y CSV jerárquico, fix de categorías duplicadas por mayúsculas, footer de la tienda (solo Inicio/escritorio) con su editor. |
+| `seccion-27-07-2026.md` | 27/07/2026 | **Login con Google/Facebook** (`app/auth/callback`, fix de Redirect URLs en Supabase), reactivación de `middleware.ts` con protección real por rol, **sistema interno de mensajería** cliente↔proveedor↔admin con Realtime (`lib/mensajeria.ts`, `ChatPanel.tsx`), soporte movido a submenú de Configuración, botón "Contactar al proveedor" en la ficha de producto pública, fix de tarjetas del catálogo del mismo alto, carrito: ícono de basura + cantidad editable +/- + clic abre detalle del producto. |
 
 ---
 

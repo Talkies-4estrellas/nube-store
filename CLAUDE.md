@@ -165,9 +165,21 @@ normal de `estado='Pendiente'` — no rompe nada, solo no genera el cobro real.
 
 ### Archivos clave
 - `lib/auth-context.tsx` — `AuthUser`, `Role`, `ROLE_ROUTES`, `ROLE_HOME`, `canAccess()`, `AuthProvider`, `useAuth()`
-- `lib/supabase.ts` — `createBrowserClient` con mock completo (getUser, getSession, signInWithPassword, signOut, onAuthStateChange)
-- `middleware.ts` — matcher excluye `_next`, imágenes y ruta raíz `/`
-- `app/login/page.tsx` — branding Navy #252855 + Pink #e7226d; redirige según `ROLE_HOME`
+- `lib/supabase.ts` — `createBrowserClient` con mock completo (getUser, getSession, signInWithPassword, signInWithOAuth, signOut, onAuthStateChange)
+- `middleware.ts` — matcher excluye `_next`, imágenes y ruta raíz `/`. **Reactivado 27/07/2026** con `ROLE_ROUTES`/`ROLE_HOME` duplicados localmente (no puede importar módulos `'use client'`): redirige a `/login?redirect=` sin sesión en ruta protegida, y al home del rol si la ruta actual no le corresponde
+- `app/login/page.tsx` — branding Navy #252855 + Pink #e7226d; email/password + botones **Google/Facebook** (`signInWithOAuth`); redirige según `ROLE_HOME` vía `irSegunRol()` compartido
+- `app/auth/callback/route.ts` — Route Handler que intercambia el `code` de OAuth por sesión (`exchangeCodeForSession`) y redirige a `/login`. **La Redirect URL debe estar en la allowlist de Supabase** (Authentication → URL Configuration) o el `code` queda sin consumir y cae al Site URL por defecto (síntoma: `?code=...#_=_` colgado en la URL)
+
+### Mensajería interna (27/07/2026)
+Sistema cliente↔proveedor↔admin, con Realtime (`postgres_changes`), diseñado antes de implementar
+a pedido explícito del usuario. Un solo hilo continuo por cliente (no uno por incidencia).
+- `lib/mensajeria.ts` — helpers de conversación/mensajes; resolución proveedor↔producto **por SKU** contra `solicitudes_productos` (`estado='aprobado'`), mismo patrón que la pestaña Administración de `/proveedores`
+- `components/ChatPanel.tsx` — UI de chat reutilizable, usada en `mi-cuenta`, `proveedores`, `configuracion` y `tienda/[slug]`
+- Cliente↔proveedor: desde una línea de pedido (`mi-cuenta`) o desde la ficha de producto pública (`tienda/[slug]`, sin pedido previo)
+- Cliente↔admin: un solo hilo, escondido como "Soporte" dentro del submenú **Configuración** de `mi-cuenta` (no vive en la pestaña Mensajes)
+- Admin ve todas las conversaciones cliente↔admin en `/configuracion`, sección oculta "Comentarios" (no aparece en `Sidebar.tsx`, a propósito)
+- Proveedor ve su lista de conversaciones agrupada por **cliente** (no por producto — un mismo producto puede tener varios clientes preguntando)
+- Schema: `Doc/database/migration_mensajeria.sql` — tablas `conversaciones`/`mensajes`, columna `producto_id`, índices únicos separados (por pedido / por producto)
 
 ---
 
@@ -305,6 +317,9 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Confirmar que se corrió en Supabase todo el SQL de mensajería** (`Doc/database/migration_mensajeria.sql`) — se fue ampliando en 3 commits del 27/07 (tablas base, `producto_id`, índices únicos separados); no hay confirmación de que quedó aplicado completo
+- [ ] **Confirmar en Supabase Dashboard → Authentication → URL Configuration** que la Redirect URL de producción (`https://nube-store-pi.vercel.app/auth/callback`) y el Site URL quedaron guardados — se guio paso a paso el 27/07 pero sin confirmación final
+- [ ] Badge de notificación de mensajes sin leer para el admin en "Comentarios" (ofrecido el 27/07, no pedido todavía)
 - [ ] **Confirmar que se corrió en Supabase todo el SQL del 24/07**: `parent_id` en `categorias` + migración automática de categorías `"Padre / Hijo"` + índice único compuesto (reemplaza al índice único case-insensitive del mismo día), y las columnas nuevas de `config_storefront` para `destacados`, "Editar perfil" (`avatar_url` en `user_roles` + función `actualizar_mi_perfil` con `nuevo_avatar_url`) y el Footer (`youtube`, `footer_telefono_2`, `footer_direccion`, `footer_copyright`, `footer_paginas`, `footer_newsletter_activo`, `footer_envios_logos`) — se fue pasando por bloques a lo largo del día, no hay confirmación de que todo quedó aplicado
 - [ ] **Configurar las credenciales reales de BBVA/OpenPay, PayPal y Mercado Pago** — ya se pueden cargar desde el panel (`/tienda-en-linea/legal` → "Claves de pago", tabla `config_pagos_secretos`) o por variables de entorno; sin ellas ninguna pasarela cobra de verdad todavía (22-23/07/2026)
 - [ ] **Re-habilitar RLS en `productos` y `categorias`** antes de producción — sigue desactivado desde la sesión de importación CSV, por pedido explícito del usuario
@@ -319,6 +334,17 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
+
+## Completado (27/07/2026)
+- [x] **Login social**: botones Google/Facebook (`signInWithOAuth`) en `app/login/page.tsx` + `app/auth/callback/route.ts` nuevo. Bug real encontrado: `redirectTo` faltaba en la allowlist de Redirect URLs de Supabase, caía al Site URL sin consumir el `code` — corregido agregando `localhost:3000/auth/callback` y el equivalente de producción
+- [x] **`middleware.ts` reactivado** con protección real por rol — estaba deshabilitado desde antes; se detectó el hueco al ver que el login social podía aterrizar a un cliente básico en el panel admin
+- [x] **Sistema interno de mensajería** cliente↔proveedor↔admin con Supabase Realtime — diseñado con el usuario antes de implementar (ver sección "Mensajería interna" más arriba)
+- [x] Mensajería: lista de conversaciones del proveedor agrupada por cliente (fix de ambigüedad cuando varios clientes preguntan por el mismo producto)
+- [x] Mensajería: "Contactar a soporte" del cliente movido de la pestaña Mensajes a un submenú dentro de Configuración
+- [x] Mensajería: botón "Contactar al proveedor" agregado también en la ficha pública de producto (`/tienda/[slug]`), resolviendo el proveedor automáticamente por SKU
+- [x] **Fix real**: tarjetas del catálogo de tienda con distinta altura según el texto — `align-items:start` movido de `.store-grid` a `.shop-layout`, título con `line-clamp:2` + `min-height` reservado
+- [x] Carrito de la tienda: botón "Quitar" (texto) → ícono de bote de basura (`Trash2`, lucide-react)
+- [x] Carrito de la tienda: cantidad editable con botones +/- (respeta `productStockMap`) y clic en el artículo abre el detalle del producto (`/tienda/{sku}`)
 
 ## Completado (03/07/2026)
 - [x] Storefront conectado a config_storefront: hero_titulo, hero_subtitulo, hero_cta, nombre_tienda, color_acento, whatsapp, instagram, email_contacto

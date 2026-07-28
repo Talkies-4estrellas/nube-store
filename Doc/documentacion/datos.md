@@ -131,11 +131,51 @@ Una sola fila (id = 1). Leída por la tienda pública al montar y editable desde
 |---------|------|-------|
 | id | uuid PK | |
 | user_id | uuid unique FK → auth.users | |
-| role | text | `admin`, `vendedor`, `bodega` |
+| role | text | `admin`, `vendedor`, `bodega`, `proveedor`, `basico` — sanitizado en servidor por `handle_new_user` |
 | nombre | text | nombre para mostrar |
+| avatar_url | text | foto de perfil (WebP), agregado 24/07/2026 |
 | created_at | timestamptz | |
 
 > El uso de `user_roles` en el flujo de login y el acceso por rol está en [Arquitectura](./arquitectura.md).
+
+---
+
+### `conversaciones` / `mensajes` — agregado 27/07/2026
+
+Sistema interno de mensajería. Un solo hilo continuo por cliente (no uno por incidencia).
+
+**`conversaciones`**
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | uuid PK | |
+| tipo | text | `cliente_proveedor` o `cliente_admin` |
+| cliente_email | text | |
+| proveedor_email | text | null si es `cliente_admin` |
+| venta_item_id | uuid FK → venta_items | null si nace desde la ficha de producto |
+| producto_id | uuid FK → productos | agregado en un commit posterior del mismo día |
+| created_at | timestamptz | |
+
+Índices únicos parciales (evitan duplicar hilos): uno para conversaciones ligadas a un pedido
+(`venta_item_id` no nulo), otro para las que nacen desde la ficha de producto (`producto_id` no
+nulo) — separados porque un mismo cliente puede tener ambos tipos de hilo con el mismo proveedor.
+
+**`mensajes`**
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | uuid PK | |
+| conversacion_id | uuid FK → conversaciones | |
+| remitente_tipo | text | `cliente`, `proveedor` o `admin` |
+| remitente_email | text | |
+| remitente_nombre | text | |
+| contenido | text | |
+| leido | bool | usado por `marcarLeidos()` |
+| created_at | timestamptz | |
+
+Ambas tablas dadas de alta en `supabase_realtime` (`alter publication ... add table`) para que
+`ChatPanel.tsx` reciba mensajes nuevos sin recargar. La resolución proveedor↔producto usa el
+mismo patrón que el resto del proyecto: **por SKU** contra `solicitudes_productos` con
+`estado='aprobado'` (no hay FK directa proveedor↔producto). Script completo:
+`Doc/database/migration_mensajeria.sql`.
 
 ---
 
@@ -179,6 +219,7 @@ Todo lo demás (ventas, productos, clientes, config, solicitudes) vive en Supaba
 | `solicitudes_productos` | configuracion, proveedores, Sidebar | proveedores | configuracion | — |
 | `config_storefront` | configuracion, Storefront | — | configuracion | — |
 | `registros` | Storefront (login) | Storefront (registro) | — | — |
+| `conversaciones` / `mensajes` | mi-cuenta, proveedores, configuracion, tienda/[slug] (ChatPanel, Realtime) | mi-cuenta, proveedores, configuracion, tienda/[slug] (`lib/mensajeria.ts`) | mensajes (`leido`) | — |
 | **Storage `productos`** | — | productos, proveedores | — | productos |
 
 ---
@@ -193,6 +234,7 @@ Todo lo demás (ventas, productos, clientes, config, solicitudes) vive en Supaba
 | `migration_criticos.sql` | Triggers INSERT+UPDATE, RLS de `config_storefront`, tablas `config_metodos_pago` / `config_notificaciones` / `cart_items` |
 | `migration_columnas.sql` | Columnas de dirección en `clientes`; `telefono`/`facebook` en `config_storefront`; `updated_at` en `registros` y `solicitudes_productos` |
 | `migration_tablas_faltantes.sql` | Migración segura (`IF NOT EXISTS`): crea `registros`, `solicitudes_productos`, agrega `deleted_at` en clientes, inserta fila inicial en `config_storefront` |
+| `migration_mensajeria.sql` | Tablas `conversaciones`/`mensajes`, RLS, alta a `supabase_realtime`, columna `producto_id` e índices únicos separados (por pedido / por producto) — agregado 27/07/2026 |
 
 > El estado de qué migraciones ya se ejecutaron en Supabase está en [Mantenimiento](./mantenimiento.md).
 
@@ -208,3 +250,4 @@ Días de trabajo que tocaron esta área:
 - [01/07/2026](../sesiones/seccion-01-07-2026.md) — tablas `config_storefront` y `solicitudes_productos`.
 - [02/07/2026](../sesiones/seccion-02-07-2026.md) — ajustes de schema para robustez.
 - [03/07/2026](../sesiones/seccion-03-07-2026.md) — fix de triggers INSERT+UPDATE, migraciones y tablas nuevas.
+- [27/07/2026](../sesiones/seccion-27-07-2026.md) — tablas `conversaciones`/`mensajes` para el sistema de mensajería interna.

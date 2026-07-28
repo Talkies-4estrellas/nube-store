@@ -8,13 +8,16 @@
 
 ## Pendientes técnicos conocidos
 
+> Lista completa y siempre actualizada en la sección "Pendiente" de `CLAUDE.md` (raíz del
+> proyecto) — aquí solo los de mayor impacto técnico.
+
 | # | Pendiente | Impacto |
 |---|-----------|---------|
-| 1 | Ejecutar `Doc/database/migration_tablas_faltantes.sql` en Supabase | Sin esto, login de tienda y proveedores fallan en producción |
-| 2 | Password en `registros` en texto plano | Seguridad — migrar a hash |
-| 3 | Enriquecimiento de clientes hace N+1 queries | Performance — migrar a una sola query con agregaciones |
-| 4 | Cart en localStorage no sincroniza entre dispositivos | UX — requiere cuenta + tabla `cart_items` en DB |
-| 5 | POS crea clientes duplicados "Público en general" | Datos sucios — agregar lookup antes de insert |
+| 1 | Confirmar que `Doc/database/migration_mensajeria.sql` corrió completo en Supabase (27/07) | Sin esto, el sistema de mensajería falla en producción |
+| 2 | Confirmar Redirect URLs de OAuth en Supabase para el dominio de Vercel (27/07) | Sin esto, login con Google/Facebook falla en producción |
+| 3 | Password en `registros` en texto plano | Seguridad — migrar a hash (o completar la migración a Supabase Auth ya iniciada con `/registro`) |
+| 4 | Cart en localStorage no sincroniza entre dispositivos | UX — requiere tabla `cart_items` en DB (ya existe, falta conectarla) |
+| 5 | Re-habilitar RLS en `productos` y `categorias` antes de producción | Sigue desactivado desde la importación CSV, por pedido explícito del usuario |
 
 ---
 
@@ -36,7 +39,9 @@ Ejecutadas el **03/07/2026**:
 - ✅ `Doc/database/migration_criticos.sql` — triggers INSERT+UPDATE, RLS de `config_storefront`, tablas `config_metodos_pago` / `config_notificaciones` / `cart_items`
 - ✅ `Doc/database/migration_columnas.sql` — `direccion`/`codigo_postal`/`estado_region`/`pais` en `clientes`; `telefono`/`facebook` en `config_storefront`; `updated_at` en `registros` y `solicitudes_productos`
 
-Pendiente de ejecutar: `Doc/database/migration_tablas_faltantes.sql` (ver tabla de pendientes arriba).
+Sin confirmación final de que corrieron completas (se fueron pasando por bloques):
+`migration_mensajeria.sql` (27/07 — tablas `conversaciones`/`mensajes`), y el resto del historial
+detallado en la sección "Pendiente" de `CLAUDE.md`.
 
 ---
 
@@ -54,3 +59,4 @@ Días de trabajo que tocaron esta área:
 
 - [03/07/2026](../sesiones/seccion-03-07-2026.md) — migraciones ejecutadas en Supabase y pendientes técnicos.
 - [05/07/2026](../sesiones/seccion-05-07-2026.md) — reconstrucción del registro diario de sesiones.
+- [27/07/2026](../sesiones/seccion-27-07-2026.md) — migración de mensajería y Redirect URLs de OAuth pendientes de confirmar.

@@ -91,10 +91,12 @@ C:\nube\
 
 ```ts
 // components/AppChrome.tsx
-const PUBLIC_PATHS = ['/', '/login', '/proveedores']
+const PUBLIC_PATHS = ['/', '/login', '/registro', '/proveedores', '/mi-cuenta']
 ```
 
-Estas rutas renderizan sus `children` directamente sin Sidebar ni Topbar.
+`/tienda/[slug]` es pública por patrón de ruta dinámica (no está en la lista explícita).
+Estas rutas renderizan sus `children` directamente sin Sidebar ni Topbar (excepto `/proveedores`
+y `/mi-cuenta`, que tienen su propio layout con sidebar propio).
 
 ---
 
@@ -104,37 +106,54 @@ Estas rutas renderizan sus `children` directamente sin Sidebar ni Topbar.
 
 ```ts
 // lib/auth-context.tsx
-type Role = 'admin' | 'vendedor' | 'bodega'
+type Role = 'admin' | 'vendedor' | 'bodega' | 'proveedor' | 'basico'
 ```
+
+`proveedor` y `basico` se agregaron el 23/07/2026 junto con el self-signup público en
+`/registro` (el rol se sanitiza en el servidor vía trigger `handle_new_user` — nunca se puede
+autoasignar `admin`/`vendedor`/`bodega` desde el cliente).
 
 ### Acceso por rol
 
 ```ts
 const ROLE_ROUTES: Record<Role, string[]> = {
-  admin:    ['*'],   // todo
-  vendedor: ['/dashboard', '/ventas', '/clientes'],
-  bodega:   ['/productos', '/envio-nube'],
+  admin:     ['/dashboard','/ventas','/productos','/clientes','/envio-nube','/tienda-en-linea','/punto-de-venta','/configuracion'],
+  vendedor:  ['/dashboard','/ventas','/clientes'],
+  bodega:    ['/productos','/envio-nube'],
+  proveedor: ['/proveedores'],
+  basico:    ['/mi-cuenta'],
 }
 
 const ROLE_HOME: Record<Role, string> = {
-  admin:    '/dashboard',
-  vendedor: '/dashboard',
-  bodega:   '/productos',
+  admin: '/dashboard', vendedor: '/dashboard', bodega: '/productos',
+  proveedor: '/proveedores', basico: '/mi-cuenta',
 }
 ```
 
-### Labels de rol (AppChrome + Sidebar)
+**`middleware.ts` reactivado el 27/07/2026** (llevaba tiempo deshabilitado) con esta misma tabla
+duplicada localmente — un Edge Middleware no puede importar módulos `'use client'`, así que
+`ROLE_ROUTES`/`ROLE_HOME` viven por separado ahí y en `lib/auth-context.tsx`, hay que mantener
+ambas copias sincronizadas a mano. Comportamiento:
+- Sin sesión en ruta protegida → redirige a `/login?redirect=<ruta>`
+- Con sesión pero la ruta actual no está en `ROLE_ROUTES[role]` → redirige a `ROLE_HOME[role]`
+- En `/login` con sesión activa → redirige a `ROLE_HOME[role]` solo si existe fila en `user_roles`
+  (evita loop infinito para cuentas sin rol, que el cliente maneja con `signOut()`)
 
-```ts
-const ROLE_LABELS = { admin: 'Administrador', vendedor: 'Vendedor', bodega: 'Bodega' }
-const ROLE_HOME_CHROME = { admin: '/dashboard', vendedor: '/dashboard', bodega: '/productos' }
-```
+### Login social (Google / Facebook) — agregado 27/07/2026
 
-### Flujo de login
+`app/login/page.tsx` llama `supabase.auth.signInWithOAuth({ provider, options: { redirectTo } })`.
+El callback es un Route Handler propio, `app/auth/callback/route.ts`, que hace
+`exchangeCodeForSession(code)` y redirige a `/login` (donde el flujo normal de `ROLE_HOME` toma
+el control). **Requisito no obvio:** la URL de `redirectTo` debe estar en la allowlist de
+Supabase (Authentication → URL Configuration → Redirect URLs) — si falta, Supabase cae
+silenciosamente al Site URL configurado, dejando el `code` sin consumir (síntoma visible:
+`?code=...#_=_` colgado en la URL, el `_=_` es un artefacto propio de Facebook).
+
+### Flujo de login (email/password)
 
 1. `supabase.auth.signInWithPassword({ email, password })`
 2. Consulta `user_roles` donde `user_id = session.user.id` → obtiene `role, nombre`
-3. Redirige a `ROLE_HOME[role]` o al query param `?redirect=`
+3. Redirige a `ROLE_HOME[role]` o al query param `?redirect=` (helper compartido `irSegunRol()`)
 4. Si no tiene fila en `user_roles` → `signOut()` automático
 
 > La tabla `user_roles` y sus políticas RLS se documentan en [Datos](./datos.md).
@@ -150,3 +169,5 @@ Días de trabajo que tocaron esta área:
 - [28/06/2026](../sesiones/seccion-28-06-2026.md) — rebranding a Order Express, cliente Supabase.
 - [29/06/2026](../sesiones/seccion-29-06-2026.md) — autenticación, roles, middleware y rutas públicas.
 - [05/07/2026](../sesiones/seccion-05-07-2026.md) — consolidación definitiva del nombre Order Express.
+- [23/07/2026](../sesiones/seccion-23-07-2026.md) — roles `proveedor`/`basico`, self-signup, `/mi-cuenta`.
+- [27/07/2026](../sesiones/seccion-27-07-2026.md) — login Google/Facebook, `middleware.ts` reactivado con protección real por rol.
