@@ -11,6 +11,8 @@ import { paginasVisibles } from '@/lib/pagination'
 import { construirArbolCategorias, crearCategoriaConPadre, type CategoriaConHijos, type CategoriaPlana } from '@/lib/categorias'
 import Icon from '@/components/Icon'
 import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
+import { useAuth } from '@/lib/auth-context'
+import { crearTransferencias } from '@/lib/transferencias'
 
 const PAGE_SIZE = 12
 const NAVY = '#252855'
@@ -70,6 +72,7 @@ function colorCategoria(nombre: string, lista: string[]) {
 }
 
 export default function ProductosPage() {
+  const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [categoriasRaw, setCategoriasRaw] = useState<CategoriaPlana[]>([])
   const categorias = categoriasRaw.map(c => c.nombre)
@@ -95,6 +98,56 @@ export default function ProductosPage() {
   const [showImport, setShowImport] = useState(false)
   const [exportando, setExportando] = useState(false)
   const [confirmExport, setConfirmExport] = useState(false)
+
+  // Transferir productos a un proveedor
+  const [modoTransferir, setModoTransferir] = useState(false)
+  const [seleccionTransferir, setSeleccionTransferir] = useState<Set<string>>(new Set())
+  const [proveedoresLista, setProveedoresLista] = useState<{ nombre: string; email: string; empresa: string | null }[]>([])
+  const [proveedorDestino, setProveedorDestino] = useState('')
+  const [confirmTransferir, setConfirmTransferir] = useState(false)
+  const [enviandoTransferencia, setEnviandoTransferencia] = useState(false)
+
+  function iniciarTransferir() {
+    setModoTransferir(true)
+    setSeleccionTransferir(new Set())
+    setProveedorDestino('')
+    if (proveedoresLista.length === 0) {
+      supabase.from('user_roles').select('nombre, email, empresa').eq('role', 'proveedor').order('nombre')
+        .then(({ data }) => setProveedoresLista((data ?? []) as { nombre: string; email: string; empresa: string | null }[]))
+    }
+  }
+
+  function cancelarTransferir() {
+    setModoTransferir(false)
+    setSeleccionTransferir(new Set())
+    setProveedorDestino('')
+  }
+
+  function toggleSeleccion(id: string) {
+    setSeleccionTransferir(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  async function confirmarTransferencia() {
+    const proveedor = proveedoresLista.find(p => p.email === proveedorDestino)
+    if (!proveedor) return
+    const seleccionados = products.filter(p => seleccionTransferir.has(p.id))
+    if (seleccionados.length === 0) return
+    setEnviandoTransferencia(true)
+    const { error } = await crearTransferencias(
+      seleccionados.map(p => ({ id: p.id, nombre: p.nombre, sku: p.sku })),
+      { email: proveedor.email, nombre: proveedor.nombre },
+      user?.id,
+    )
+    setEnviandoTransferencia(false)
+    setConfirmTransferir(false)
+    if (error) { setToast({ msg: 'Error al enviar la transferencia: ' + error.message, color: PINK }); return }
+    setToast({ msg: `Transferencia enviada a ${proveedor.nombre}. Queda pendiente de que la acepte.`, color: BLUE })
+    cancelarTransferir()
+  }
 
   async function exportarCSV() {
     setExportando(true)
@@ -393,6 +446,10 @@ export default function ProductosPage() {
             style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             ⬆ Importar CSV
           </button>
+          <button onClick={() => modoTransferir ? cancelarTransferir() : iniciarTransferir()}
+            style={{ background: modoTransferir ? NAVY : '#f3f4f6', color: modoTransferir ? '#fff' : '#374151', border: 'none', padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            🔁 Transferir
+          </button>
           <button onClick={() => { if (!showSolicitudes) fetchSolicitudes(); setShowSolicitudes(v => !v) }}
             style={{ position: 'relative', background: showSolicitudes ? NAVY : '#f3f4f6', color: showSolicitudes ? '#fff' : '#374151', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             Solicitudes
@@ -550,8 +607,20 @@ export default function ProductosPage() {
         )}
         {!loading && view === 'grid' && (
           <div className="grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-            {paginated.map(p => (
-              <div key={p.id} style={{ border: '1px solid #f3f4f6', borderRadius: 10, overflow: 'hidden' }}>
+            {paginated.map(p => {
+              const transferible = p.origen !== 'proveedor'
+              return (
+              <div key={p.id} style={{ border: modoTransferir && seleccionTransferir.has(p.id) ? `2px solid ${BLUE}` : '1px solid #f3f4f6', borderRadius: 10, overflow: 'hidden', opacity: modoTransferir && !transferible ? 0.5 : 1, position: 'relative' }}>
+                {modoTransferir && transferible && (
+                  <label style={{ position: 'absolute', top: 10, left: 10, zIndex: 2, width: 22, height: 22, background: '#fff', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.25)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={seleccionTransferir.has(p.id)} onChange={() => toggleSeleccion(p.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                  </label>
+                )}
+                {modoTransferir && !transferible && (
+                  <span style={{ position: 'absolute', top: 10, left: 10, zIndex: 2, fontSize: 10, fontWeight: 700, color: '#7c3aed', background: '#ede9fe', padding: '2px 8px', borderRadius: 20 }}>
+                    Ya es de un proveedor
+                  </span>
+                )}
                 <div style={{ height: 140, background: colorCategoria(p.categoria, categorias), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {p.imagen_url
                     ? <img src={p.imagen_url} alt={p.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -578,18 +647,21 @@ export default function ProductosPage() {
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#0049ff' }}>${Number(p.precio).toLocaleString()}</span>
                     <span style={{ fontSize: 12, color: '#6b7280' }}>Stock: {p.stock}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                    <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ flex: 1, background: '#f3f4f6', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
-                    <button
-                      onClick={() => setConfirmDelete(p)}
-                      disabled={deleting === p.id}
-                      style={{ flex: 1, background: '#fee2e2', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#dc2626' }}>
-                      {deleting === p.id ? '...' : 'Eliminar'}
-                    </button>
-                  </div>
+                  {!modoTransferir && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+                      <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ flex: 1, background: '#f3f4f6', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
+                      <button
+                        onClick={() => setConfirmDelete(p)}
+                        disabled={deleting === p.id}
+                        style={{ flex: 1, background: '#fee2e2', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#dc2626' }}>
+                        {deleting === p.id ? '...' : 'Eliminar'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -875,6 +947,38 @@ export default function ProductosPage() {
           confirmLabel="Descargar CSV"
           onCancel={() => setConfirmExport(false)}
           onConfirm={() => { setConfirmExport(false); exportarCSV() }}
+        />
+      )}
+
+      {modoTransferir && (
+        <div style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 250, background: NAVY, color: '#fff', borderRadius: 12, padding: '14px 20px', boxShadow: '0 12px 32px rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', maxWidth: '92vw' }}>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>{seleccionTransferir.size} seleccionado{seleccionTransferir.size === 1 ? '' : 's'}</span>
+          <select value={proveedorDestino} onChange={e => setProveedorDestino(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: 8, border: 'none', fontSize: 13, minWidth: 200, color: '#111' }}>
+            <option value="">Elegir proveedor destino…</option>
+            {proveedoresLista.map(p => (
+              <option key={p.email} value={p.email}>{p.nombre}{p.empresa ? ` · ${p.empresa}` : ''}</option>
+            ))}
+          </select>
+          <button onClick={() => setConfirmTransferir(true)} disabled={seleccionTransferir.size === 0 || !proveedorDestino}
+            style={{ background: seleccionTransferir.size === 0 || !proveedorDestino ? '#4b5568' : PINK, color: '#fff', border: 'none', padding: '9px 18px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: seleccionTransferir.size === 0 || !proveedorDestino ? 'not-allowed' : 'pointer' }}>
+            Enviar transferencia
+          </button>
+          <button onClick={cancelarTransferir}
+            style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.4)', padding: '9px 14px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {confirmTransferir && (
+        <ConfirmDialog
+          danger={false}
+          title="¿Enviar transferencia?"
+          message={`${seleccionTransferir.size} producto(s) se enviarán a ${proveedoresLista.find(p => p.email === proveedorDestino)?.nombre ?? ''}. El proveedor deberá aceptarla para que los productos pasen a su cuenta — mientras tanto siguen apareciendo como tuyos.`}
+          confirmLabel={enviandoTransferencia ? 'Enviando...' : 'Sí, enviar'}
+          onCancel={() => setConfirmTransferir(false)}
+          onConfirm={confirmarTransferencia}
         />
       )}
     </div>

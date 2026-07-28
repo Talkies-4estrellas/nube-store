@@ -11,6 +11,7 @@ import { construirArbolCategorias, crearCategoriaConPadre, type CategoriaPlana }
 import CategoriaSelector from '@/components/CategoriaSelector'
 import ChatPanel from '@/components/ChatPanel'
 import type { Conversacion } from '@/lib/mensajeria'
+import { fetchTransferenciasPendientes, aceptarTransferencia, rechazarTransferencia, type Transferencia } from '@/lib/transferencias'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -120,7 +121,7 @@ function blur(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLS
 export default function ProveedoresPage() {
   const { user, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
-  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'ajustes'>('registro')
+  const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'transferencias' | 'ajustes'>('registro')
   const { isMobile } = useSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -135,6 +136,31 @@ export default function ProveedoresPage() {
     supabase.from('conversaciones').select('*').eq('proveedor_email', user.email).order('updated_at', { ascending: false })
       .then(({ data }) => { setConversaciones(data ?? []); setCargandoConv(false) })
   }, [tab, user?.email])
+  // Transferencias de productos (admin -> proveedor)
+  const [transferencias, setTransferencias] = useState<Transferencia[]>([])
+  const [cargandoTransferencias, setCargandoTransferencias] = useState(false)
+  const [respondiendo, setRespondiendo] = useState<string | null>(null)
+  const [toastTransferencia, setToastTransferencia] = useState<{ msg: string; color: string } | null>(null)
+
+  async function cargarTransferencias() {
+    if (!user?.email) return
+    setCargandoTransferencias(true)
+    setTransferencias(await fetchTransferenciasPendientes(user.email))
+    setCargandoTransferencias(false)
+  }
+
+  useEffect(() => { if (user?.email) cargarTransferencias() }, [user?.email]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function responderTransferencia(t: Transferencia, aceptar: boolean) {
+    setRespondiendo(t.id)
+    const { error } = aceptar ? await aceptarTransferencia(t.id) : await rechazarTransferencia(t.id)
+    setRespondiendo(null)
+    if (error) { setToastTransferencia({ msg: 'Error: ' + error.message, color: PINK }); return }
+    setToastTransferencia({ msg: aceptar ? `Aceptaste "${t.producto_nombre}" — ya es tuyo` : `Rechazaste "${t.producto_nombre}"`, color: aceptar ? BLUE : '#6b7280' })
+    cargarTransferencias()
+    setTimeout(() => setToastTransferencia(null), 3500)
+  }
+
   const [savedEmail, setSavedEmail] = useState('')
   const [formState, setFormState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
@@ -696,7 +722,7 @@ export default function ProveedoresPage() {
 
   const catNombre = (id: string) => categorias.find(c => String(c.id) === id)?.nombre ?? '—'
 
-  const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'ajustes', label: string, emoji: string) => {
+  const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'transferencias' | 'ajustes', label: string, emoji: string, badge?: number) => {
     const active = tab === id
     return (
       <button onClick={() => {
@@ -713,6 +739,11 @@ export default function ProveedoresPage() {
       }}>
         <span style={{ fontSize: 16 }}>{emoji}</span>
         <span style={{ flex: 1 }}>{label}</span>
+        {!!badge && (
+          <span style={{ background: PINK, color: '#fff', fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>
+            {badge}
+          </span>
+        )}
       </button>
     )
   }
@@ -761,6 +792,7 @@ export default function ProveedoresPage() {
           {navItem('registro',  'Registrar producto', '📦')}
           {navItem('historial', 'Mis solicitudes',    '🔍')}
           {navItem('misEnviados', 'Mis productos', '📋')}
+          {navItem('transferencias', 'Transferencias', '🔁', transferencias.length)}
           {navItem('mensajes', 'Mensajes', '💬')}
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '20px 14px 6px', display: 'block' }}>ACCESO</span>
           {navItem('ajustes', 'Ajustes', '⚙️')}
@@ -803,7 +835,7 @@ export default function ProveedoresPage() {
               style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 32, width: 'auto' }} />
           )}
           <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? 'Administración' : tab === 'mensajes' ? 'Mensajes' : 'Ajustes'}
+            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? 'Administración' : tab === 'mensajes' ? 'Mensajes' : tab === 'transferencias' ? 'Transferencias' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
             <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1710,6 +1742,46 @@ export default function ProveedoresPage() {
               <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
                 Selecciona una conversación para verla.
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ---- Tab: Transferencias ---- */}
+        {tab === 'transferencias' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 720 }}>
+            {toastTransferencia && (
+              <div style={{ background: toastTransferencia.color, color: '#fff', padding: '10px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>
+                {toastTransferencia.msg}
+              </div>
+            )}
+            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
+              Productos que el administrador quiere transferir a tu cuenta. Acéptalos para que pasen a tu catálogo, o recházalos si no te corresponden.
+            </p>
+            {cargandoTransferencias ? (
+              <p style={{ fontSize: 13, color: '#9ca3af' }}>Cargando...</p>
+            ) : transferencias.length === 0 ? (
+              <div style={{ background: '#fff', borderRadius: 16, padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13, boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                No tienes transferencias pendientes.
+              </div>
+            ) : (
+              transferencias.map(t => (
+                <div key={t.id} style={{ background: '#fff', borderRadius: 16, padding: 18, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY }}>{t.producto_nombre}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 12, color: '#9ca3af' }}>SKU: {t.producto_sku} · {new Date(t.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => responderTransferencia(t, true)} disabled={respondiendo === t.id}
+                      style={{ background: '#d1fae5', color: '#065f46', border: 'none', padding: '9px 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: respondiendo === t.id ? 'wait' : 'pointer' }}>
+                      {respondiendo === t.id ? '...' : '✓ Aceptar'}
+                    </button>
+                    <button onClick={() => responderTransferencia(t, false)} disabled={respondiendo === t.id}
+                      style={{ background: '#fee2e2', color: '#991b1b', border: 'none', padding: '9px 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: respondiendo === t.id ? 'wait' : 'pointer' }}>
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
