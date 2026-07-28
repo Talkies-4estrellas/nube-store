@@ -959,7 +959,7 @@ export default function ProductosPage() {
         <div style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 250, background: NAVY, color: '#fff', borderRadius: 12, padding: '14px 20px', boxShadow: '0 12px 32px rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', maxWidth: '92vw' }}>
           <span style={{ fontSize: 14, fontWeight: 700 }}>{seleccionTransferir.size} seleccionado{seleccionTransferir.size === 1 ? '' : 's'}</span>
           <select value={proveedorDestino} onChange={e => setProveedorDestino(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 8, border: 'none', fontSize: 13, minWidth: 200, color: '#111' }}>
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, minWidth: 200, background: '#fff', color: '#111', cursor: 'pointer' }}>
             <option value="">Elegir proveedor destino…</option>
             {proveedoresLista.map(p => (
               <option key={p.email} value={p.email}>{p.nombre}{p.empresa ? ` · ${p.empresa}` : ''}</option>
