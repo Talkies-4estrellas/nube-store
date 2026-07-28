@@ -187,6 +187,7 @@ export default function ProveedoresPage() {
   const [showMisProductos, setShowMisProductos] = useState(false)
   const [misProductos, setMisProductos] = useState<MiSolicitud[]>([])
   const [loadingMisProductos, setLoadingMisProductos] = useState(false)
+  const [misProductosVista, setMisProductosVista] = useState<'grid' | 'list'>('list')
 
   // Tab Ajustes — perfil guardado del proveedor (localStorage, para autollenar el formulario)
   const [perfil, setPerfil] = useState({ nombre: '', empresa: '', email: '', telefono: '' })
@@ -1555,8 +1556,29 @@ export default function ProveedoresPage() {
         ) : null}
 
         {/* ---- Tab: Mis productos ---- */}
-        {tab === 'misEnviados' && (
-          <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+        {tab === 'misEnviados' && (() => {
+          const estadoMap: Record<string, { bg: string; text: string; label: string }> = {
+            pendiente: { bg: '#fef3c7', text: '#92400e', label: '⏳ Pendiente' },
+            aprobado:  { bg: '#d1fae5', text: '#065f46', label: '✅ Aprobado' },
+            rechazado: { bg: '#fee2e2', text: '#991b1b', label: '❌ Rechazado' },
+          }
+          return (
+          <div>
+            {misProductos.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 4, background: '#f1f2f6', padding: 4, borderRadius: 10 }}>
+                  {(['grid', 'list'] as const).map(v => (
+                    <button key={v} onClick={() => setMisProductosVista(v)} style={{
+                      padding: '7px 12px', borderRadius: 6, fontSize: 14, cursor: 'pointer',
+                      background: misProductosVista === v ? '#fff' : 'transparent',
+                      color: misProductosVista === v ? NAVY : '#9aa0b4', border: 'none',
+                      boxShadow: misProductosVista === v ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    }}>{v === 'grid' ? '⊞' : '☰'}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
 
             {loadingMisProductos ? (
               <div style={{ padding: '48px', textAlign: 'center' }}>
@@ -1568,15 +1590,47 @@ export default function ProveedoresPage() {
                 <p style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>Aún no tienes productos aprobados</p>
                 <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Cuando el equipo apruebe tus solicitudes, aparecerán aquí.</p>
               </div>
+            ) : misProductosVista === 'grid' ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, padding: 24 }}>
+                  {misProductos.map(item => {
+                    const st = estadoMap[item.estado] ?? estadoMap.pendiente
+                    return (
+                      <div key={item.id} style={{ border: '1px solid #f3f4f6', borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ height: 120, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                          {item.imagen_url
+                            ? <img src={item.imagen_url} alt={item.producto_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : <span style={{ fontSize: 28 }}>📦</span>}
+                        </div>
+                        <div style={{ padding: 14 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6, marginBottom: 6 }}>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{item.producto_nombre}</p>
+                          </div>
+                          <span style={{ display: 'inline-flex', background: st.bg, color: st.text, fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, whiteSpace: 'nowrap', marginBottom: 6 }}>
+                            {st.label}
+                          </span>
+                          <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</p>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: '#059669' }}>${Number(item.producto_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                            <span style={{ fontSize: 10, color: '#9ca3af' }}>{new Date(item.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ padding: '12px 28px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#9ca3af' }}>{misProductos.length} producto{misProductos.length !== 1 ? 's' : ''} encontrado{misProductos.length !== 1 ? 's' : ''}</span>
+                  <button type="button" onClick={() => { if (savedEmail) cargarMisProductos(savedEmail) }}
+                    style={{ background: 'none', border: 'none', fontSize: 12, color: '#9ca3af', cursor: 'pointer', fontWeight: 600 }}>
+                    🔄 Actualizar
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {misProductos.map((item, i) => {
-                    const estadoMap: Record<string, { bg: string; text: string; label: string }> = {
-                      pendiente: { bg: '#fef3c7', text: '#92400e', label: '⏳ Pendiente' },
-                      aprobado:  { bg: '#d1fae5', text: '#065f46', label: '✅ Aprobado' },
-                      rechazado: { bg: '#fee2e2', text: '#991b1b', label: '❌ Rechazado' },
-                    }
                     const st = estadoMap[item.estado] ?? estadoMap.pendiente
                     return (
                       <div key={item.id} style={{
@@ -1620,8 +1674,10 @@ export default function ProveedoresPage() {
                 </div>
               </>
             )}
+            </div>
           </div>
-        )}
+          )
+        })()}
 
         {/* ---- Tab: Seguimiento y pagos ---- */}
         {tab === 'seguimiento' && (() => {
