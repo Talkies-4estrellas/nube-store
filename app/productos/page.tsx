@@ -639,6 +639,11 @@ export default function ProductosPage() {
                       📦 {p.proveedor_nombre}
                     </p>
                   )}
+                  {p.origen !== 'proveedor' && p.proveedor_nombre && (
+                    <p title="Viene de este proveedor, pero el producto sigue siendo tuyo" style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', background: '#f3f4f6', display: 'inline-block', padding: '2px 8px', borderRadius: 20, marginBottom: 4 }}>
+                      🏷️ Viene de {p.proveedor_nombre}
+                    </p>
+                  )}
                   <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>SKU: {p.sku}</p>
                   <span style={{ display: 'inline-block', background: colorCategoria(p.categoria, categorias) + '22', color: colorCategoria(p.categoria, categorias), fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, marginBottom: 8 }}>
                     {p.categoria}

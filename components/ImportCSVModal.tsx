@@ -390,7 +390,11 @@ export default function ImportCSVModal({ onClose, onDone, existingProducts }: Pr
         if (f.ancho_cm !== null) p.ancho_cm = f.ancho_cm
         if (f.profundidad_cm !== null) p.profundidad_cm = f.profundidad_cm
         if (f.ubicacion) p.ubicacion = f.ubicacion
-        if (f.proveedor) { p.proveedor_nombre = f.proveedor; p.origen = 'proveedor' }
+        // Solo texto informativo ("viene de tal proveedor") — el producto sigue
+        // siendo del administrador. `origen: 'proveedor'` se reserva para productos
+        // que de verdad pertenecen a una cuenta de proveedor registrada (aprobados
+        // por solicitud o por una transferencia aceptada).
+        if (f.proveedor) p.proveedor_nombre = f.proveedor
 
         // Históricos del control Excel 2023: columna propia, sin pasar por `detalles`
         if (f.proveedor_contacto) p.proveedor_contacto = f.proveedor_contacto
