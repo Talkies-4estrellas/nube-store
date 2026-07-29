@@ -796,6 +796,24 @@ export default function ProveedoresPage() {
     )
   }
 
+  if (user.role === 'proveedor' && user.estado === 'suspendido') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f8', padding: 24 }}>
+        <div style={{ background: '#fff', borderRadius: 16, padding: '40px 32px', maxWidth: 420, textAlign: 'center', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+          <p style={{ fontSize: 40, margin: '0 0 12px' }}>🚫</p>
+          <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: '0 0 8px' }}>Cuenta suspendida</h2>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px' }}>
+            Tu cuenta de proveedor fue suspendida por el equipo de Order Express. Si crees que es un error, contáctanos.
+          </p>
+          <button onClick={signOut}
+            style={{ background: PINK, color: '#fff', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 

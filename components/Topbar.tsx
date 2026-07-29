@@ -88,6 +88,26 @@ export default function Topbar() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
+  // Realtime: nueva solicitud de proveedor pendiente → badge + dropdown
+  // (antes solo se cargaba una vez al abrir la página, a diferencia de "venta nueva")
+  useEffect(() => {
+    const channel = supabase
+      .channel('topbar-solicitudes-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'solicitudes_productos' }, payload => {
+        const s = payload.new as { id: string; producto_nombre: string; proveedor_nombre: string; estado: string; created_at: string }
+        if (s.estado !== 'pendiente') return
+        setNotifs(prev => [{
+          id: `sol-${s.id}`, tipo: 'solicitud' as const,
+          titulo: `Nueva solicitud: ${s.producto_nombre}`,
+          subtitulo: s.proveedor_nombre, at: s.created_at, href: '/configuracion',
+          icono: '📥', color: '#0049ff',
+        }, ...prev.filter(n => n.id !== `sol-${s.id}`)].slice(0, 20))
+        setUnread(n => n + 1)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
   // Cerrar dropdown al click fuera
   useEffect(() => {
     function handleClick(e: MouseEvent) {

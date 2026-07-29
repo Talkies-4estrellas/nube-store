@@ -5,6 +5,9 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import Icon from '@/components/Icon'
 import { useSidebar } from '@/lib/sidebar-context'
+import { useAuth } from '@/lib/auth-context'
+import { aprobarSolicitud, rechazarSolicitud } from '@/lib/solicitudes'
+import MotivoRechazoDialog from '@/components/MotivoRechazoDialog'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
 type VentaGrafica = { total: number; estado: string; created_at: string }
@@ -115,12 +118,18 @@ function GraficaBarras({ data }: { data: { label: string; total: number }[] }) {
 
 export default function DashboardPage() {
   const { isMobile } = useSidebar()
+  const { user } = useAuth()
+  const [rechazandoId, setRechazandoId] = useState<string | null>(null)
   const [ventas, setVentas]             = useState<Venta[]>([])
   const [ventasPeriodo, setVentasPeriodo] = useState<VentaGrafica[]>([])
   const [stockBajo, setStockBajo]       = useState<ProductoBajo[]>([])
   const [totalClientes, setTotalClientes] = useState(0)
   const [totalProveedores, setTotalProveedores] = useState(0)
   const [totalSinStock, setTotalSinStock] = useState(0)
+  const [totalProductos, setTotalProductos] = useState(0)
+  const [productosAprobados, setProductosAprobados] = useState(0)
+  const [productosRechazados, setProductosRechazados] = useState(0)
+  const [pedidosActivos, setPedidosActivos] = useState(0)
   const [loading, setLoading]           = useState(true)
   const [periodo, setPeriodo]           = useState<Periodo>('semana')
   const [loadingPeriodo, setLoadingPeriodo] = useState(false)
@@ -152,7 +161,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }, { data: sols }, { count: countProveedores }, { count: countSinStock }] = await Promise.all([
+      const [
+        { data: v }, { data: p }, { count }, { data: items }, { data: clientesGasto }, { data: sols },
+        { count: countProveedores }, { count: countSinStock },
+        { count: countProductos }, { count: countAprobados }, { count: countRechazados }, { count: countActivos },
+      ] = await Promise.all([
         supabase.from('ventas').select('*, clientes(nombre)').order('created_at', { ascending: false }).limit(5),
         supabase.from('productos').select('id, nombre, stock').lte('stock', 3).order('stock').limit(50),
         supabase.from('clientes').select('id', { count: 'exact', head: true }),
@@ -161,6 +174,10 @@ export default function DashboardPage() {
         supabase.from('solicitudes_productos').select('*').eq('estado', 'pendiente').order('created_at', { ascending: false }),
         supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'proveedor'),
         supabase.from('productos').select('id', { count: 'exact', head: true }).eq('stock', 0),
+        supabase.from('productos').select('id', { count: 'exact', head: true }),
+        supabase.from('solicitudes_productos').select('id', { count: 'exact', head: true }).eq('estado', 'aprobado'),
+        supabase.from('solicitudes_productos').select('id', { count: 'exact', head: true }).eq('estado', 'rechazado'),
+        supabase.from('ventas').select('id', { count: 'exact', head: true }).not('estado', 'in', '("Enviado","Entregado","Cancelado")'),
       ])
       if (v) setVentas(v)
       if (p) setStockBajo(p)
@@ -168,6 +185,10 @@ export default function DashboardPage() {
       setTotalClientes(count ?? 0)
       setTotalProveedores(countProveedores ?? 0)
       setTotalSinStock(countSinStock ?? 0)
+      setTotalProductos(countProductos ?? 0)
+      setProductosAprobados(countAprobados ?? 0)
+      setProductosRechazados(countRechazados ?? 0)
+      setPedidosActivos(countActivos ?? 0)
 
       // Calcular top metrics
       const tops: TopMetric[] = []
@@ -226,46 +247,51 @@ export default function DashboardPage() {
     loadPeriodo()
   }, [periodo])
 
-  async function cambiarEstado(id: string, estado: 'aprobado' | 'rechazado') {
+  async function aprobar(id: string) {
     setProcesando(id)
-    if (estado === 'aprobado') {
-      const sol = solicitudes.find(s => s.id === id)
-      if (sol) {
-        await supabase.from('productos').insert({
-          nombre: sol.producto_nombre,
-          sku: sol.producto_sku,
-          precio: sol.producto_precio,
-          stock: sol.producto_stock,
-          imagen_url: sol.imagen_url,
-          categoria_id: sol.categoria_id,
-          activo: true,
-          origen: 'proveedor',
-          proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
-        })
-      }
-    }
-    await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
+    const sol = solicitudes.find(s => s.id === id)
+    if (sol) await aprobarSolicitud(supabase, sol, user?.id)
     setSolicitudes(prev => prev.filter(s => s.id !== id))
-    addToast(
-      estado === 'aprobado' ? 'Producto aprobado y publicado en el catálogo' : 'Solicitud rechazada',
-      estado === 'aprobado' ? 'check' : 'warning',
-      estado === 'aprobado' ? '#059669' : '#dc2626',
-    )
+    setProductosAprobados(prev => prev + 1)
+    setTotalProductos(prev => prev + 1)
+    addToast('Producto aprobado y publicado en el catálogo', 'check', '#059669')
     setProcesando(null)
   }
 
+  async function confirmarRechazo(motivo: string) {
+    if (!rechazandoId) return
+    const sol = solicitudes.find(s => s.id === rechazandoId)
+    if (!sol) return
+    setProcesando(rechazandoId)
+    await rechazarSolicitud(supabase, sol, motivo, user?.id)
+    setSolicitudes(prev => prev.filter(s => s.id !== rechazandoId))
+    setProductosRechazados(prev => prev + 1)
+    addToast('Solicitud rechazada', 'warning', '#dc2626')
+    setProcesando(null)
+    setRechazandoId(null)
+  }
+
   const totalPeriodo = ventasPeriodo.filter(v => v.estado === 'Pagado').reduce((s, v) => s + Number(v.total), 0)
-  const pendientes   = ventas.filter(v => v.estado === 'Pendiente').length
   const chartData    = buildChartData(ventasPeriodo, periodo)
   const hayDatosGrafica = chartData.some(d => d.total > 0)
 
   const metrics = [
     { label: `Ventas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString('es-MX')}`, icon: 'dollar', href: '/ventas', color: '#059669' },
-    { label: 'Pedidos pendientes', value: pendientes, icon: 'clipboard', href: '/ventas', color: '#d97706' },
+    { label: 'Pedidos activos', value: pedidosActivos, icon: 'clipboard', href: '/ventas', color: '#d97706' },
+    { label: 'Total de productos', value: totalProductos, icon: 'box', href: '/productos', color: '#374151' },
+    { label: 'Pendientes de aprobación', value: solicitudes.length, icon: 'clock', href: '/configuracion', color: '#d97706' },
+    { label: 'Productos aprobados', value: productosAprobados, icon: 'check', href: '/productos', color: '#059669' },
+    { label: 'Productos rechazados', value: productosRechazados, icon: 'warning', href: '/configuracion', color: '#dc2626' },
     { label: 'Clientes registrados', value: totalClientes, icon: 'users', href: '/clientes', color: BLUE },
     { label: 'Proveedores registrados', value: totalProveedores, icon: 'users', href: '/configuracion', color: '#7c3aed' },
     { label: 'Productos sin stock', value: totalSinStock, icon: 'warning', href: '/productos', color: '#dc2626' },
   ]
+
+  const alertas = [
+    totalSinStock > 0 && { msg: `${totalSinStock} producto${totalSinStock > 1 ? 's' : ''} sin stock`, href: '/productos', color: '#dc2626' },
+    solicitudes.length > 0 && { msg: `${solicitudes.length} producto${solicitudes.length > 1 ? 's' : ''} esperando aprobación`, href: '/configuracion', color: '#d97706' },
+    pedidosActivos > 0 && { msg: `${pedidosActivos} pedido${pedidosActivos > 1 ? 's' : ''} en proceso`, href: '/ventas', color: BLUE },
+  ].filter((a): a is { msg: string; href: string; color: string } => !!a)
 
   return (
     <div>
@@ -305,6 +331,20 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Alertas importantes — panel persistente (no depende de estar mirando la pantalla en el momento del Realtime) */}
+      {!loading && alertas.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 12, padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 20 }}>
+          <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>⚠️ Alertas importantes</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {alertas.map(a => (
+              <Link key={a.msg} href={a.href} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, background: a.color + '12', color: a.color, fontSize: 13, fontWeight: 700, padding: '8px 14px', borderRadius: 20 }}>
+                {a.msg} →
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Top métricas: producto, categoría, cliente */}
       {topMetrics.length > 0 && (
@@ -445,17 +485,12 @@ export default function DashboardPage() {
                   onClick={async () => {
                     setProcesando('all')
                     for (const sol of solicitudes) {
-                      await supabase.from('productos').insert({
-                        nombre: sol.producto_nombre, sku: sol.producto_sku,
-                        precio: sol.producto_precio, stock: sol.producto_stock,
-                        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
-                        origen: 'proveedor',
-                        proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
-                      })
-                      await supabase.from('solicitudes_productos').update({ estado: 'aprobado' }).eq('id', sol.id)
+                      await aprobarSolicitud(supabase, sol, user?.id)
                     }
-                    setSolicitudes([])
+                    setProductosAprobados(prev => prev + solicitudes.length)
+                    setTotalProductos(prev => prev + solicitudes.length)
                     addToast(`${solicitudes.length} productos aprobados y publicados`, 'check', '#059669')
+                    setSolicitudes([])
                     setProcesando(null)
                   }}
                   disabled={procesando !== null}
@@ -508,13 +543,13 @@ export default function DashboardPage() {
                   {/* Acciones */}
                   <div className="sol-card-actions" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                     <button
-                      onClick={() => cambiarEstado(sol.id, 'rechazado')}
+                      onClick={() => setRechazandoId(sol.id)}
                       disabled={procesando === sol.id}
                       style={{ padding: '8px 16px', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer', opacity: procesando === sol.id ? 0.5 : 1 }}>
                       Rechazar
                     </button>
                     <button
-                      onClick={() => cambiarEstado(sol.id, 'aprobado')}
+                      onClick={() => aprobar(sol.id)}
                       disabled={procesando === sol.id}
                       style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: procesando === sol.id ? '#9ca3af' : '#059669', color: '#fff', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer' }}>
                       {procesando === sol.id ? '...' : 'Aprobar y publicar'}
@@ -525,6 +560,14 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+      )}
+
+      {rechazandoId && (
+        <MotivoRechazoDialog
+          enviando={procesando === rechazandoId}
+          onCancel={() => setRechazandoId(null)}
+          onConfirm={confirmarRechazo}
+        />
       )}
 
       {/* Toasts */}

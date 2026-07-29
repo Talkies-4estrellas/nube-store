@@ -6,6 +6,8 @@ import VentaModal from '@/components/VentaModal'
 import Icon from '@/components/Icon'
 import { SkeletonTableBody } from '@/components/Skeleton'
 import { paginasVisibles } from '@/lib/pagination'
+import { useAuth } from '@/lib/auth-context'
+import { registrarMovimiento, fetchHistorial, type MovimientoVenta } from '@/lib/ventasHistorial'
 
 const PAGE_SIZE = 15
 
@@ -32,19 +34,21 @@ const statusStyle: Record<string, { bg: string; text: string }> = {
   'En proceso':{ bg: '#ede9fe', text: '#6d28d9'  },
   Pagado:      { bg: '#d1fae5', text: '#065f46'  },
   Enviado:     { bg: '#dbeafe', text: '#1e40af'  },
+  Entregado:   { bg: '#dcfce7', text: '#166534'  },
   Cancelado:   { bg: '#fee2e2', text: '#991b1b'  },
 }
 
 const estadosSig: Record<string, string[]> = {
   Pendiente:  ['Pagado', 'Cancelado'],
   Pagado:     ['Enviado', 'Cancelado'],
-  Enviado:    [],
+  Enviado:    ['Entregado', 'Cancelado'],
+  Entregado:  [],
   Cancelado:  [],
 }
 
-const PIPELINE = ['Pendiente', 'Pagado', 'Enviado']
+const PIPELINE = ['Pendiente', 'Pagado', 'Enviado', 'Entregado']
 
-const statuses = ['Todos', 'Pendiente', 'Pagado', 'Enviado', 'Cancelado']
+const statuses = ['Todos', 'Pendiente', 'Pagado', 'Enviado', 'Entregado', 'Cancelado']
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -116,7 +120,10 @@ function imprimirVenta(venta: Venta, items: VentaItem[]) {
 }
 
 export default function VentasPage() {
+  const { user } = useAuth()
   const [ventas, setVentas] = useState<Venta[]>([])
+  const [historial, setHistorial] = useState<MovimientoVenta[]>([])
+  const [showHistorial, setShowHistorial] = useState(false)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('Todos')
@@ -143,21 +150,26 @@ export default function VentasPage() {
 
   async function abrirDetalle(v: Venta) {
     setDetalle(v)
+    setShowHistorial(false)
     setLoadingItems(true)
-    const { data } = await supabase
-      .from('venta_items')
-      .select('*')
-      .eq('venta_id', v.id)
-      .order('created_at', { ascending: true })
+    const [{ data }, hist] = await Promise.all([
+      supabase.from('venta_items').select('*').eq('venta_id', v.id).order('created_at', { ascending: true }),
+      fetchHistorial(supabase, v.id),
+    ])
     setItems(data ?? [])
+    setHistorial(hist)
     setLoadingItems(false)
   }
 
   async function cambiarEstado(venta: Venta, nuevoEstado: string) {
     setCambiandoEstado(venta.id)
     await supabase.from('ventas').update({ estado: nuevoEstado }).eq('id', venta.id)
+    await registrarMovimiento(supabase, venta.id, venta.estado, nuevoEstado, user?.id)
     await fetchVentas()
-    if (detalle?.id === venta.id) setDetalle(v => v ? { ...v, estado: nuevoEstado } : v)
+    if (detalle?.id === venta.id) {
+      setDetalle(v => v ? { ...v, estado: nuevoEstado } : v)
+      setHistorial(await fetchHistorial(supabase, venta.id))
+    }
     setCambiandoEstado(null)
   }
 
@@ -430,6 +442,34 @@ export default function VentasPage() {
               ))}
             </div>
           )}
+
+          {/* Historial de movimientos */}
+          <div style={{ borderTop: '1px solid #f3f4f6', padding: '14px 20px' }}>
+            <button onClick={() => setShowHistorial(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ transform: showHistorial ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.15s' }}>▶</span>
+              Historial {historial.length > 0 ? `(${historial.length})` : ''}
+            </button>
+            {showHistorial && (
+              historial.length === 0 ? (
+                <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 10 }}>Sin movimientos registrados todavía.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                  {historial.map(m => (
+                    <div key={m.id} style={{ fontSize: 12, color: '#374151', paddingLeft: 12, borderLeft: '2px solid #e5e7eb' }}>
+                      <p style={{ margin: 0, fontWeight: 700 }}>
+                        {m.estado_anterior ? `${m.estado_anterior} → ${m.estado_nuevo}` : m.estado_nuevo}
+                      </p>
+                      <p style={{ margin: '2px 0 0', color: '#9ca3af' }}>
+                        {new Date(m.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {m.comentario && <p style={{ margin: '4px 0 0', fontStyle: 'italic' }}>{m.comentario}</p>}
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
         </div>
       )}
 

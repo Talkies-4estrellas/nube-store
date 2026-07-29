@@ -78,7 +78,11 @@ type Props = {
   inicial?: Partial<Producto> & { id?: string }
   arbolCategorias: CategoriaConHijos[]
   onCrearCategoria: (nombre: string, parentId: number | null) => Promise<{ id: number; nombre: string } | null>
+  serverError?: string
+  guardando?: boolean
 }
+
+const MAX_IMAGEN_MB = 8
 
 function buildVariantes(
   colores: string[], tallas: string[],
@@ -92,9 +96,10 @@ function buildVariantes(
   return colores.flatMap(c => tallas.map(t => ({ color: c, talla: t, stock: existing.find(v => v.color === c && v.talla === t)?.stock ?? '' })))
 }
 
-export default function ProductoModal({ onClose, onSave, inicial, arbolCategorias, onCrearCategoria }: Props) {
+export default function ProductoModal({ onClose, onSave, inicial, arbolCategorias, onCrearCategoria, serverError, guardando }: Props) {
   const [form, setForm] = useState<Producto>({ ...empty, ...emptyExtra(), ...inicial })
   const [errors, setErrors] = useState<Partial<Record<keyof Producto, string>>>({})
+  const [imagenError, setImagenError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [convirtiendo, setConvirtiendo] = useState(false)
   const [mostrarOpcionales, setMostrarOpcionales] = useState(false)
@@ -135,7 +140,10 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
 
   /* ---- Imagen extra ---- */
   async function agregarImagenesExtra(files: FileList | File[]) {
-    const arr = Array.from(files).filter(f => f.type.startsWith('image/'))
+    const todas = Array.from(files).filter(f => f.type.startsWith('image/'))
+    const pesadas = todas.filter(f => f.size > MAX_IMAGEN_MB * 1024 * 1024)
+    const arr = todas.filter(f => f.size <= MAX_IMAGEN_MB * 1024 * 1024)
+    setImagenError(pesadas.length > 0 ? `${pesadas.length} imagen(es) superan ${MAX_IMAGEN_MB}MB y no se agregaron` : '')
     if (!arr.length) return
     setConvirtiendo(true)
     try {
@@ -145,6 +153,28 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
       }))
       setForm(f => ({ ...f, imagenesExtra: [...f.imagenesExtra, ...converted] }))
     } finally { setConvirtiendo(false) }
+  }
+  function moverImagenExtra(i: number, dir: -1 | 1) {
+    setForm(f => {
+      const extras = [...f.imagenesExtra]
+      const j = i + dir
+      if (j < 0 || j >= extras.length) return f
+      ;[extras[i], extras[j]] = [extras[j], extras[i]]
+      return { ...f, imagenesExtra: extras }
+    })
+  }
+  function usarComoPrincipal(i: number) {
+    setForm(f => {
+      const extras = [...f.imagenesExtra]
+      const nuevaPrincipal = extras[i]
+      const principalAnterior = { file: f.imagen, preview: f.imagenPreview }
+      extras[i] = principalAnterior.file || principalAnterior.preview
+        ? { file: principalAnterior.file, preview: principalAnterior.preview }
+        : extras[i]
+      if (!principalAnterior.file && !principalAnterior.preview) extras.splice(i, 1)
+      return { ...f, imagen: nuevaPrincipal.file, imagenPreview: nuevaPrincipal.preview, imagenesExtra: extras }
+    })
+    setErrors(e => ({ ...e, imagen: '' }))
   }
   function onExtraFileChange(e: ChangeEvent<HTMLInputElement>) {
     if (e.target.files?.length) agregarImagenesExtra(e.target.files)
@@ -165,6 +195,11 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
   }
   async function handleFile(file: File) {
     if (!file.type.startsWith('image/')) return
+    if (file.size > MAX_IMAGEN_MB * 1024 * 1024) {
+      setImagenError(`La imagen supera el máximo de ${MAX_IMAGEN_MB}MB`)
+      return
+    }
+    setImagenError('')
     setConvirtiendo(true)
     try {
       const webp = await convertToWebp(file)
@@ -189,8 +224,8 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
     if (!form.nombre.trim()) errs.nombre = 'El nombre es requerido'
     if (!form.sku.trim()) errs.sku = 'El SKU es requerido'
     if (!form.categoria_id) errs.categoria_id = 'Selecciona una categoría'
-    if (!form.precio || isNaN(Number(form.precio))) errs.precio = 'Precio inválido'
-    if (!form.stock || isNaN(Number(form.stock))) errs.stock = 'Stock inválido'
+    if (!form.precio || isNaN(Number(form.precio)) || Number(form.precio) <= 0) errs.precio = 'El precio debe ser mayor a $0'
+    if (form.stock === '' || isNaN(Number(form.stock)) || Number(form.stock) < 0) errs.stock = 'El stock no puede ser negativo'
     if (!form.imagen && !inicial?.imagenPreview) errs.imagen = 'Sube una imagen del producto'
     return errs
   }
@@ -220,9 +255,16 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
 
         <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
+          {serverError && (
+            <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600 }}>
+              ⚠️ {serverError}
+            </div>
+          )}
+
           {/* Imagen principal */}
           <div>
             <label style={labelStyle}>Imagen del producto</label>
+            {imagenError && <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '4px 0 0' }}>{imagenError}</p>}
             {form.imagenPreview ? (
               <div onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
                 style={{ position: 'relative', marginTop: 8, borderRadius: 10, outline: dragging ? '2px dashed #0049ff' : 'none', outlineOffset: 2, transition: 'outline 0.15s' }}>
@@ -465,6 +507,17 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                           <img src={extra.preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                           <button type="button" onClick={() => removeExtraImagen(i)}
                             style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1, backdropFilter: 'blur(2px)' }}>×</button>
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', gap: 3, padding: 4, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))' }}>
+                            <button type="button" onClick={() => moverImagenExtra(i, -1)} disabled={i === 0}
+                              title="Mover a la izquierda"
+                              style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1 }}>◀</button>
+                            <button type="button" onClick={() => usarComoPrincipal(i)}
+                              title="Usar como imagen principal"
+                              style={{ flex: 2, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Principal</button>
+                            <button type="button" onClick={() => moverImagenExtra(i, 1)} disabled={i === form.imagenesExtra.length - 1}
+                              title="Mover a la derecha"
+                              style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === form.imagenesExtra.length - 1 ? 'default' : 'pointer', opacity: i === form.imagenesExtra.length - 1 ? 0.3 : 1 }}>▶</button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -487,8 +540,8 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
           {/* Acciones */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
             <button onClick={onClose} style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
-            <button onClick={handleSubmit} disabled={convirtiendo} style={{ background: convirtiendo ? '#93c5fd' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-              {inicial?.id ? 'Actualizar producto' : 'Guardar producto'}
+            <button onClick={handleSubmit} disabled={convirtiendo || guardando} style={{ background: convirtiendo || guardando ? '#93c5fd' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: convirtiendo || guardando ? 'default' : 'pointer' }}>
+              {guardando ? 'Guardando...' : inicial?.id ? 'Actualizar producto' : 'Guardar producto'}
             </button>
           </div>
         </div>

@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabase'
 import { convertToWebp, uploadToSupabase } from '@/lib/uploadWebp'
 import ChatPanel from '@/components/ChatPanel'
 import type { Conversacion } from '@/lib/mensajeria'
+import { aprobarSolicitud, rechazarSolicitud } from '@/lib/solicitudes'
+import MotivoRechazoDialog from '@/components/MotivoRechazoDialog'
+import { registrarAuditoria, fetchBitacora, type EntradaBitacora } from '@/lib/bitacora'
 
 type Section = 'perfil' | 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 'usuarios' | 'solicitudes' | 'comentarios'
 
@@ -27,6 +30,8 @@ type Solicitud = {
   estado: 'pendiente' | 'aprobado' | 'rechazado'
   created_at: string
   categorias?: { nombre: string } | null
+  motivo_rechazo?: string | null
+  revisado_por?: string | null
 }
 
 const ALL_NAV: { id: Section; label: string; icon: string; adminOnly?: boolean }[] = [
@@ -57,6 +62,8 @@ export default function ConfiguracionPage() {
   // Estado para sección usuarios
   const [usuarios,        setUsuarios]        = useState<UserRow[]>([])
   const [loadingUsuarios, setLoadingUsuarios] = useState(false)
+  const [bitacora, setBitacora] = useState<EntradaBitacora[]>([])
+  const [loadingBitacora, setLoadingBitacora] = useState(false)
   const [editingRole,     setEditingRole]     = useState<{ id: string; role: string } | null>(null)
   const [savingRole,      setSavingRole]      = useState(false)
 
@@ -65,6 +72,7 @@ export default function ConfiguracionPage() {
   const [loadingSolicitudes, setLoadingSolicitudes] = useState(false)
   const [filtroEstado,       setFiltroEstado]       = useState<'todas' | 'pendiente' | 'aprobado' | 'rechazado'>('pendiente')
   const [updatingId,         setUpdatingId]         = useState<string | null>(null)
+  const [rechazandoId,       setRechazandoId]       = useState<string | null>(null)
   const [expandedId,         setExpandedId]         = useState<string | null>(null)
 
   const navItems = ALL_NAV.filter(n => !n.adminOnly || user?.role === 'admin')
@@ -140,7 +148,11 @@ export default function ConfiguracionPage() {
   }
 
   useEffect(() => {
-    if (section === 'usuarios') fetchUsuarios()
+    if (section === 'usuarios') {
+      fetchUsuarios()
+      setLoadingBitacora(true)
+      fetchBitacora(supabase).then(rows => { setBitacora(rows); setLoadingBitacora(false) })
+    }
     if (section === 'solicitudes') fetchSolicitudes()
     if (section === 'comentarios') fetchComentarios()
   }, [section])
@@ -167,10 +179,18 @@ export default function ConfiguracionPage() {
   async function saveRole() {
     if (!editingRole) return
     setSavingRole(true)
+    const anterior = usuarios.find(u => u.id === editingRole.id)?.role ?? null
     await supabase.from('user_roles').update({ role: editingRole.role }).eq('id', editingRole.id)
+    if (anterior !== editingRole.role) {
+      registrarAuditoria(supabase, {
+        usuarioId: user?.id, accion: 'cambio_rol', tabla: 'user_roles', registroId: editingRole.id,
+        valorAnterior: anterior, valorNuevo: editingRole.role,
+      })
+    }
     setSavingRole(false)
     setEditingRole(null)
     fetchUsuarios()
+    fetchBitacora(supabase).then(setBitacora)
   }
 
   async function fetchSolicitudes() {
@@ -183,36 +203,41 @@ export default function ConfiguracionPage() {
     setLoadingSolicitudes(false)
   }
 
-  async function cambiarEstado(id: string, estado: 'aprobado' | 'rechazado' | 'pendiente') {
+  async function aprobar(id: string) {
     setUpdatingId(id)
+    const solicitud = solicitudes.find(s => s.id === id)
+    if (solicitud) await aprobarSolicitud(supabase, solicitud, user?.id)
+    setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado: 'aprobado', motivo_rechazo: null } : s))
+    setUpdatingId(null)
+  }
 
-    if (estado === 'aprobado') {
-      const solicitud = solicitudes.find(s => s.id === id)
-      if (solicitud) {
-        // Crear el producto en el catálogo al aprobar
-        await supabase.from('productos').insert({
-          nombre:           solicitud.producto_nombre,
-          sku:              solicitud.producto_sku,
-          precio:           solicitud.producto_precio,
-          stock:            solicitud.producto_stock,
-          imagen_url:       solicitud.imagen_url,
-          categoria_id:     solicitud.categoria_id,
-          activo:           true,
-          origen:           'proveedor',
-          proveedor_nombre: solicitud.proveedor_empresa || solicitud.proveedor_nombre,
-        })
-      }
-    }
+  async function confirmarRechazoSolicitud(motivo: string) {
+    if (!rechazandoId) return
+    const solicitud = solicitudes.find(s => s.id === rechazandoId)
+    if (!solicitud) return
+    setUpdatingId(rechazandoId)
+    await rechazarSolicitud(supabase, solicitud, motivo, user?.id)
+    setSolicitudes(prev => prev.map(s => s.id === rechazandoId ? { ...s, estado: 'rechazado', motivo_rechazo: motivo } : s))
+    setUpdatingId(null)
+    setRechazandoId(null)
+  }
 
-    await supabase.from('solicitudes_productos').update({ estado }).eq('id', id)
-    setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado } : s))
+  async function volverAPendiente(id: string) {
+    setUpdatingId(id)
+    await supabase.from('solicitudes_productos').update({ estado: 'pendiente', motivo_rechazo: null }).eq('id', id)
+    setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado: 'pendiente', motivo_rechazo: null } : s))
     setUpdatingId(null)
   }
 
   async function deleteUser(u: UserRow) {
     if (!confirm(`¿Eliminar acceso de ${u.nombre}? El usuario de Supabase Auth no se elimina.`)) return
     await supabase.from('user_roles').delete().eq('id', u.id)
+    registrarAuditoria(supabase, {
+      usuarioId: user?.id, accion: 'eliminar_acceso', tabla: 'user_roles', registroId: u.id,
+      valorAnterior: u.role, valorNuevo: null,
+    })
     fetchUsuarios()
+    fetchBitacora(supabase).then(setBitacora)
   }
 
   const [negocio, setNegocio] = useState({ nombre: 'Order Express', moneda: 'MXN — Peso mexicano', zona: 'America/Mexico_City', idioma: 'Español (México)' })
@@ -520,14 +545,21 @@ export default function ConfiguracionPage() {
                               </div>
                             </div>
 
+                            {s.estado === 'rechazado' && s.motivo_rechazo && (
+                              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+                                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Motivo del rechazo</p>
+                                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#7f1d1d' }}>{s.motivo_rechazo}</p>
+                              </div>
+                            )}
+
                             {/* Acciones */}
                             {s.estado === 'pendiente' && (
                               <div style={{ display: 'flex', gap: 10, paddingTop: 12, borderTop: '1px solid #e5e7eb', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <button onClick={() => cambiarEstado(s.id, 'aprobado')} disabled={updatingId === s.id}
+                                <button onClick={() => aprobar(s.id)} disabled={updatingId === s.id}
                                   style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingId === s.id ? 0.6 : 1 }}>
                                   {updatingId === s.id ? 'Creando producto...' : '✓ Aprobar y publicar producto'}
                                 </button>
-                                <button onClick={() => cambiarEstado(s.id, 'rechazado')} disabled={updatingId === s.id}
+                                <button onClick={() => setRechazandoId(s.id)} disabled={updatingId === s.id}
                                   style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingId === s.id ? 0.6 : 1 }}>
                                   ✕ Rechazar
                                 </button>
@@ -536,7 +568,7 @@ export default function ConfiguracionPage() {
                             )}
                             {s.estado !== 'pendiente' && (
                               <div style={{ paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
-                                <button onClick={() => cambiarEstado(s.id, 'pendiente')} disabled={updatingId === s.id}
+                                <button onClick={() => volverAPendiente(s.id)} disabled={updatingId === s.id}
                                   style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                                   Volver a pendiente
                                 </button>
@@ -619,6 +651,41 @@ export default function ConfiguracionPage() {
           </Card>
         )}
 
+        {section === 'usuarios' && (
+          <Card title="🔒 Actividad reciente (seguridad)">
+            <p style={{ fontSize: 13, color: '#6b7280', marginTop: -10, marginBottom: 4 }}>
+              Cambios de rol y de acceso — quién, cuándo y qué valor tenía antes.
+            </p>
+            {loadingBitacora ? (
+              <p style={{ fontSize: 13, color: '#9ca3af', padding: '12px 0' }}>Cargando...</p>
+            ) : bitacora.length === 0 ? (
+              <p style={{ fontSize: 13, color: '#9ca3af', padding: '12px 0' }}>Todavía no hay movimientos registrados.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {bitacora.map(b => {
+                  const usuarioNombre = usuarios.find(u => u.user_id === b.usuario_id)?.nombre ?? 'Alguien'
+                  const accionLabel: Record<string, string> = {
+                    cambio_rol: 'cambió el rol', eliminar_acceso: 'quitó el acceso',
+                    suspender_proveedor: 'suspendió a un proveedor', reactivar_proveedor: 'reactivó a un proveedor',
+                  }
+                  return (
+                    <div key={b.id} style={{ fontSize: 12, color: '#374151', paddingLeft: 12, borderLeft: '2px solid #e5e7eb' }}>
+                      <p style={{ margin: 0 }}>
+                        <strong>{usuarioNombre}</strong> {accionLabel[b.accion] ?? b.accion}
+                        {b.valor_anterior && b.valor_nuevo && ` de "${ROLE_LABEL[b.valor_anterior] ?? b.valor_anterior}" a "${ROLE_LABEL[b.valor_nuevo] ?? b.valor_nuevo}"`}
+                        {b.valor_anterior && !b.valor_nuevo && ` (tenía rol "${ROLE_LABEL[b.valor_anterior] ?? b.valor_anterior}")`}
+                      </p>
+                      <p style={{ margin: '2px 0 0', color: '#9ca3af' }}>
+                        {new Date(b.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        )}
+
         {section === 'comentarios' && (
           <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16, alignItems: 'start' }}>
             <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
@@ -658,6 +725,14 @@ export default function ConfiguracionPage() {
         </div>
         )}
       </div>
+
+      {rechazandoId && (
+        <MotivoRechazoDialog
+          enviando={updatingId === rechazandoId}
+          onCancel={() => setRechazandoId(null)}
+          onConfirm={confirmarRechazoSolicitud}
+        />
+      )}
     </div>
   )
 }

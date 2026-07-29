@@ -13,6 +13,8 @@ import Icon from '@/components/Icon'
 import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
 import { useAuth } from '@/lib/auth-context'
 import { crearTransferencias } from '@/lib/transferencias'
+import { aprobarSolicitud, rechazarSolicitud } from '@/lib/solicitudes'
+import MotivoRechazoDialog from '@/components/MotivoRechazoDialog'
 
 const PAGE_SIZE = 12
 const NAVY = '#252855'
@@ -83,16 +85,23 @@ export default function ProductosPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [showModal, setShowModal] = useState(false)
   const [editando, setEditando] = useState<Product | null>(null)
+  const [guardandoProducto, setGuardandoProducto] = useState(false)
+  const [errorGuardarProducto, setErrorGuardarProducto] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Product | null>(null)
   const [page, setPage] = useState(1)
   const [sortBy, setSortBy] = useState<'nombre' | 'precio' | 'stock'>('nombre')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [proveedorFiltro, setProveedorFiltro] = useState<string | null>(null)
+  const [estadoFiltro, setEstadoFiltro] = useState<string | null>(null)
+  const [disponibilidadFiltro, setDisponibilidadFiltro] = useState<'' | 'visible' | 'oculto'>('')
+  const [precioMin, setPrecioMin] = useState('')
+  const [precioMax, setPrecioMax] = useState('')
   const [showSolicitudes, setShowSolicitudes] = useState(false)
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [loadingSol, setLoadingSol] = useState(false)
   const [procesando, setProcesando] = useState<string | null>(null)
+  const [rechazandoId, setRechazandoId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null)
   const [solicitudDetalle, setSolicitudDetalle] = useState<Solicitud | null>(null)
   const [showImport, setShowImport] = useState(false)
@@ -221,62 +230,47 @@ export default function ProductosPage() {
     setLoadingSol(false)
   }
 
-  async function notificarProveedor(sol: Solicitud, estado: 'aprobado' | 'rechazado') {
-    try {
-      await supabase.functions.invoke('notify-proveedor', {
-        body: {
-          proveedor_email: sol.proveedor_email,
-          proveedor_nombre: sol.proveedor_nombre,
-          producto_nombre: sol.producto_nombre,
-          estado,
-        }
-      })
-    } catch {}
-  }
-
-  async function cambiarEstadoSol(id: string, estado: 'aprobado' | 'rechazado') {
+  async function aprobar(id: string) {
     setProcesando(id)
     const sol = solicitudes.find(s => s.id === id)
-    if (estado === 'aprobado' && sol) {
-      const { error: errIns } = await supabase.from('productos').upsert({
-        nombre: sol.producto_nombre, sku: sol.producto_sku,
-        precio: sol.producto_precio, stock: sol.producto_stock,
-        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id,
-        origen: 'proveedor',
-        proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
-      }, { onConflict: 'sku', ignoreDuplicates: true })
-      if (errIns) console.error('Error al publicar producto:', errIns)
+    if (sol) {
+      const { error } = await aprobarSolicitud(supabase, sol, user?.id)
+      if (error) {
+        setToast({ msg: `Error: ${error.message}`, color: '#dc2626' })
+        setTimeout(() => setToast(null), 4000)
+        setProcesando(null)
+        return
+      }
     }
-    const { error: errUpd } = await supabase
-      .from('solicitudes_productos').update({ estado }).eq('id', id)
-    if (errUpd) {
-      console.error('Error al actualizar estado:', errUpd)
-      setToast({ msg: `Error: ${errUpd.message}`, color: '#dc2626' })
-      setTimeout(() => setToast(null), 4000)
-      setProcesando(null)
-      return
-    }
-    if (sol) notificarProveedor(sol, estado)
     setSolicitudes(prev => prev.filter(s => s.id !== id))
     setProcesando(null)
-    const msg = estado === 'aprobado' ? 'Producto aprobado y publicado' : 'Solicitud rechazada'
-    const color = estado === 'aprobado' ? '#059669' : '#dc2626'
-    setToast({ msg, color })
+    setToast({ msg: 'Producto aprobado y publicado', color: '#059669' })
     setTimeout(() => setToast(null), 3000)
-    if (estado === 'aprobado') fetchProducts()
+    fetchProducts()
+  }
+
+  async function confirmarRechazoProducto(motivo: string) {
+    if (!rechazandoId) return
+    const sol = solicitudes.find(s => s.id === rechazandoId)
+    if (!sol) return
+    setProcesando(rechazandoId)
+    const { error } = await rechazarSolicitud(supabase, sol, motivo, user?.id)
+    setProcesando(null)
+    if (error) {
+      setToast({ msg: `Error: ${error.message}`, color: '#dc2626' })
+      setTimeout(() => setToast(null), 4000)
+      return
+    }
+    setSolicitudes(prev => prev.filter(s => s.id !== rechazandoId))
+    setRechazandoId(null)
+    setToast({ msg: 'Solicitud rechazada', color: '#dc2626' })
+    setTimeout(() => setToast(null), 3000)
   }
 
   async function aprobarTodos() {
     setProcesando('all')
     for (const sol of solicitudes) {
-      await supabase.from('productos').insert({
-        nombre: sol.producto_nombre, sku: sol.producto_sku,
-        precio: sol.producto_precio, stock: sol.producto_stock,
-        imagen_url: sol.imagen_url, categoria_id: sol.categoria_id, activo: true,
-        origen: 'proveedor',
-        proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
-      })
-      await supabase.from('solicitudes_productos').update({ estado: 'aprobado' }).eq('id', sol.id)
+      await aprobarSolicitud(supabase, sol, user?.id)
     }
     const n = solicitudes.length
     setSolicitudes([])
@@ -326,6 +320,8 @@ export default function ProductosPage() {
     peso: string; largo: string; ancho: string; alto: string
     imagenesExtra: Array<{ file: File | null; preview: string | null }>
   }) {
+    setGuardandoProducto(true)
+    setErrorGuardarProducto('')
     let imagen_url: string | null = null
 
     if (form.imagen) {
@@ -377,12 +373,15 @@ export default function ProductosPage() {
       ? await supabase.from('productos').update(payload).eq('id', editando.id)
       : await supabase.from('productos').insert(payload)
 
+    setGuardandoProducto(false)
     if (!error) {
       await fetchProducts()
       setShowModal(false)
       setEditando(null)
+    } else if (error.message.includes('duplicate key') && error.message.includes('sku')) {
+      setErrorGuardarProducto(`Ya existe un producto con el SKU "${form.sku}". Usa un SKU distinto.`)
     } else {
-      alert('Error al guardar: ' + error.message)
+      setErrorGuardarProducto('No se pudo guardar el producto: ' + error.message)
     }
   }
 
@@ -410,13 +409,25 @@ export default function ProductosPage() {
     products.filter(p => p.origen === 'proveedor' && p.proveedor_nombre).map(p => p.proveedor_nombre!)
   )]
 
+  const hayFiltrosActivos = !!search || categoria !== 'Todas' || !!proveedorFiltro || !!estadoFiltro || !!disponibilidadFiltro || !!precioMin || !!precioMax
+
+  function limpiarFiltros() {
+    setSearch(''); setCategoria('Todas'); setProveedorFiltro(null)
+    setEstadoFiltro(null); setDisponibilidadFiltro(''); setPrecioMin(''); setPrecioMax('')
+  }
+
   const filtered = products
     .filter(p => {
       const matchSearch = p.nombre.toLowerCase().includes(search.toLowerCase()) ||
         p.sku.toLowerCase().includes(search.toLowerCase())
       const matchCat = categoria === 'Todas' || p.categoria === categoria
       const matchProv = !proveedorFiltro || p.proveedor_nombre === proveedorFiltro
-      return matchSearch && matchCat && matchProv
+      const matchEstado = !estadoFiltro || p.estado === estadoFiltro
+      const matchDisponibilidad = !disponibilidadFiltro
+        || (disponibilidadFiltro === 'visible' ? p.activo !== false : p.activo === false)
+      const matchPrecioMin = !precioMin || p.precio >= Number(precioMin)
+      const matchPrecioMax = !precioMax || p.precio <= Number(precioMax)
+      return matchSearch && matchCat && matchProv && matchEstado && matchDisponibilidad && matchPrecioMin && matchPrecioMax
     })
     .sort((a, b) => {
       const mul = sortDir === 'asc' ? 1 : -1
@@ -459,7 +470,7 @@ export default function ProductosPage() {
               </span>
             )}
           </button>
-          <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: BLUE, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          <button onClick={() => { setEditando(null); setErrorGuardarProducto(''); setShowModal(true) }} style={{ background: BLUE, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             + Agregar producto
           </button>
         </div>
@@ -512,11 +523,11 @@ export default function ProductosPage() {
                       style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       Ver
                     </button>
-                    <button onClick={() => cambiarEstadoSol(sol.id, 'rechazado')} disabled={procesando === sol.id}
+                    <button onClick={() => setRechazandoId(sol.id)} disabled={procesando === sol.id}
                       style={{ padding: '8px 16px', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer', opacity: procesando === sol.id ? 0.5 : 1 }}>
                       Rechazar
                     </button>
-                    <button onClick={() => cambiarEstadoSol(sol.id, 'aprobado')} disabled={procesando === sol.id}
+                    <button onClick={() => aprobar(sol.id)} disabled={procesando === sol.id}
                       style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: procesando === sol.id ? '#9ca3af' : '#059669', color: '#fff', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer' }}>
                       {procesando === sol.id ? '...' : 'Aprobar y publicar'}
                     </button>
@@ -573,6 +584,36 @@ export default function ProductosPage() {
               <option value="">📦 Proveedores</option>
               {proveedores.map(p => <option key={p} value={p}>📦 {p}</option>)}
             </select>
+          )}
+          <select
+            value={estadoFiltro ?? ''}
+            onChange={e => { setEstadoFiltro(e.target.value || null); setPage(1) }}
+            style={{ padding: '9px 14px', border: `1px solid ${estadoFiltro ? NAVY : '#e5e7eb'}`, borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: estadoFiltro ? NAVY : '#374151', cursor: 'pointer', minWidth: 140, fontWeight: estadoFiltro ? 700 : 400 }}>
+            <option value="">Estado</option>
+            <option value="Activo">Activo</option>
+            <option value="Stock bajo">Stock bajo</option>
+            <option value="Sin stock">Sin stock</option>
+          </select>
+          <select
+            value={disponibilidadFiltro}
+            onChange={e => { setDisponibilidadFiltro(e.target.value as typeof disponibilidadFiltro); setPage(1) }}
+            style={{ padding: '9px 14px', border: `1px solid ${disponibilidadFiltro ? NAVY : '#e5e7eb'}`, borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: disponibilidadFiltro ? NAVY : '#374151', cursor: 'pointer', minWidth: 150, fontWeight: disponibilidadFiltro ? 700 : 400 }}>
+            <option value="">Disponibilidad</option>
+            <option value="visible">Visible en tienda</option>
+            <option value="oculto">Oculto</option>
+          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="number" min="0" value={precioMin} onChange={e => { setPrecioMin(e.target.value); setPage(1) }}
+              placeholder="Precio min" style={{ width: 100, padding: '9px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none' }} />
+            <span style={{ color: '#9ca3af', fontSize: 13 }}>–</span>
+            <input type="number" min="0" value={precioMax} onChange={e => { setPrecioMax(e.target.value); setPage(1) }}
+              placeholder="Precio max" style={{ width: 100, padding: '9px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none' }} />
+          </div>
+          {hayFiltrosActivos && (
+            <button onClick={() => { limpiarFiltros(); setPage(1) }}
+              style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              ✕ Limpiar filtros
+            </button>
           )}
           {view === 'grid' && (
             <select value={`${sortBy}-${sortDir}`} onChange={e => {
@@ -654,7 +695,7 @@ export default function ProductosPage() {
                   </div>
                   {!modoTransferir && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                      <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ flex: 1, background: '#f3f4f6', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
+                      <button onClick={() => { setEditando(p); setErrorGuardarProducto(''); setShowModal(true) }} style={{ flex: 1, background: '#f3f4f6', border: 'none', padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Editar</button>
                       <button
                         onClick={() => setConfirmDelete(p)}
                         disabled={deleting === p.id}
@@ -724,7 +765,7 @@ export default function ProductosPage() {
                   </td>
                   <td style={{ padding: '12px 0' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => { setEditando(p); setShowModal(true) }} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
+                      <button onClick={() => { setEditando(p); setErrorGuardarProducto(''); setShowModal(true) }} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Editar</button>
                       <button
                         onClick={() => setConfirmDelete(p)}
                         disabled={deleting === p.id}
@@ -887,11 +928,11 @@ export default function ProductosPage() {
 
               {/* Acciones */}
               <div style={{ display: 'flex', gap: 10, paddingTop: 4, borderTop: '1px solid #f3f4f6' }}>
-                <button onClick={() => { cambiarEstadoSol(solicitudDetalle.id, 'rechazado'); setSolicitudDetalle(null) }}
+                <button onClick={() => { setRechazandoId(solicitudDetalle.id); setSolicitudDetalle(null) }}
                   style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                   Rechazar
                 </button>
-                <button onClick={() => { cambiarEstadoSol(solicitudDetalle.id, 'aprobado'); setSolicitudDetalle(null) }}
+                <button onClick={() => { aprobar(solicitudDetalle.id); setSolicitudDetalle(null) }}
                   style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: '#059669', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
                   Aprobar y publicar
                 </button>
@@ -914,7 +955,9 @@ export default function ProductosPage() {
       {showModal && (
         <ProductoModal
           arbolCategorias={arbolCategorias}
-          onClose={() => { setShowModal(false); setEditando(null) }}
+          serverError={errorGuardarProducto}
+          guardando={guardandoProducto}
+          onClose={() => { setShowModal(false); setEditando(null); setErrorGuardarProducto('') }}
           onSave={handleSave}
           onCrearCategoria={async (nombre, parentId) => {
             const nueva = await crearCategoriaConPadre(supabase, nombre, parentId)
@@ -984,6 +1027,14 @@ export default function ProductosPage() {
           confirmLabel={enviandoTransferencia ? 'Enviando...' : 'Sí, enviar'}
           onCancel={() => setConfirmTransferir(false)}
           onConfirm={confirmarTransferencia}
+        />
+      )}
+
+      {rechazandoId && (
+        <MotivoRechazoDialog
+          enviando={procesando === rechazandoId}
+          onCancel={() => setRechazandoId(null)}
+          onConfirm={confirmarRechazoProducto}
         />
       )}
     </div>

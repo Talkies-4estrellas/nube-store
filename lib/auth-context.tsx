@@ -12,6 +12,7 @@ export type AuthUser = {
   nombre: string
   role: Role
   avatar_url: string | null
+  estado: 'activo' | 'suspendido'
 }
 
 // Rutas que cada rol puede ver
@@ -59,7 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single()
 
     if (data) {
-      setUser({ id: session.user.id, email: session.user.email ?? '', nombre: data.nombre, role: data.role as Role, avatar_url: data.avatar_url ?? null })
+      // `estado` se consulta aparte y con fallback silencioso: si la migración
+      // migration_estado_proveedores.sql todavía no corrió en esta base, la
+      // columna no existe — no debe tumbar el login de nadie por eso.
+      let estado: 'activo' | 'suspendido' = 'activo'
+      try {
+        const { data: estadoRow } = await supabase
+          .from('user_roles').select('estado').eq('user_id', session.user.id).single()
+        if (estadoRow?.estado === 'suspendido') estado = 'suspendido'
+      } catch { /* columna aún no existe — se asume activo */ }
+      setUser({ id: session.user.id, email: session.user.email ?? '', nombre: data.nombre, role: data.role as Role, avatar_url: data.avatar_url ?? null, estado })
     } else {
       // Autenticado pero sin rol asignado — logout automático
       await supabase.auth.signOut()

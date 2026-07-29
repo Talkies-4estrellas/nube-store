@@ -7,6 +7,8 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import Icon from '@/components/Icon'
 import { SkeletonTableBody } from '@/components/Skeleton'
 import { paginasVisibles } from '@/lib/pagination'
+import { useAuth } from '@/lib/auth-context'
+import { registrarAuditoria } from '@/lib/bitacora'
 
 const PAGE_SIZE = 15
 
@@ -43,6 +45,7 @@ type Proveedor = {
   telefono: string | null
   created_at: string
   productos_aprobados?: number
+  estado?: 'activo' | 'suspendido'
 }
 
 const AVATAR_COLORS = ['#0049ff','#7c3aed','#db2777','#059669','#d97706','#dc2626','#0891b2','#374151']
@@ -57,10 +60,13 @@ function initials(nombre: string) {
 }
 
 export default function ClientesPage() {
+  const { user: authUser } = useAuth()
   const [seccion, setSeccion] = useState<'clientes' | 'proveedores'>('clientes')
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [loadingProveedores, setLoadingProveedores] = useState(true)
   const [searchProv, setSearchProv] = useState('')
+  const [filtroEstadoProv, setFiltroEstadoProv] = useState<'todos' | 'activo' | 'suspendido'>('todos')
+  const [confirmSuspender, setConfirmSuspender] = useState<Proveedor | null>(null)
 
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,24 +127,38 @@ export default function ClientesPage() {
 
   async function fetchProveedores() {
     setLoadingProveedores(true)
+    // select('*') a propósito: así no truena si `estado` todavía no existe
+    // en esta base (migration_estado_proveedores.sql pendiente de correr).
     const [{ data }, { data: solicitudes }] = await Promise.all([
-      supabase.from('user_roles').select('id, nombre, email, empresa, telefono, created_at').eq('role', 'proveedor').order('created_at', { ascending: false }),
+      supabase.from('user_roles').select('*').eq('role', 'proveedor').order('created_at', { ascending: false }),
       supabase.from('solicitudes_productos').select('proveedor_email').eq('estado', 'aprobado'),
     ])
     if (data) {
       const conteo: Record<string, number> = {}
       for (const s of (solicitudes ?? [])) conteo[s.proveedor_email] = (conteo[s.proveedor_email] ?? 0) + 1
-      setProveedores(data.map(p => ({ ...p, productos_aprobados: conteo[p.email] ?? 0 })))
+      setProveedores(data.map(p => ({ ...p, estado: p.estado ?? 'activo', productos_aprobados: conteo[p.email] ?? 0 })))
     }
     setLoadingProveedores(false)
+  }
+
+  async function cambiarEstadoProveedor(p: Proveedor) {
+    const nuevo = p.estado === 'suspendido' ? 'activo' : 'suspendido'
+    setProveedores(prev => prev.map(x => x.id === p.id ? { ...x, estado: nuevo } : x))
+    const { error } = await supabase.from('user_roles').update({ estado: nuevo }).eq('id', p.id)
+    if (error) { setProveedores(prev => prev.map(x => x.id === p.id ? { ...x, estado: p.estado } : x)); return }
+    registrarAuditoria(supabase, {
+      usuarioId: authUser?.id, accion: nuevo === 'suspendido' ? 'suspender_proveedor' : 'reactivar_proveedor',
+      tabla: 'user_roles', registroId: p.id, valorAnterior: p.estado ?? 'activo', valorNuevo: nuevo,
+    })
   }
 
   useEffect(() => { if (seccion === 'proveedores' && proveedores.length === 0) fetchProveedores() }, [seccion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredProveedores = proveedores.filter(p =>
-    p.nombre.toLowerCase().includes(searchProv.toLowerCase()) ||
-    p.email.toLowerCase().includes(searchProv.toLowerCase()) ||
-    (p.empresa ?? '').toLowerCase().includes(searchProv.toLowerCase())
+    (filtroEstadoProv === 'todos' || (p.estado ?? 'activo') === filtroEstadoProv) &&
+    (p.nombre.toLowerCase().includes(searchProv.toLowerCase()) ||
+      p.email.toLowerCase().includes(searchProv.toLowerCase()) ||
+      (p.empresa ?? '').toLowerCase().includes(searchProv.toLowerCase()))
   )
 
   async function handleDelete(c: Cliente) {
@@ -199,24 +219,37 @@ export default function ClientesPage() {
 
       {seccion === 'proveedores' ? (
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-          <input
-            value={searchProv}
-            onChange={e => setSearchProv(e.target.value)}
-            placeholder="Buscar por nombre, email o empresa..."
-            style={{ width: '100%', maxWidth: 360, padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', marginBottom: 16 }}
-          />
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              value={searchProv}
+              onChange={e => setSearchProv(e.target.value)}
+              placeholder="Buscar por nombre, email o empresa..."
+              style={{ flex: 1, minWidth: 240, maxWidth: 360, padding: '9px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none' }}
+            />
+            <div style={{ display: 'flex', gap: 4, background: '#f3f4f6', padding: 4, borderRadius: 10 }}>
+              {([['todos', 'Todos'], ['activo', 'Activos'], ['suspendido', 'Suspendidos']] as const).map(([v, label]) => (
+                <button key={v} onClick={() => setFiltroEstadoProv(v)} style={{
+                  padding: '7px 14px', borderRadius: 7, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  background: filtroEstadoProv === v ? '#fff' : 'transparent', color: filtroEstadoProv === v ? '#111' : '#6b7280',
+                  boxShadow: filtroEstadoProv === v ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}>{label}</button>
+              ))}
+            </div>
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                {['Proveedor', 'Empresa', 'Teléfono', 'Productos aprobados', 'Registrado'].map(h => (
+                {['Proveedor', 'Empresa', 'Teléfono', 'Productos aprobados', 'Estado', 'Registrado', ''].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loadingProveedores ? (
-                <SkeletonTableBody rows={5} cols={['180px', '140px', '110px', '80px', '90px']} />
-              ) : filteredProveedores.map(p => (
+                <SkeletonTableBody rows={5} cols={['180px', '140px', '110px', '80px', '70px', '90px', '80px']} />
+              ) : filteredProveedores.map(p => {
+                const suspendido = p.estado === 'suspendido'
+                return (
                 <tr key={p.id} style={{ borderBottom: '1px solid #f9fafb' }}>
                   <td style={{ padding: '13px 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -232,11 +265,22 @@ export default function ClientesPage() {
                   <td style={{ padding: '13px 0', fontSize: 13, color: '#6b7280' }}>{p.empresa ?? '—'}</td>
                   <td style={{ padding: '13px 0', fontSize: 13, color: '#6b7280' }}>{p.telefono ?? '—'}</td>
                   <td style={{ padding: '13px 0', fontSize: 13, fontWeight: 600 }}>{p.productos_aprobados ?? 0}</td>
+                  <td style={{ padding: '13px 0' }}>
+                    <span style={{ background: suspendido ? '#fee2e2' : '#d1fae5', color: suspendido ? '#991b1b' : '#065f46', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
+                      {suspendido ? 'Suspendido' : 'Activo'}
+                    </span>
+                  </td>
                   <td style={{ padding: '13px 0', fontSize: 12, color: '#6b7280' }}>
                     {new Date(p.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
+                  <td style={{ padding: '13px 0' }}>
+                    <button onClick={() => setConfirmSuspender(p)}
+                      style={{ background: suspendido ? '#d1fae5' : '#fee2e2', color: suspendido ? '#065f46' : '#991b1b', border: 'none', padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      {suspendido ? 'Reactivar' : 'Suspender'}
+                    </button>
+                  </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
           {!loadingProveedores && filteredProveedores.length === 0 && (
@@ -432,6 +476,19 @@ export default function ClientesPage() {
         )}
       </div>
       </>
+      )}
+
+      {confirmSuspender && (
+        <ConfirmDialog
+          danger={confirmSuspender.estado !== 'suspendido'}
+          title={confirmSuspender.estado === 'suspendido' ? '¿Reactivar proveedor?' : '¿Suspender proveedor?'}
+          message={confirmSuspender.estado === 'suspendido'
+            ? `"${confirmSuspender.nombre}" va a poder volver a acceder a su portal y gestionar sus productos.`
+            : `"${confirmSuspender.nombre}" no va a poder iniciar sesión en su portal hasta que lo reactives. Sus productos ya publicados NO se ocultan del catálogo.`}
+          confirmLabel={confirmSuspender.estado === 'suspendido' ? 'Sí, reactivar' : 'Sí, suspender'}
+          onConfirm={() => { cambiarEstadoProveedor(confirmSuspender); setConfirmSuspender(null) }}
+          onCancel={() => setConfirmSuspender(null)}
+        />
       )}
 
       {confirmDelete && (
