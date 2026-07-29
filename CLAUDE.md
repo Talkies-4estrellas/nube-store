@@ -181,6 +181,29 @@ a pedido explícito del usuario. Un solo hilo continuo por cliente (no uno por i
 - Proveedor ve su lista de conversaciones agrupada por **cliente** (no por producto — un mismo producto puede tener varios clientes preguntando)
 - Schema: `Doc/database/migration_mensajeria.sql` — tablas `conversaciones`/`mensajes`, columna `producto_id`, índices únicos separados (por pedido / por producto)
 
+### Transferencia de productos admin→proveedor (28/07/2026)
+Solo para productos con `origen != 'proveedor'` (subidos por admin o CSV) — **nunca** se le puede quitar un producto a un proveedor para dárselo a otro. Doble confirmación: el admin confirma el envío en un diálogo, y el proveedor debe aceptar o rechazar antes de que cambie el dueño.
+- `lib/transferencias.ts` + `Doc/database/migration_transferencias.sql` — tabla `transferencias_productos`, RPCs `security definer` `aceptar_transferencia()`/`rechazar_transferencia()` (solo el proveedor destino puede ejecutarlas)
+- Al aceptar: actualiza `productos.origen`/`proveedor_nombre` **y** crea una fila espejo aprobada en `solicitudes_productos`, para que mensajería/Administración funcionen sin cambios extra
+- UI: botón "🔁 Transferir" en `/productos` (modo selección + barra flotante); pestaña "Transferencias" en `/proveedores` (con badge de pendientes)
+
+### Bug de datos: importador CSV marcaba `origen='proveedor'` sin dueño real (28/07/2026)
+`components/ImportCSVModal.tsx` ponía `origen='proveedor'` con solo tener texto en la columna "proveedor" del Excel, sin que existiera cuenta real detrás — inflaba el filtro de proveedores de `/productos` con nombres del Excel viejo. **Corregido**: ese campo ahora es solo informativo (`proveedor_nombre`, insignia gris "🏷️ Viene de X"), no toca `origen`. `Doc/database/fix_origen_csv_productos.sql` corrige los productos ya importados (compara contra `solicitudes_productos` + `user_roles` para saber quién es dueño real).
+
+### Paquetes de envío — medidas y peso por proveedor (28/07/2026)
+`lib/paquetes.ts` + `Doc/database/migration_paquetes_envio.sql` — tabla `paquetes_envio`, **una fila por `venta_item`** (no por venta completa), porque un mismo pedido puede traer productos de varios proveedores que empacan por separado.
+- Proveedor captura Alto/Ancho/Peso inline en `/proveedores` → Administración, por cada producto vendido
+- Admin ve lo mismo en `/envio-nube` → pestaña "Paquetes por proveedor", con filtro de proveedores (mismo patrón que Productos)
+
+### Bug real: recursión infinita de RLS entre `ventas` y `venta_items` (28/07/2026)
+Encontrado al probar el flujo de ventas para proveedores: `500 Internal Server Error` al consultar `venta_items` (visible en la consola del navegador). La política `"venta_items select propio"` hace subquery sobre `ventas`, y `"ventas select proveedor"` hace subquery sobre `venta_items` — se disparan mutuamente y Postgres corta con "infinite recursion detected in policy". **Arreglado** en `Doc/database/fix_rls_recursion_venta_items.sql` con dos funciones `security definer` (`es_venta_de_mi_producto`, `es_item_de_mi_producto`) que resuelven la pertenencia sin volver a evaluar RLS de la tabla contraria — patrón estándar de Postgres para este tipo de ciclo. **Si algo similar vuelve a pasar** (500 en una tabla con políticas que se referencian entre sí), este es el patrón de fix a aplicar.
+
+### Seguimiento de pedido propio en `/mi-cuenta` (28/07/2026)
+Reemplaza los links externos a la web de cada paquetería (DHL/FedEx/etc.) — el cliente ya no sale del proyecto para rastrear:
+- Línea de tiempo de 3 pasos (Pedido recibido → En camino → Entregado) con fechas reales de `envios.fecha_envio`/`fecha_entrega`
+- Mapa real embebido vía `<iframe>` de **OpenStreetMap** (sin API key, sin costo, sin dependencias nuevas) — marcador que se mueve entre origen y destino según el progreso. Coordenadas de ejemplo fijas (centro de Maravatío, Michoacán, sede real de OrdenExpress); **todavía no conectado a GPS real** del transportista, aclarado explícitamente en la UI
+- Este mismo patrón de link externo (`TRACKING_URL`) sigue existiendo tal cual en `/envio-nube` (admin) y `/proveedores` (Administración) — el cambio a mapa propio se aplicó **solo** en el panel del cliente, a pedido explícito
+
 ---
 
 ## Base de datos Supabase
@@ -317,6 +340,9 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Confirmar que se corrió en Supabase todo el SQL del 28/07**: `migration_transferencias.sql`, `fix_origen_csv_productos.sql`, `migration_paquetes_envio.sql` y sobre todo **`fix_rls_recursion_venta_items.sql`** (corrige un 500 real que afecta a cualquier proveedor consultando sus ventas — el más urgente de confirmar)
+- [ ] Los scripts `Doc/database/diagnostico_*.sql` y `seed_*.sql` del 28/07 son de un solo uso (datos de prueba) — se pueden borrar cuando ya no se necesiten como referencia
+- [ ] Mapa de rastreo de `/mi-cuenta` sigue con coordenadas de ejemplo fijas (Maravatío) — no conectado a GPS real de ningún transportista; el link externo a la paquetería (`TRACKING_URL`) sigue existiendo tal cual en `/envio-nube` y `/proveedores`
 - [ ] **Confirmar que se corrió en Supabase todo el SQL de mensajería** (`Doc/database/migration_mensajeria.sql`) — se fue ampliando en 3 commits del 27/07 (tablas base, `producto_id`, índices únicos separados); no hay confirmación de que quedó aplicado completo
 - [ ] **Confirmar en Supabase Dashboard → Authentication → URL Configuration** que la Redirect URL de producción (`https://nube-store-pi.vercel.app/auth/callback`) y el Site URL quedaron guardados — se guio paso a paso el 27/07 pero sin confirmación final
 - [ ] Badge de notificación de mensajes sin leer para el admin en "Comentarios" (ofrecido el 27/07, no pedido todavía)
@@ -334,6 +360,14 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
+
+## Completado (28/07/2026)
+- [x] **Transferencia de productos admin→proveedor** con doble confirmación — ver sección "Transferencia de productos" más arriba
+- [x] **Fix de bug de datos**: importador CSV inflaba el filtro de proveedores de `/productos` marcando `origen='proveedor'` sin cuenta real detrás — corregido en el importador + script de limpieza para lo ya importado
+- [x] **Registro de medidas/peso de paquete** por el proveedor (alto, ancho, peso), por línea de venta — visible también en Envíos del admin con filtro de proveedores
+- [x] **Fix de bug real**: recursión infinita de RLS entre `ventas`/`venta_items` que tiraba 500 al consultar ventas como proveedor — ver sección dedicada más arriba
+- [x] "Mis productos" del proveedor: toggle de vista grid/lista (igual que Productos del admin)
+- [x] **Seguimiento de pedido propio** en `/mi-cuenta`: línea de tiempo de 3 pasos + mapa real (OpenStreetMap embebido, sin API key) — reemplaza los links externos a la paquetería, solo en el panel del cliente
 
 ## Completado (27/07/2026)
 - [x] **Login social**: botones Google/Facebook (`signInWithOAuth`) en `app/login/page.tsx` + `app/auth/callback/route.ts` nuevo. Bug real encontrado: `redirectTo` faltaba en la allowlist de Redirect URLs de Supabase, caía al Site URL sin consumir el `code` — corregido agregando `localhost:3000/auth/callback` y el equivalente de producción

@@ -179,6 +179,50 @@ mismo patrón que el resto del proyecto: **por SKU** contra `solicitudes_product
 
 ---
 
+### `transferencias_productos` — agregado 28/07/2026
+
+Transferencia de productos admin→proveedor con doble confirmación. Solo para productos
+con `origen != 'proveedor'` (subidos por admin o CSV) — nunca se le puede quitar un
+producto a un proveedor para dárselo a otro.
+
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | uuid PK | |
+| lote_id | uuid | agrupa las filas creadas en un mismo envío desde `/productos` |
+| producto_id | uuid FK → productos | |
+| producto_nombre / producto_sku | text | copia informativa |
+| proveedor_email / proveedor_nombre | text | destino de la transferencia |
+| creado_por | uuid FK → auth.users | admin que la envió |
+| estado | text | `pendiente`, `aceptada`, `rechazada` |
+| created_at / respondida_at | timestamptz | |
+
+Al aceptar (RPC `aceptar_transferencia`, security definer, solo ejecutable por el
+proveedor destino): actualiza `productos.origen='proveedor'`/`proveedor_nombre`, **y**
+crea una fila espejo aprobada en `solicitudes_productos` — así toda la lógica ya
+existente (mensajería por SKU, panel Administración) reconoce el producto sin cambios
+extra. Script: `Doc/database/migration_transferencias.sql`.
+
+---
+
+### `paquetes_envio` — agregado 28/07/2026
+
+Medidas y peso del paquete, registrados por el proveedor. **Una fila por `venta_item`**,
+no por venta completa — un mismo pedido puede traer productos de varios proveedores que
+empacan y envían por separado.
+
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | uuid PK | |
+| venta_item_id | uuid FK → venta_items, unique | |
+| proveedor_email | text | |
+| alto_cm / ancho_cm / peso_kg | numeric(10,2) | editables inline en `/proveedores` |
+| updated_at | timestamptz | |
+
+Leído también desde `/envio-nube` → pestaña "Paquetes por proveedor", con filtro de
+proveedores. Script: `Doc/database/migration_paquetes_envio.sql`.
+
+---
+
 ## Triggers de la base de datos
 
 ### `trg_descontar_stock`
@@ -220,6 +264,8 @@ Todo lo demás (ventas, productos, clientes, config, solicitudes) vive en Supaba
 | `config_storefront` | configuracion, Storefront | — | configuracion | — |
 | `registros` | Storefront (login) | Storefront (registro) | — | — |
 | `conversaciones` / `mensajes` | mi-cuenta, proveedores, configuracion, tienda/[slug] (ChatPanel, Realtime) | mi-cuenta, proveedores, configuracion, tienda/[slug] (`lib/mensajeria.ts`) | mensajes (`leido`) | — |
+| `transferencias_productos` | productos (barra Transferir), proveedores (pestaña Transferencias) | productos (`lib/transferencias.ts`) | RPC `aceptar_transferencia`/`rechazar_transferencia` (proveedor) | — |
+| `paquetes_envio` | proveedores (Administración), envio-nube (Paquetes por proveedor) | proveedores/envio-nube (`lib/paquetes.ts`, upsert) | proveedores (`lib/paquetes.ts`) | — |
 | **Storage `productos`** | — | productos, proveedores | — | productos |
 
 ---
@@ -235,6 +281,10 @@ Todo lo demás (ventas, productos, clientes, config, solicitudes) vive en Supaba
 | `migration_columnas.sql` | Columnas de dirección en `clientes`; `telefono`/`facebook` en `config_storefront`; `updated_at` en `registros` y `solicitudes_productos` |
 | `migration_tablas_faltantes.sql` | Migración segura (`IF NOT EXISTS`): crea `registros`, `solicitudes_productos`, agrega `deleted_at` en clientes, inserta fila inicial en `config_storefront` |
 | `migration_mensajeria.sql` | Tablas `conversaciones`/`mensajes`, RLS, alta a `supabase_realtime`, columna `producto_id` e índices únicos separados (por pedido / por producto) — agregado 27/07/2026 |
+| `migration_transferencias.sql` | Tabla `transferencias_productos`, RLS, RPCs `aceptar_transferencia`/`rechazar_transferencia` — agregado 28/07/2026 |
+| `fix_origen_csv_productos.sql` | Corrige productos importados por CSV mal marcados `origen='proveedor'` sin dueño real — agregado 28/07/2026 |
+| `migration_paquetes_envio.sql` | Tabla `paquetes_envio` (medidas/peso por `venta_item`) — agregado 28/07/2026 |
+| `fix_rls_recursion_venta_items.sql` | **Fix de bug real**: recursión infinita de RLS entre `ventas`/`venta_items` (funciones `security definer` `es_venta_de_mi_producto`/`es_item_de_mi_producto`) — agregado 28/07/2026 |
 
 > El estado de qué migraciones ya se ejecutaron en Supabase está en [Mantenimiento](./mantenimiento.md).
 
@@ -251,3 +301,4 @@ Días de trabajo que tocaron esta área:
 - [02/07/2026](../sesiones/seccion-02-07-2026.md) — ajustes de schema para robustez.
 - [03/07/2026](../sesiones/seccion-03-07-2026.md) — fix de triggers INSERT+UPDATE, migraciones y tablas nuevas.
 - [27/07/2026](../sesiones/seccion-27-07-2026.md) — tablas `conversaciones`/`mensajes` para el sistema de mensajería interna.
+- [28/07/2026](../sesiones/seccion-28-07-2026.md) — tablas `transferencias_productos` y `paquetes_envio`; fix de RLS recursivo en `ventas`/`venta_items`.
