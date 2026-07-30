@@ -483,14 +483,15 @@ export default function Storefront() {
   }
 
   // Ocultar la barra móvil al bajar y mostrarla al subir
+  const [navShrink, setNavShrink] = useState(false)
   useEffect(() => {
     let lastY = window.scrollY
     const onScroll = () => {
       const y = window.scrollY
       if (mobileNavOpen) { lastY = y; return }
-      if (y < 80) setHeaderHidden(false)          // cerca del tope: siempre visible
-      else if (y > lastY + 6) setHeaderHidden(true)   // bajando: ocultar hacia arriba
-      else if (y < lastY - 6) setHeaderHidden(false)  // subiendo: mostrar
+      if (y < 80) { setHeaderHidden(false); setNavShrink(false) }          // cerca del tope: siempre visible
+      else if (y > lastY + 6) { setHeaderHidden(true); setNavShrink(true) }   // bajando: ocultar header / achicar pastilla
+      else if (y < lastY - 6) { setHeaderHidden(false); setNavShrink(false) }  // subiendo: mostrar / tamaño normal
       lastY = y
     }
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -1989,8 +1990,8 @@ export default function Storefront() {
         const navCfg = { ...NAV_MOVIL_DEFAULT, ...(storeConfig.nav_movil ?? {}) }
         const azul = storeConfig.fondo_logo === 'azul'
         return (
-        <nav className="oe-bottom-nav" aria-label="Navegación principal móvil"
-          style={azul ? { background: '#252855', borderTopColor: 'rgba(255,255,255,0.1)' } : undefined}>
+        <nav className={`oe-bottom-nav${navShrink ? ' shrink' : ''}`} aria-label="Navegación principal móvil"
+          style={azul ? { background: '#252855', borderColor: 'rgba(255,255,255,0.12)' } : undefined}>
           <button type="button" className={`oe-bottom-nav-item${view === 'inicio' ? ' active' : ''}${azul ? ' on-azul' : ''}`} onClick={() => goView('inicio')}>
             <Ic n={navCfg.inicio.icon} />
             <span>{navCfg.inicio.label}</span>

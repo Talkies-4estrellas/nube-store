@@ -2681,14 +2681,28 @@
   .oe-store .oe-bottom-nav {
     display: flex;
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: 50%;
+    right: auto;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    width: calc(100% - 24px);
+    max-width: 420px;
     z-index: 400;
-    background: #fff;
-    border-top: 1px solid #eef0f4;
-    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    border-radius: 999px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06);
+    padding: 8px 6px;
+    transform-origin: center bottom;
+    transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.28s ease;
+  }
+
+  /* Al deslizar hacia abajo la pastilla se achica; al subir vuelve a su tamaño */
+  .oe-store .oe-bottom-nav.shrink {
+    transform: translateX(-50%) scale(0.82);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14), 0 1px 4px rgba(15, 23, 42, 0.05);
   }
 
   .oe-store .oe-bottom-nav-item {
@@ -2697,17 +2711,26 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 1px;
     padding: 6px 2px;
     background: none;
     border: none;
     color: #9aa0b4;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     text-decoration: none;
     cursor: pointer;
-    border-radius: 12px;
-    transition: color 0.15s;
+    border-radius: 999px;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .oe-store .oe-bottom-nav-item.active,
+  .oe-store .oe-bottom-nav-item:active {
+    background: rgba(231, 34, 109, 0.08);
+  }
+  .oe-store .oe-bottom-nav-item.on-azul.active,
+  .oe-store .oe-bottom-nav-item.on-azul:active {
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .oe-store .oe-bottom-nav-item svg {
@@ -2742,9 +2765,9 @@
     font-weight: 800;
   }
 
-  /* Espacio para que el contenido no quede tapado por la barra fija */
+  /* Espacio para que el contenido no quede tapado por la pastilla flotante */
   .oe-store .page-shell {
-    padding-bottom: 78px;
+    padding-bottom: 96px;
   }
 }
 
