@@ -204,6 +204,15 @@ Reemplaza los links externos a la web de cada paquetería (DHL/FedEx/etc.) — e
 - Mapa real embebido vía `<iframe>` de **OpenStreetMap** (sin API key, sin costo, sin dependencias nuevas) — marcador que se mueve entre origen y destino según el progreso. Coordenadas de ejemplo fijas (centro de Maravatío, Michoacán, sede real de OrdenExpress); **todavía no conectado a GPS real** del transportista, aclarado explícitamente en la UI
 - Este mismo patrón de link externo (`TRACKING_URL`) sigue existiendo tal cual en `/envio-nube` (admin) y `/proveedores` (Administración) — el cambio a mapa propio se aplicó **solo** en el panel del cliente, a pedido explícito
 
+### Optimización rol Proveedor + frontend Storefront (29/07/2026)
+- **Bug real de pérdida de datos, corregido**: `lib/solicitudes.ts` → `aprobarSolicitud()` no copiaba `detalles` (colores/tallas/variantes/peso/dimensiones/fotos extra) del `solicitudes_productos` aprobado hacia el `productos` final. Ahora copia `detalles` completo y extrae `precio_promocional` desde `detalles.precio_promocional` (la tabla `solicitudes_productos` no tiene columna propia para eso, se guarda dentro del jsonb como el resto de los campos opcionales).
+- **RLS de `solicitudes_productos`** permite `UPDATE` a cualquier autenticado (policy `"auth gestiona solicitudes"`) — se usó para que el proveedor reenvíe su propia solicitud rechazada a revisión sin necesitar una función RPC nueva.
+- **Header de escritorio del Storefront**: `position:sticky` no servía porque su contenedor (`.home-immersive`) es más corto que el scroll real de la página (diagnosticado con `getBoundingClientRect`/`getComputedStyle`). Reemplazado por `position:fixed` replicando a mano `left`/`width`/`max-width` de `.page-shell` en cada breakpoint + CSS var `--nav-width`. Si se necesita algo "pegajoso" en este proyecto, preferir este patrón a `sticky`.
+- Bottom nav bar móvil (`.oe-bottom-nav`, `storefront.css`) con Inicio/Buscar/Rastreo/Perfil.
+- "Mis solicitudes" del proveedor (`/proveedores`) ahora muestra el `motivo_rechazo` real (la columna ya existía pero el `useState` no la tipaba) y tiene botón "Reenviar a revisión".
+- Nueva sección "Perfil comercial" en Ajustes del proveedor (descripción, redes sociales, métodos de envío, estado de cuenta) — **requiere correr `Doc/database/migration_perfil_proveedor.sql`**, sin eso el guardado no persiste.
+- Detalle completo del día: `Doc/sesiones/seccion-29-07-2026.md`.
+
 ---
 
 ## Base de datos Supabase
@@ -340,6 +349,8 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Correr en Supabase `Doc/database/migration_perfil_proveedor.sql`** (29/07) — bloquea el guardado de "Perfil comercial" del proveedor en Ajustes
+- [ ] El botón "Reenviar a revisión" se probó en vivo el 29/07 sobre el producto real "Prueba" (SKU `323565`) — quedó en estado "pendiente"; volver a rechazarlo desde el panel admin si se quiere esa fila de prueba como estaba
 - [ ] **Confirmar que se corrió en Supabase todo el SQL del 28/07**: `migration_transferencias.sql`, `fix_origen_csv_productos.sql`, `migration_paquetes_envio.sql` y sobre todo **`fix_rls_recursion_venta_items.sql`** (corrige un 500 real que afecta a cualquier proveedor consultando sus ventas — el más urgente de confirmar)
 - [ ] Los scripts `Doc/database/diagnostico_*.sql` y `seed_*.sql` del 28/07 son de un solo uso (datos de prueba) — se pueden borrar cuando ya no se necesiten como referencia
 - [ ] Mapa de rastreo de `/mi-cuenta` sigue con coordenadas de ejemplo fijas (Maravatío) — no conectado a GPS real de ningún transportista; el link externo a la paquetería (`TRACKING_URL`) sigue existiendo tal cual en `/envio-nube` y `/proveedores`
@@ -360,6 +371,14 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
+
+## Completado (29/07/2026)
+- [x] **Fix de bug real**: `aprobarSolicitud()` ya copia `detalles` (colores/tallas/variantes/peso/dimensiones/fotos extra) al producto aprobado — antes se perdían en silencio
+- [x] Campo "Precio de promoción" en el formulario de producto del proveedor + controles ◀▶/★ Principal en fotos adicionales (igual que el modal del admin)
+- [x] "Mis solicitudes" del proveedor muestra el motivo de rechazo real y permite reenviar a revisión
+- [x] Dashboard del proveedor: 8 métricas + panel de alertas; nueva sección "Perfil comercial" en Ajustes
+- [x] Storefront: bottom nav bar móvil, header de escritorio dinámico (fix de `sticky` roto → `fixed`), badge de oferta + últimas unidades en tarjetas, búsqueda ordenada por relevancia
+- [x] Auditoría de "Pedidos del Proveedor" — ya estaba completo por trabajo de sesiones previas, sin huecos encontrados
 
 ## Completado (28/07/2026)
 - [x] **Transferencia de productos admin→proveedor** con doble confirmación — ver sección "Transferencia de productos" más arriba
