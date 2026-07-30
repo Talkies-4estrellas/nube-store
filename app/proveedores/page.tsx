@@ -84,6 +84,7 @@ type ProductoLocal = {
   sku: string
   descripcion: string
   precio: string
+  precioPromocion: string
   stock: string
   categoria_id: string
   imagenFile: File | null
@@ -100,7 +101,7 @@ type ProductoLocal = {
 }
 
 const emptyProducto = (): ProductoLocal => ({
-  nombre: '', sku: '', descripcion: '', precio: '',
+  nombre: '', sku: '', descripcion: '', precio: '', precioPromocion: '',
   stock: '', categoria_id: '', imagenFile: null, imagenPreview: null,
   colores: [], tallas: [], variantes: [],
   peso: '', largo: '', ancho: '', alto: '', imagenesExtra: [],
@@ -180,12 +181,14 @@ export default function ProveedoresPage() {
   const [prodError, setProdError] = useState('')
 
   // Mis solicitudes (historial)
-  const [historialItems, setHistorialItems] = useState<{ id: string; producto_nombre: string; producto_sku: string; estado: string; created_at: string }[] | null>(null)
+  const [historialItems, setHistorialItems] = useState<{ id: string; producto_nombre: string; producto_sku: string; estado: string; created_at: string; motivo_rechazo: string | null }[] | null>(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
+  const [reenviandoId, setReenviandoId] = useState<string | null>(null)
 
   // Panel "Mis productos enviados" en tab registro
   const [showMisProductos, setShowMisProductos] = useState(false)
   const [misProductos, setMisProductos] = useState<MiSolicitud[]>([])
+  const [inventarioTotal, setInventarioTotal] = useState<number | null>(null)
   const [loadingMisProductos, setLoadingMisProductos] = useState(false)
   const [misProductosVista, setMisProductosVista] = useState<'grid' | 'list'>('list')
 
@@ -207,6 +210,44 @@ export default function ProveedoresPage() {
   useEffect(() => {
     if (user) { setCuentaNombre(user.nombre); setCuentaAvatarPreview(user.avatar_url) }
   }, [user])
+
+  // Tab Ajustes — Perfil comercial (descripción, redes, métodos de envío, estado)
+  const [perfilComercial, setPerfilComercial] = useState({ descripcion: '', instagram: '', facebook: '', whatsapp: '', metodosEnvio: '' })
+  const [estadoCuenta, setEstadoCuenta] = useState<'pendiente' | 'activo' | 'suspendido' | 'en_revision'>('activo')
+  const [guardandoComercial, setGuardandoComercial] = useState(false)
+  const [comercialGuardado, setComercialGuardado] = useState(false)
+  const [comercialError, setComercialError] = useState('')
+
+  useEffect(() => {
+    if (!user?.id) return
+    supabase.from('user_roles').select('descripcion, redes_sociales, metodos_envio, estado').eq('user_id', user.id).maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        const redes = (data.redes_sociales ?? {}) as { instagram?: string; facebook?: string; whatsapp?: string }
+        setPerfilComercial({
+          descripcion: data.descripcion ?? '',
+          instagram: redes.instagram ?? '',
+          facebook: redes.facebook ?? '',
+          whatsapp: redes.whatsapp ?? '',
+          metodosEnvio: data.metodos_envio ?? '',
+        })
+        if (data.estado) setEstadoCuenta(data.estado as typeof estadoCuenta)
+      })
+  }, [user?.id])
+
+  async function guardarPerfilComercial() {
+    setGuardandoComercial(true)
+    setComercialError('')
+    const { error } = await supabase.rpc('actualizar_perfil_comercial_proveedor', {
+      nueva_descripcion: perfilComercial.descripcion,
+      nuevas_redes: { instagram: perfilComercial.instagram, facebook: perfilComercial.facebook, whatsapp: perfilComercial.whatsapp },
+      nuevos_metodos_envio: perfilComercial.metodosEnvio,
+    })
+    setGuardandoComercial(false)
+    if (error) { setComercialError('No se pudo guardar: ' + error.message); return }
+    setComercialGuardado(true)
+    setTimeout(() => setComercialGuardado(false), 2500)
+  }
 
   function elegirCuentaAvatar(file: File | null) {
     if (!file) return
@@ -380,12 +421,21 @@ export default function ProveedoresPage() {
     setLoadingHistorial(true)
     const { data } = await supabase
       .from('solicitudes_productos')
-      .select('id, producto_nombre, producto_sku, estado, created_at')
+      .select('id, producto_nombre, producto_sku, estado, created_at, motivo_rechazo')
       .eq('proveedor_email', email)
       .neq('estado', 'aprobado')
       .order('created_at', { ascending: false })
     setHistorialItems(data ?? [])
     setLoadingHistorial(false)
+  }
+
+  async function reenviarARevision(id: string) {
+    setReenviandoId(id)
+    const { error } = await supabase.from('solicitudes_productos')
+      .update({ estado: 'pendiente', motivo_rechazo: null })
+      .eq('id', id)
+    setReenviandoId(null)
+    if (!error && savedEmail) cargarHistorial(savedEmail)
   }
 
   const [proveedor, setProveedor] = useState({
@@ -472,6 +522,28 @@ export default function ProveedoresPage() {
       const extras = [...p.imagenesExtra]
       extras.splice(idx, 1)
       return { ...p, imagenesExtra: extras }
+    })
+  }
+  function moverImagenExtra(i: number, dir: -1 | 1) {
+    setProd(p => {
+      const extras = [...p.imagenesExtra]
+      const j = i + dir
+      if (j < 0 || j >= extras.length) return p
+      ;[extras[i], extras[j]] = [extras[j], extras[i]]
+      return { ...p, imagenesExtra: extras }
+    })
+  }
+  function usarComoPrincipal(i: number) {
+    setProd(p => {
+      const extras = [...p.imagenesExtra]
+      const nuevaPrincipal = extras[i]
+      const principalAnterior = { file: p.imagenFile, preview: p.imagenPreview }
+      if (principalAnterior.file || principalAnterior.preview) {
+        extras[i] = { file: principalAnterior.file, preview: principalAnterior.preview }
+      } else {
+        extras.splice(i, 1)
+      }
+      return { ...p, imagenFile: nuevaPrincipal.file, imagenPreview: nuevaPrincipal.preview, imagenesExtra: extras }
     })
   }
 
@@ -563,6 +635,14 @@ export default function ProveedoresPage() {
     cargarSeguimiento(user.email)
   }, [user?.email])
 
+  // Inventario total: suma del stock real de los productos aprobados de este proveedor
+  useEffect(() => {
+    if (misProductos.length === 0) { setInventarioTotal(0); return }
+    const skus = misProductos.map(p => p.producto_sku)
+    supabase.from('productos').select('stock').in('sku', skus)
+      .then(({ data }) => setInventarioTotal((data ?? []).reduce((t, p) => t + (p.stock ?? 0), 0)))
+  }, [misProductos])
+
   // Realtime: cuando el admin cambia el estado de una solicitud → refrescar
   useEffect(() => {
     if (!savedEmail) return
@@ -633,6 +713,10 @@ export default function ProveedoresPage() {
     }
     if (!prod.precio || isNaN(Number(prod.precio)) || Number(prod.precio) <= 0) {
       setProdError('El precio debe ser un número mayor a 0.')
+      return
+    }
+    if (prod.precioPromocion && Number(prod.precioPromocion) >= Number(prod.precio)) {
+      setProdError('El precio de promoción debe ser menor al precio regular.')
       return
     }
     if (productos.some(p => p.sku.toUpperCase() === prod.sku.toUpperCase())) {
@@ -708,6 +792,9 @@ export default function ProveedoresPage() {
       if (p.peso)              detalles.peso_g    = Number(p.peso)
       if (p.largo || p.ancho || p.alto) detalles.dimensiones = { largo: Number(p.largo)||0, ancho: Number(p.ancho)||0, alto: Number(p.alto)||0 }
       if (imagenesExtraUrls.length) detalles.imagenes_extra = imagenesExtraUrls
+      if (p.precioPromocion && Number(p.precioPromocion) > 0 && Number(p.precioPromocion) < Number(p.precio)) {
+        detalles.precio_promocional = Number(p.precioPromocion)
+      }
 
       rows.push({
         proveedor_nombre:     proveedor.nombre.trim(),
@@ -1217,6 +1304,24 @@ export default function ProveedoresPage() {
                     </div>
                   </div>
 
+                  {/* Precio de promoción */}
+                  <div>
+                    <label style={labelStyle}>
+                      Precio de promoción (MXN)
+                      <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Opcional, debe ser menor al precio regular</span>
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9ca3af', fontWeight: 700, pointerEvents: 'none' }}>$</span>
+                      <input type="number" min="0" step="0.01"
+                        style={{ ...inputStyle, paddingLeft: 26 }}
+                        value={prod.precioPromocion} onChange={e => setPR('precioPromocion', e.target.value)}
+                        placeholder="Sin promoción" onFocus={focus} onBlur={blur} />
+                    </div>
+                    {prod.precioPromocion && prod.precio && Number(prod.precioPromocion) >= Number(prod.precio) && (
+                      <p style={{ margin: '4px 0 0', fontSize: 11, color: PINK, fontWeight: 600 }}>El precio de promoción debe ser menor al precio regular.</p>
+                    )}
+                  </div>
+
                   {/* Descripción */}
                   <div>
                     <label style={labelStyle}>
@@ -1395,10 +1500,23 @@ export default function ProveedoresPage() {
                           {prod.imagenesExtra.length > 0 && (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 12 }}>
                               {prod.imagenesExtra.map((extra, i) => (
-                                <div key={i} style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', position: 'relative', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
-                                  <img src={extra.preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                                  <button type="button" onClick={() => removeExtraImagen(i)}
-                                    style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1 }}>×</button>
+                                <div key={i} style={{ borderRadius: 8, overflow: 'hidden', position: 'relative', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
+                                  <div style={{ aspectRatio: '1', position: 'relative' }}>
+                                    <img src={extra.preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                    <button type="button" onClick={() => removeExtraImagen(i)}
+                                      style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1 }}>×</button>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 2, padding: 2, background: '#f3f4f6' }}>
+                                    <button type="button" onClick={() => moverImagenExtra(i, -1)} disabled={i === 0}
+                                      title="Mover a la izquierda"
+                                      style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1 }}>◀</button>
+                                    <button type="button" onClick={() => usarComoPrincipal(i)}
+                                      title="Usar como imagen principal"
+                                      style={{ flex: 2, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Principal</button>
+                                    <button type="button" onClick={() => moverImagenExtra(i, 1)} disabled={i === prod.imagenesExtra.length - 1}
+                                      title="Mover a la derecha"
+                                      style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === prod.imagenesExtra.length - 1 ? 'default' : 'pointer', opacity: i === prod.imagenesExtra.length - 1 ? 0.3 : 1 }}>▶</button>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -1697,19 +1815,28 @@ export default function ProveedoresPage() {
           )
         })()}
 
-        {/* ---- Tab: Seguimiento y pagos ---- */}
+        {/* ---- Tab: Seguimiento y pagos (Dashboard del proveedor) ---- */}
         {tab === 'seguimiento' && (() => {
-          const pagado = seguimiento.filter(f => f.ventaEstado === 'Pagado')
-          const enProceso = seguimiento.filter(f => f.ventaEstado !== 'Pagado' && f.ventaEstado !== 'Cancelado')
+          // "Ya pagado" = llegó a Pagado o más adelante (Enviado/Entregado siguen siendo
+          // ventas ya cobradas). Antes un pedido Entregado quedaba mal contado como
+          // "en proceso" — mismo tipo de bug que se encontró hoy en el dashboard admin.
+          const ESTADOS_PAGADOS = ['Pagado', 'Enviado', 'Entregado']
+          const pagado = seguimiento.filter(f => ESTADOS_PAGADOS.includes(f.ventaEstado))
+          const enProceso = seguimiento.filter(f => !ESTADOS_PAGADOS.includes(f.ventaEstado) && f.ventaEstado !== 'Cancelado')
           const totalAPagar = pagado.reduce((t, f) => t + (f.costo ?? 0) * f.cantidad, 0)
           const totalEnProceso = enProceso.reduce((t, f) => t + (f.costo ?? 0) * f.cantidad, 0)
           const piezasVendidas = seguimiento.reduce((t, f) => t + f.cantidad, 0)
+          const pedidosActivos = new Set(seguimiento.filter(f => f.ventaEstado !== 'Cancelado' && f.ventaEstado !== 'Entregado').map(f => f.ventaNumero)).size
+          const productosPublicados = misProductos.length
+          const productosPendientes = (historialItems ?? []).filter(h => h.estado === 'pendiente').length
+          const productosRechazados = (historialItems ?? []).filter(h => h.estado === 'rechazado').length
 
           const estadoVentaStyle: Record<string, { bg: string; text: string }> = {
             'Pendiente': { bg: '#fef3c7', text: '#92400e' },
             'En proceso': { bg: '#dbeafe', text: '#1e40af' },
             'Pagado': { bg: '#d1fae5', text: '#065f46' },
             'Enviado': { bg: '#e0e7ff', text: '#3730a3' },
+            'Entregado': { bg: '#dcfce7', text: '#166534' },
             'Cancelado': { bg: '#fee2e2', text: '#991b1b' },
           }
           const estadoEnvioStyle: Record<string, { bg: string; text: string }> = {
@@ -1725,14 +1852,55 @@ export default function ProveedoresPage() {
 
           return (
             <div>
-              {/* Panel de pago */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+              {/* Alertas */}
+              {(productosPendientes > 0 || productosRechazados > 0) && (
+                <div style={{ background: '#fff', borderRadius: 16, padding: '14px 18px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', marginBottom: 16 }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>⚠️ Alertas</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    {productosPendientes > 0 && (
+                      <button type="button" onClick={() => setTab('historial')}
+                        style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, color: '#92400e', backgroundColor: '#fef3c7' }}>
+                        {productosPendientes} producto{productosPendientes !== 1 ? 's' : ''} en revisión →
+                      </button>
+                    )}
+                    {productosRechazados > 0 && (
+                      <button type="button" onClick={() => setTab('historial')}
+                        style={{ border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, color: '#991b1b', backgroundColor: '#fee2e2' }}>
+                        {productosRechazados} producto{productosRechazados !== 1 ? 's' : ''} rechazado{productosRechazados !== 1 ? 's' : ''} →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Panel principal */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 20 }}>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Publicados</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>{productosPublicados}</p>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Pendientes</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: '#d97706', margin: 0 }}>{productosPendientes}</p>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Rechazados</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: '#dc2626', margin: 0 }}>{productosRechazados}</p>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Inventario</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>{inventarioTotal ?? '—'}</p>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Pedidos activos</p>
+                  <p style={{ fontSize: 24, fontWeight: 900, color: '#0049ff', margin: 0 }}>{pedidosActivos}</p>
+                </div>
                 <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
                   <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Piezas vendidas</p>
                   <p style={{ fontSize: 24, fontWeight: 900, color: NAVY, margin: 0 }}>{piezasVendidas}</p>
                 </div>
                 <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
-                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Por pagar (en proceso)</p>
+                  <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>Por pagar</p>
                   <p style={{ fontSize: 24, fontWeight: 900, color: '#92400e', margin: 0 }}>${totalEnProceso.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
                 </div>
                 <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
@@ -1741,7 +1909,7 @@ export default function ProveedoresPage() {
                 </div>
               </div>
               <p style={{ fontSize: 12, color: '#9ca3af', margin: '-10px 0 20px' }}>
-                Calculado sobre el costo registrado de cada producto × cantidad vendida. Es informativo — el pago real se coordina con el equipo de Order Express.
+                Los montos se calculan sobre el costo registrado de cada producto × cantidad vendida. Es informativo — el pago real se coordina con el equipo de Order Express.
               </p>
 
               {/* Listado */}
@@ -2016,6 +2184,83 @@ export default function ProveedoresPage() {
             </button>
           </div>
 
+          {/* Perfil comercial (público) */}
+          <div style={{ background: '#fff', borderRadius: 20, padding: '32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', maxWidth: 640 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, background: `${NAVY}12`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏪</div>
+                <div>
+                  <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>Perfil comercial</h2>
+                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Descripción, redes sociales y métodos de envío</p>
+                </div>
+              </div>
+              {(() => {
+                const estadoInfo: Record<string, { label: string; bg: string; color: string }> = {
+                  activo: { label: '✓ Activo', bg: '#d1fae5', color: '#065f46' },
+                  suspendido: { label: '⛔ Suspendido', bg: '#fee2e2', color: '#991b1b' },
+                  pendiente: { label: '⏳ Pendiente', bg: '#fef3c7', color: '#92400e' },
+                  en_revision: { label: '🔍 En revisión', bg: '#dbeafe', color: '#1e40af' },
+                }
+                const info = estadoInfo[estadoCuenta] ?? estadoInfo.activo
+                return (
+                  <span style={{ background: info.bg, color: info.color, fontSize: 12, fontWeight: 800, padding: '6px 14px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+                    {info.label}
+                  </span>
+                )
+              })()}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={labelStyle}>Descripción de tu negocio</label>
+                <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }}
+                  value={perfilComercial.descripcion}
+                  onChange={e => setPerfilComercial(p => ({ ...p, descripcion: e.target.value }))}
+                  placeholder="Cuéntale a los clientes qué vendes y qué te hace diferente..."
+                  onFocus={focus} onBlur={blur} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Instagram</label>
+                  <input style={inputStyle} value={perfilComercial.instagram}
+                    onChange={e => setPerfilComercial(p => ({ ...p, instagram: e.target.value }))}
+                    placeholder="@tu_negocio" onFocus={focus} onBlur={blur} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Facebook</label>
+                  <input style={inputStyle} value={perfilComercial.facebook}
+                    onChange={e => setPerfilComercial(p => ({ ...p, facebook: e.target.value }))}
+                    placeholder="facebook.com/tu_negocio" onFocus={focus} onBlur={blur} />
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>WhatsApp</label>
+                <input style={inputStyle} value={perfilComercial.whatsapp}
+                  onChange={e => setPerfilComercial(p => ({ ...p, whatsapp: e.target.value }))}
+                  placeholder="55 1234 5678" onFocus={focus} onBlur={blur} />
+              </div>
+              <div>
+                <label style={labelStyle}>Métodos de envío</label>
+                <textarea style={{ ...inputStyle, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
+                  value={perfilComercial.metodosEnvio}
+                  onChange={e => setPerfilComercial(p => ({ ...p, metodosEnvio: e.target.value }))}
+                  placeholder="Ej: Envío nacional por DHL/Estafeta, entrega local en 24-48h..."
+                  onFocus={focus} onBlur={blur} />
+              </div>
+            </div>
+
+            {comercialError && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 16px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginTop: 16 }}>
+                {comercialError}
+              </div>
+            )}
+
+            <button type="button" onClick={guardarPerfilComercial} disabled={guardandoComercial}
+              style={{ marginTop: 20, background: comercialGuardado ? '#059669' : NAVY, color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+              {guardandoComercial ? 'Guardando...' : comercialGuardado ? '¡Guardado!' : 'Guardar cambios'}
+            </button>
+          </div>
+
           <div style={{ background: '#fff', borderRadius: 20, padding: '32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', maxWidth: 640 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
               <div style={{ width: 40, height: 40, background: `${NAVY}12`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>⚙️</div>
@@ -2168,25 +2413,37 @@ export default function ProveedoresPage() {
                     const st = estadoMap[item.estado] ?? estadoMap.pendiente
                     return (
                       <div key={item.id} style={{
-                        display: 'grid', gridTemplateColumns: '1fr auto',
-                        gap: 16, alignItems: 'center', padding: '14px 28px',
+                        padding: '14px 28px',
                         borderBottom: i < historialItems.length - 1 ? '1px solid #f3f4f6' : 'none',
                         background: i % 2 === 0 ? '#fff' : '#fafafa',
                         borderLeft: `3px solid ${st.borderColor}`,
                       }}>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
-                          <div style={{ display: 'flex', gap: 10, marginTop: 3, alignItems: 'center' }}>
-                            <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</span>
-                            <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
-                            <span style={{ fontSize: 11, color: '#9ca3af' }}>
-                              {new Date(item.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
+                            <div style={{ display: 'flex', gap: 10, marginTop: 3, alignItems: 'center' }}>
+                              <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</span>
+                              <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
+                              <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                                {new Date(item.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
                           </div>
+                          <span style={{ display: 'inline-flex', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '5px 14px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {st.label}
+                          </span>
                         </div>
-                        <span style={{ display: 'inline-flex', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '5px 14px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {st.label}
-                        </span>
+                        {item.estado === 'rechazado' && (
+                          <div style={{ marginTop: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px' }}>
+                            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#b91c1c' }}>
+                              Motivo del rechazo: {item.motivo_rechazo || 'No se especificó un motivo.'}
+                            </p>
+                            <button type="button" onClick={() => reenviarARevision(item.id)} disabled={reenviandoId === item.id}
+                              style={{ background: '#fff', border: '1px solid #fca5a5', color: '#b91c1c', fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 6, cursor: reenviandoId === item.id ? 'default' : 'pointer', opacity: reenviandoId === item.id ? 0.6 : 1 }}>
+                              {reenviandoId === item.id ? 'Reenviando…' : '↻ Reenviar a revisión'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )
                   })}

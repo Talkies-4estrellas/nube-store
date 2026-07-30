@@ -1097,6 +1097,44 @@
   background: #eef2f7;
 }
 
+.oe-store .badge-oferta {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: var(--pink);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+  z-index: 2;
+}
+
+.oe-store .store-product-stock {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #d97706;
+}
+
+.oe-store .price-promo {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.2;
+}
+
+.oe-store .price-promo s {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.oe-store .price-promo strong {
+  color: var(--pink);
+}
+
 .oe-store .store-product-media img {
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -2625,5 +2663,141 @@
 
   .oe-store .oe-footer-logo {
     height: 40px;
+  }
+}
+
+/* ============================================================
+   Barra de navegación inferior (móvil) — Home / Buscar / Rastreo / Perfil
+   Oculta por defecto (desktop); visible solo bajo el breakpoint móvil.
+   Va al final del archivo a propósito: reglas de igual especificidad
+   ganan por orden de aparición, no solo por coincidencia de @media
+   (ver notas de la sesión del 21/07 sobre este mismo problema).
+   ============================================================ */
+.oe-store .oe-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .oe-store .oe-bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 400;
+    background: #fff;
+    border-top: 1px solid #eef0f4;
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .oe-store .oe-bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 2px;
+    background: none;
+    border: none;
+    color: #9aa0b4;
+    font-size: 10px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: color 0.15s;
+  }
+
+  .oe-store .oe-bottom-nav-item svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .oe-store .oe-bottom-nav-item.active,
+  .oe-store .oe-bottom-nav-item:active {
+    color: var(--pink, #e7226d);
+  }
+
+  .oe-store .oe-bottom-nav-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--pink, #e7226d);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  /* Espacio para que el contenido no quede tapado por la barra fija */
+  .oe-store .page-shell {
+    padding-bottom: 78px;
+  }
+}
+
+/* ============================================================
+   Header dinámico en escritorio (ocultar al bajar / mostrar al subir)
+   — solo en vistas distintas a "inicio" (ahí el header vive dentro
+   del hero inmersivo de pantalla completa, no tiene sentido ocultarlo
+   y `.home-immersive` tiene overflow:hidden que rompe cualquier
+   position:sticky/fixed relativo a esa caja).
+
+   `position: sticky` NO funciona aquí: el contenedor real del header
+   (`.home-immersive`) es una caja corta (header + carrusel) que
+   termina mucho antes que el catálogo completo — el sticky se "sale"
+   de su contenedor a los ~400-500px de scroll y deja de pegarse
+   (confirmado en vivo). Por eso se usa `position: fixed`, con el
+   mismo left/width/max-width que `.page-shell` en cada breakpoint,
+   para que el borde del header coincida exactamente con el
+   contenido de abajo — incluye el sidebar colapsado (via
+   var(--nav-width)) y las pantallas ultra-anchas.
+   ============================================================ */
+@media (min-width: 1181px) {
+  .oe-store:not([data-view="inicio"]) .topbar {
+    position: fixed;
+    top: 0;
+    left: calc(var(--nav-width) + 44px);
+    width: calc(100% - var(--nav-width) - 44px);
+    padding: 16px 32px;
+    margin: 0 0 14px;
+    background: #edf2f8;
+    z-index: 90;
+    box-shadow: 0 8px 20px -12px rgba(15, 23, 42, 0.15);
+    transition: transform 0.28s ease, box-shadow 0.28s ease, left var(--nav-dur) var(--nav-ease), width var(--nav-dur) var(--nav-ease);
+    will-change: transform;
+  }
+
+  .oe-store:not([data-view="inicio"]) .topbar.nav-hidden {
+    transform: translateY(-100%);
+    box-shadow: none;
+  }
+
+  /* Espacio reservado arriba de .home-immersive para que el header fijo
+     no tape el contenido — mismo alto que el topbar fijo ocupa. */
+  .oe-store:not([data-view="inicio"]) .home-immersive {
+    padding-top: 78px;
+  }
+}
+
+/* Mismos topes de ancho que .page-shell (ver "Pantallas grandes" arriba),
+   para que el borde derecho del header fijo siga coincidiendo con el
+   contenido debajo en monitores anchos. */
+@media (min-width: 1400px) {
+  .oe-store:not([data-view="inicio"]) .topbar {
+    max-width: 1680px;
+  }
+}
+@media (min-width: 1800px) {
+  .oe-store:not([data-view="inicio"]) .topbar {
+    max-width: 1920px;
+  }
+}
+@media (min-width: 2200px) {
+  .oe-store:not([data-view="inicio"]) .topbar {
+    max-width: 2100px;
   }
 }

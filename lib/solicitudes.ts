@@ -12,6 +12,7 @@ export type SolicitudProducto = {
   proveedor_nombre: string
   proveedor_email: string
   proveedor_empresa?: string | null
+  detalles?: Record<string, unknown> | null
 }
 
 async function notificarProveedor(supabase: SupabaseClient, sol: SolicitudProducto, estado: 'aprobado' | 'rechazado', motivo?: string) {
@@ -30,16 +31,21 @@ async function notificarProveedor(supabase: SupabaseClient, sol: SolicitudProduc
 
 /** Aprueba una solicitud: crea el producto en el catálogo, marca la solicitud como aprobada (con auditoría de quién y cuándo) y notifica al proveedor. */
 export async function aprobarSolicitud(supabase: SupabaseClient, sol: SolicitudProducto, revisadoPor: string | undefined) {
+  const detalles = sol.detalles ?? null
+  const precioPromocional = detalles && typeof detalles.precio_promocional === 'number' ? detalles.precio_promocional : null
+
   const { error: errInsert } = await supabase.from('productos').insert({
     nombre: sol.producto_nombre,
     sku: sol.producto_sku,
     precio: sol.producto_precio,
+    precio_promocional: precioPromocional,
     stock: sol.producto_stock,
     imagen_url: sol.imagen_url ?? sol.producto_imagen_url ?? null,
     categoria_id: sol.categoria_id,
     activo: true,
     origen: 'proveedor',
     proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
+    detalles,
   })
   if (errInsert) return { error: errInsert }
 

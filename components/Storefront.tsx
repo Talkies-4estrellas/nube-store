@@ -67,6 +67,7 @@ type SupabaseProduct = {
   nombre: string
   sku: string
   precio: number
+  precio_promocional: number | null
   stock: number
   imagen_url: string | null
   activo: boolean
@@ -125,6 +126,16 @@ const slides = [
 /* ---- Helpers ---- */
 const priceValue = (price: string) => Number(price.replace(/[$,]/g, '')) || 0
 const formatPrice = (value: number) => `$${value.toLocaleString('en-US')}`
+
+/** Ordena resultados de búsqueda por relevancia: nombre exacto > nombre empieza con > nombre contiene > solo la categoría coincide. */
+function relevanciaBusqueda([title, , , , category]: Product, q: string): number {
+  const nt = title.toLowerCase()
+  if (nt === q) return 0
+  if (nt.startsWith(q)) return 1
+  if (nt.includes(q)) return 2
+  if (category.toLowerCase().includes(q)) return 3
+  return 4
+}
 const bump = (el: Element) =>
   el.animate(
     [{ transform: 'scale(1)' }, { transform: 'scale(0.92)' }, { transform: 'scale(1)' }],
@@ -192,6 +203,7 @@ export default function Storefront() {
   const [productIdMap, setProductIdMap] = useState<Record<string, string>>({})
   const [productSkuMap, setProductSkuMap] = useState<Record<string, string>>({})
   const [productStockMap, setProductStockMap] = useState<Record<string, number>>({})
+  const [productPromoMap, setProductPromoMap] = useState<Record<string, number>>({})
   const [categoriasRaw, setCategoriasRaw] = useState<CategoriaPlana[]>([])
   const categorias = categoriasRaw.map(c => c.nombre)
   const arbolCategorias: CategoriaConHijos[] = construirArbolCategorias(categoriasRaw)
@@ -364,7 +376,7 @@ export default function Storefront() {
       const [{ data: prods }, { data: cats }] = await Promise.all([
         supabase
           .from('productos')
-          .select('id, nombre, sku, precio, stock, imagen_url, activo, categorias(nombre)')
+          .select('id, nombre, sku, precio, precio_promocional, stock, imagen_url, activo, categorias(nombre)')
           .eq('activo', true)
           .gt('stock', 0)
           .order('created_at', { ascending: false }),
@@ -376,10 +388,17 @@ export default function Storefront() {
         const idMap: Record<string, string> = {}
         const skuMap: Record<string, string> = {}
         const stockMap: Record<string, number> = {}
-        typed.forEach(p => { idMap[p.nombre] = p.id; skuMap[p.nombre] = p.sku; stockMap[p.nombre] = p.stock })
+        const promoMap: Record<string, number> = {}
+        typed.forEach(p => {
+          idMap[p.nombre] = p.id; skuMap[p.nombre] = p.sku; stockMap[p.nombre] = p.stock
+          if (p.precio_promocional != null && p.precio_promocional > 0 && p.precio_promocional < p.precio) {
+            promoMap[p.nombre] = p.precio_promocional
+          }
+        })
         setProductIdMap(idMap)
         setProductSkuMap(skuMap)
         setProductStockMap(stockMap)
+        setProductPromoMap(promoMap)
       }
       if (cats) setCategoriasRaw(cats)
       setLoadingProducts(false)
@@ -739,9 +758,10 @@ export default function Storefront() {
     setSearchValue(val)
     if (val.trim().length > 1) {
       const q = val.toLowerCase()
-      const sugs = dbProducts.filter(([t, , , , c]) =>
-        t.toLowerCase().includes(q) || c.toLowerCase().includes(q)
-      ).slice(0, 5)
+      const sugs = dbProducts
+        .filter(([t, , , , c]) => t.toLowerCase().includes(q) || c.toLowerCase().includes(q))
+        .sort((a, b) => relevanciaBusqueda(a, q) - relevanciaBusqueda(b, q))
+        .slice(0, 5)
       setSearchSuggestions(sugs)
       setShowSuggestions(sugs.length > 0)
     } else {
@@ -825,10 +845,14 @@ export default function Storefront() {
 
   const ProductCard = ([title, text, price, image, category]: Product) => {
     const guardado = favoritos.includes(title)
+    const promo = productPromoMap[title]
+    const stockDisponible = productStockMap[title]
+    const pocasUnidades = stockDisponible != null && stockDisponible > 0 && stockDisponible <= 5
     return (
     <article key={title} className="store-product" data-detail-title={title} onClick={(e) => onCardClick(e, title)}>
       <div className="store-product-media">
         <img src={image} alt={title} />
+        {promo != null && <span className="badge-oferta">Oferta</span>}
         <button
           className={`icon-button${guardado ? ' saved' : ''}`}
           type="button"
@@ -842,8 +866,16 @@ export default function Storefront() {
       <span>{category}</span>
       <h3>{title}</h3>
       <p>{text}</p>
+      {pocasUnidades && <p className="store-product-stock">¡Últimas {stockDisponible} unidades!</p>}
       <div className="price-row">
-        <strong>{price}</strong>
+        {promo != null ? (
+          <span className="price-promo">
+            <s>{price}</s>
+            <strong>{formatPrice(promo)}</strong>
+          </span>
+        ) : (
+          <strong>{price}</strong>
+        )}
         <AddButton title={title} dark />
       </div>
     </article>
@@ -1259,7 +1291,9 @@ export default function Storefront() {
     const q = searchQuery.trim()
     const nq = q.toLowerCase()
     const label = q || 'Todo'
-    const results = dbProducts.filter(([t, x, , , c]) => [t, x, c].some((v) => v.toLowerCase().includes(nq)))
+    const results = dbProducts
+      .filter(([t, x, , , c]) => [t, x, c].some((v) => v.toLowerCase().includes(nq)))
+      .sort((a, b) => relevanciaBusqueda(a, nq) - relevanciaBusqueda(b, nq))
     const suggestions = categorias.slice(0, 3).join(', ') || 'productos disponibles'
     return (
       <>
@@ -1550,7 +1584,7 @@ export default function Storefront() {
 
       <main className="page-shell">
         <section className="home-immersive" style={{ visibility: configLoaded ? 'visible' : 'hidden' }}>
-          <header className="topbar">
+          <header className={`topbar${headerHidden ? ' nav-hidden' : ''}`}>
             <div>
               <p className="eyebrow">{storeConfig.nombre_tienda}</p>
               <h1>{storeConfig.hero_titulo}</h1>
@@ -1932,6 +1966,30 @@ export default function Storefront() {
           </div>
         </div>
       )}
+
+      {/* Barra de navegación inferior — solo móvil (ver storefront.css) */}
+      <nav className="oe-bottom-nav" aria-label="Navegación principal móvil">
+        <button type="button" className={`oe-bottom-nav-item${view === 'inicio' ? ' active' : ''}`} onClick={() => goView('inicio')}>
+          <Ic n="home" />
+          <span>Inicio</span>
+        </button>
+        <button type="button" className="oe-bottom-nav-item" onClick={() => { setHeaderHidden(false); setMobileSearchOpen(true) }}>
+          <Ic n="search" />
+          <span>Buscar</span>
+        </button>
+        <a href={panelUser ? '/mi-cuenta' : '/login?redirect=/mi-cuenta'} className="oe-bottom-nav-item">
+          <Ic n="truck" />
+          <span>Rastreo</span>
+        </a>
+        <a href={panelUser ? ROLE_HOME[panelUser.role] : '/login'} className="oe-bottom-nav-item">
+          {panelUser ? (
+            <span className="oe-bottom-nav-avatar">{panelUser.nombre.charAt(0).toUpperCase()}</span>
+          ) : (
+            <Ic n="log-in" />
+          )}
+          <span>{panelUser ? 'Perfil' : 'Entrar'}</span>
+        </a>
+      </nav>
     </div>
   )
 }
