@@ -85,6 +85,7 @@ export default function ProductosPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [showModal, setShowModal] = useState(false)
   const [editando, setEditando] = useState<Product | null>(null)
+  const [modalKey, setModalKey] = useState(0)
   const [guardandoProducto, setGuardandoProducto] = useState(false)
   const [errorGuardarProducto, setErrorGuardarProducto] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -319,7 +320,7 @@ export default function ProductosPage() {
     colores: string[]; tallas: string[]; variantes: Array<{ color: string; talla: string; stock: string }>
     peso: string; largo: string; ancho: string; alto: string
     imagenesExtra: Array<{ file: File | null; preview: string | null }>
-  }) {
+  }, opts?: { continuar?: boolean }) {
     setGuardandoProducto(true)
     setErrorGuardarProducto('')
     let imagen_url: string | null = null
@@ -376,8 +377,12 @@ export default function ProductosPage() {
     setGuardandoProducto(false)
     if (!error) {
       await fetchProducts()
-      setShowModal(false)
-      setEditando(null)
+      if (opts?.continuar) {
+        setModalKey(k => k + 1)
+      } else {
+        setShowModal(false)
+        setEditando(null)
+      }
     } else if (error.message.includes('duplicate key') && error.message.includes('sku')) {
       setErrorGuardarProducto(`Ya existe un producto con el SKU "${form.sku}". Usa un SKU distinto.`)
     } else {
@@ -954,6 +959,7 @@ export default function ProductosPage() {
 
       {showModal && (
         <ProductoModal
+          key={modalKey}
           arbolCategorias={arbolCategorias}
           serverError={errorGuardarProducto}
           guardando={guardandoProducto}

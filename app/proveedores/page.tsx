@@ -33,9 +33,63 @@ const PALETA_COLORES = [
   { nombre: 'Beige',    hex: '#d2b48c' },
 ]
 
+const GRUPOS_TALLAS = [
+  { nombre: 'Ropa',    valores: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
+  { nombre: 'Calzado', valores: ['22', '23', '24', '25', '26', '27', '28', '38', '39', '40', '41', '42'] },
+  { nombre: 'Otro',    valores: ['Único'] },
+]
+
+const UNIDADES_PESO = ['g', 'kg', 'ml', 'L'] as const
+type UnidadPeso = typeof UNIDADES_PESO[number]
+// Factor a gramos (ml/L se tratan como equivalente de peso 1:1 para estimar envío)
+const FACTOR_A_GRAMOS: Record<UnidadPeso, number> = { g: 1, kg: 1000, ml: 1, L: 1000 }
+function pesoAUnidadMasClara(gramos: number): { valor: string; unidad: UnidadPeso } {
+  if (gramos <= 0) return { valor: '', unidad: 'g' }
+  if (gramos % 1000 === 0 && gramos >= 1000) return { valor: String(gramos / 1000), unidad: 'kg' }
+  return { valor: String(gramos), unidad: 'g' }
+}
+
+function ProvCard({ icon, title, hint, right, children }: { icon: string; title: string; hint?: string; right?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eef0f3', borderRadius: 16, padding: 20, boxShadow: '0 1px 3px rgba(16,24,40,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: NAVY }}>{title}</p>
+          {hint && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{hint}</p>}
+        </div>
+        {right}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ProvCollapsible({ icon, title, hint, abierto, onToggle, badges, children }: {
+  icon: string; title: string; hint?: string; abierto: boolean; onToggle: () => void; badges: string[]; children: React.ReactNode
+}) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eef0f3', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(16,24,40,0.04)' }}>
+      <button type="button" onClick={onToggle} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 20, cursor: 'pointer', textAlign: 'left' }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{title}</span>
+          {hint && !abierto && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{hint}</p>}
+        </div>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          {badges.map(b => <span key={b} style={{ background: `${NAVY}12`, color: NAVY, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{b}</span>)}
+        </div>
+        <span style={{ fontSize: 11, color: '#9ca3af', transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>▶</span>
+      </button>
+      {abierto && <div style={{ padding: '0 20px 20px' }}>{children}</div>}
+    </div>
+  )
+}
+
 const DRAFT_KEY    = 'proveedor_draft_v1'
 const EMAIL_KEY    = 'proveedor_email_saved'
 const PERFIL_KEY   = 'proveedor_perfil_v1'
+const PESO_UNIDAD_KEY = 'proveedor_peso_unidad_v1'
 
 type Categoria = CategoriaPlana
 
@@ -453,7 +507,28 @@ export default function ProveedoresPage() {
   // Chips colores/tallas
   const [colorInput, setColorInput] = useState('')
   const [tallaInput, setTallaInput] = useState('')
-  const [mostrarOpcionales, setMostrarOpcionales] = useState(false)
+  const [mostrarColores, setMostrarColores] = useState(false)
+  const [abiertoVariantes, setAbiertoVariantes] = useState(false)
+  const [abiertoEnvio, setAbiertoEnvio] = useState(false)
+  const dragImgIndex = useRef<number | null>(null)
+
+  // Peso: unidad seleccionada en UI (el valor real de prod.peso siempre va en gramos)
+  const [pesoValor, setPesoValor] = useState('')
+  const [pesoUnidad, setPesoUnidad] = useState<UnidadPeso>('g')
+
+  useEffect(() => {
+    try {
+      const u = localStorage.getItem(PESO_UNIDAD_KEY) as UnidadPeso | null
+      if (u && UNIDADES_PESO.includes(u)) setPesoUnidad(u)
+    } catch { /* ignorar */ }
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem(PESO_UNIDAD_KEY, pesoUnidad) } catch { /* ignorar */ }
+  }, [pesoUnidad])
+  useEffect(() => {
+    setProd(p => ({ ...p, peso: pesoValor ? String(Math.round(Number(pesoValor) * FACTOR_A_GRAMOS[pesoUnidad])) : '' }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pesoValor, pesoUnidad])
 
   function buildVariantes(
     colores: string[], tallas: string[],
@@ -497,7 +572,18 @@ export default function ProveedoresPage() {
     })
   }
 
-  async function agregarImagenesExtra(files: FileList | File[]) {
+  // ---- Galería unificada (principal + extra) ----
+  type ImgItem = { file: File | null; preview: string | null }
+  function getGaleria(): ImgItem[] {
+    const list: ImgItem[] = []
+    if (prod.imagenFile || prod.imagenPreview) list.push({ file: prod.imagenFile, preview: prod.imagenPreview })
+    return [...list, ...prod.imagenesExtra]
+  }
+  function setGaleria(list: ImgItem[]) {
+    const [principal, ...resto] = list
+    setProd(p => ({ ...p, imagenFile: principal?.file ?? null, imagenPreview: principal?.preview ?? null, imagenesExtra: resto }))
+  }
+  async function agregarImagenesGaleria(files: FileList | File[]) {
     const arr = Array.from(files).filter(f => f.type.startsWith('image/'))
     if (!arr.length) return
     setConvirtiendo(true)
@@ -506,45 +592,37 @@ export default function ProveedoresPage() {
         const webp = await convertToWebp(f)
         return { file: webp, preview: URL.createObjectURL(webp) }
       }))
-      setProd(p => ({ ...p, imagenesExtra: [...p.imagenesExtra, ...converted] }))
+      setGaleria([...getGaleria(), ...converted])
     } finally { setConvirtiendo(false) }
   }
-  function onExtraFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.files?.length) agregarImagenesExtra(e.target.files)
+  function onGaleriaFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.length) agregarImagenesGaleria(e.target.files)
     e.target.value = ''
   }
-  function onExtraDrop(e: DragEvent<HTMLDivElement>) {
+  function onGaleriaDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault(); setExtraDragging(false)
-    if (e.dataTransfer.files?.length) agregarImagenesExtra(e.dataTransfer.files)
+    if (e.dataTransfer.files?.length) agregarImagenesGaleria(e.dataTransfer.files)
   }
-  function removeExtraImagen(idx: number) {
-    setProd(p => {
-      const extras = [...p.imagenesExtra]
-      extras.splice(idx, 1)
-      return { ...p, imagenesExtra: extras }
-    })
-  }
-  function moverImagenExtra(i: number, dir: -1 | 1) {
-    setProd(p => {
-      const extras = [...p.imagenesExtra]
-      const j = i + dir
-      if (j < 0 || j >= extras.length) return p
-      ;[extras[i], extras[j]] = [extras[j], extras[i]]
-      return { ...p, imagenesExtra: extras }
-    })
+  function removeImagenAt(i: number) {
+    const list = getGaleria()
+    list.splice(i, 1)
+    setGaleria(list)
   }
   function usarComoPrincipal(i: number) {
-    setProd(p => {
-      const extras = [...p.imagenesExtra]
-      const nuevaPrincipal = extras[i]
-      const principalAnterior = { file: p.imagenFile, preview: p.imagenPreview }
-      if (principalAnterior.file || principalAnterior.preview) {
-        extras[i] = { file: principalAnterior.file, preview: principalAnterior.preview }
-      } else {
-        extras.splice(i, 1)
-      }
-      return { ...p, imagenFile: nuevaPrincipal.file, imagenPreview: nuevaPrincipal.preview, imagenesExtra: extras }
-    })
+    const list = getGaleria()
+    const [item] = list.splice(i, 1)
+    list.unshift(item)
+    setGaleria(list)
+  }
+  function onImgDragStart(i: number) { dragImgIndex.current = i }
+  function onImgDrop(i: number) {
+    const from = dragImgIndex.current
+    dragImgIndex.current = null
+    if (from === null || from === i) return
+    const list = getGaleria()
+    const [moved] = list.splice(from, 1)
+    list.splice(i, 0, moved)
+    setGaleria(list)
   }
 
   // Cámara
@@ -619,7 +697,17 @@ export default function ProveedoresPage() {
       if (raw) {
         const { proveedor: p, prod: pr } = JSON.parse(raw)
         if (p) setProveedor(p)
-        if (pr) setProd({ ...emptyProducto(), ...pr, imagenFile: null, imagenPreview: null })
+        if (pr) {
+          setProd({ ...emptyProducto(), ...pr, imagenFile: null, imagenPreview: null })
+          if (pr.peso) {
+            const pesoUi = pesoAUnidadMasClara(Number(pr.peso) || 0)
+            setPesoValor(pesoUi.valor)
+            setPesoUnidad(pesoUi.unidad)
+          }
+          if (pr.colores?.length) setMostrarColores(true)
+          if (pr.colores?.length || pr.tallas?.length) setAbiertoVariantes(true)
+          if (pr.peso || pr.largo || pr.ancho || pr.alto) setAbiertoEnvio(true)
+        }
       }
     } catch { /* ignorar */ }
 
@@ -724,7 +812,12 @@ export default function ProveedoresPage() {
       return
     }
     setProductos(prev => [...prev, { ...prod, sku: prod.sku.toUpperCase() }])
-    setProd(emptyProducto())
+    // Recuerda la última categoría usada — la mayoría de las veces el siguiente producto es de la misma
+    setProd({ ...emptyProducto(), categoria_id: prod.categoria_id })
+    setPesoValor('')
+    setMostrarColores(false)
+    setAbiertoVariantes(false)
+    setAbiertoEnvio(false)
     setProdError('')
   }
 
@@ -1167,9 +1260,16 @@ export default function ProveedoresPage() {
                         <button type="button"
                           title="Editar producto"
                           onClick={() => {
-                            setProd(productos[i])
+                            const p = productos[i]
+                            setProd(p)
+                            const pesoUi = pesoAUnidadMasClara(Number(p.peso) || 0)
+                            setPesoValor(pesoUi.valor)
+                            if (p.peso) setPesoUnidad(pesoUi.unidad)
+                            setMostrarColores(p.colores.length > 0)
+                            setAbiertoVariantes(p.colores.length > 0 || p.tallas.length > 0)
+                            setAbiertoEnvio(!!(p.peso || p.largo || p.ancho || p.alto))
                             eliminarProducto(i)
-                            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+                            window.scrollTo({ top: 0, behavior: 'smooth' })
                           }}
                           style={{ background: 'transparent', color: '#d1d5db', border: 'none', width: 28, height: 28, borderRadius: 6, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
                           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#eff6ff'; (e.currentTarget as HTMLButtonElement).style.color = '#0049ff' }}
@@ -1205,207 +1305,276 @@ export default function ProveedoresPage() {
             )}
 
             {/* ---- Sección: Agregar producto ---- */}
-            <div style={{ background: '#fff', borderRadius: 20, boxShadow: '0 2px 16px rgba(37,40,85,0.08)', marginBottom: 20, overflow: 'hidden' }}>
+            {(() => {
+              const galeria = getGaleria()
+              const camposObligatorios = [
+                { label: 'Nombre del producto', ok: !!prod.nombre.trim() },
+                { label: 'SKU / código', ok: !!prod.sku.trim() },
+                { label: 'Categoría', ok: !!prod.categoria_id },
+                { label: 'Precio', ok: !!prod.precio && Number(prod.precio) > 0 },
+              ]
+              const camposRecomendados = [
+                { label: 'Al menos una fotografía', ok: galeria.length > 0 },
+                { label: 'Stock disponible', ok: !!prod.stock && Number(prod.stock) > 0 },
+                { label: 'Descripción', ok: !!prod.descripcion.trim() },
+              ]
+              const totalCampos = camposObligatorios.length + camposRecomendados.length
+              const hechos = [...camposObligatorios, ...camposRecomendados].filter(c => c.ok).length
+              const pctCompletado = Math.round((hechos / totalCampos) * 100)
+              const listoParaAgregar = camposObligatorios.every(c => c.ok)
+              const pendientes = [...camposObligatorios, ...camposRecomendados].filter(c => !c.ok)
 
-              {/* Cabecera de sección */}
-              <div style={{ padding: '20px 28px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 32, height: 32, background: `${PINK}15`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>📦</div>
-                <div>
-                  <h2 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: 0 }}>
-                    {productos.length === 0 ? 'Datos del producto' : `Agregar producto ${productos.length + 1}`}
-                  </h2>
-                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Completa los campos y agrégalo a tu lista</p>
-                </div>
-
-                {/* Indicador de campos completados */}
-                {(() => {
-                  const filled = [prod.nombre, prod.sku, prod.precio].filter(v => v.trim()).length
-                  const total = 3
-                  return (
-                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {Array.from({ length: total }).map((_, i) => (
-                          <div key={i} style={{ width: 28, height: 4, borderRadius: 2, background: i < filled ? PINK : '#e5e7eb', transition: 'background 0.2s' }} />
-                        ))}
-                      </div>
-                      <span style={{ fontSize: 11, color: filled === total ? PINK : '#9ca3af', fontWeight: 700 }}>
-                        {filled === total ? 'Listo para agregar' : `${filled}/${total} campos`}
-                      </span>
-                    </div>
-                  )
-                })()}
-              </div>
-
+              return (
+            <div>
               {prodError && (
-                <div style={{ margin: '0 28px', marginTop: 16, background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+                <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 16 }}>
                   {prodError}
                 </div>
               )}
 
-              {/* Layout 2 columnas: formulario | preview */}
-              <div className="prov-main-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 0 }}>
+              <div style={{ marginBottom: 16 }}>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>
+                  {productos.length === 0 ? 'Datos del producto' : `Producto ${productos.length + 1}`}
+                </h2>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '2px 0 0' }}>Completa los datos — puedes dejar en blanco lo que no necesites</p>
+              </div>
 
-                {/* Columna izquierda: campos */}
-                <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Layout: columna de tarjetas | panel lateral fijo */}
+              <div className="prov-registro-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
 
-                  {/* Nombre */}
-                  <div>
-                    <label style={labelStyle}>
-                      Nombre del producto <span style={{ color: PINK }}>*</span>
-                    </label>
-                    <input style={inputStyle} value={prod.nombre} onChange={e => setPR('nombre', e.target.value)}
-                      placeholder="Ej: Teclado mecánico TKL RGB" onFocus={focus} onBlur={blur} />
-                  </div>
+                {/* ==== Columna principal: tarjetas ==== */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
 
-                  {/* SKU */}
-                  <div>
-                    <label style={labelStyle}>
-                      SKU / Código <span style={{ color: PINK }}>*</span>
-                      <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Identificador único</span>
-                    </label>
-                    <input style={{ ...inputStyle, textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '0.05em' }}
-                      value={prod.sku} onChange={e => setPR('sku', e.target.value.toUpperCase())}
-                      placeholder="TEC-001" onFocus={focus} onBlur={blur} />
-                  </div>
+                  {/* Fotografías */}
+                  <ProvCard icon="🖼️" title="Fotografías" hint="La primera imagen es la principal — arrastra para reordenar"
+                    right={!camaraActiva && (
+                      <button type="button" onClick={abrirCamara}
+                        style={{ background: '#f3f4f6', border: 'none', padding: '5px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        📷 Cámara
+                      </button>
+                    )}>
 
-                  {/* Categoría (padre / subcategoría) */}
-                  <CategoriaSelector
-                    arbol={arbolCategorias}
-                    value={prod.categoria_id}
-                    onChange={id => setPR('categoria_id', id)}
-                    onCrear={async (nombre, parentId) => {
-                      const nueva = await crearCategoriaConPadre(supabase, nombre, parentId)
-                      const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
-                      if (data) setCategorias(data)
-                      return nueva
-                    }}
-                  />
+                    {camaraError && <p style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, margin: '0 0 10px' }}>⚠️ {camaraError}</p>}
 
-                  {/* Precio + Stock en fila */}
-                  <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div>
-                      <label style={labelStyle}>Precio (MXN) <span style={{ color: PINK }}>*</span></label>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9ca3af', fontWeight: 700, pointerEvents: 'none' }}>$</span>
-                        <input type="number" min="0" step="0.01"
-                          style={{ ...inputStyle, paddingLeft: 26 }}
-                          value={prod.precio} onChange={e => setPR('precio', e.target.value)}
-                          placeholder="0.00" onFocus={focus} onBlur={blur} />
+                    {camaraActiva ? (
+                      <div style={{ borderRadius: 12, overflow: 'hidden', border: `2px solid ${NAVY}`, position: 'relative', background: '#000' }}>
+                        <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', maxHeight: 260, objectFit: 'cover', display: 'block' }} />
+                        <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 10 }}>
+                          <button type="button" onClick={cerrarCamara}
+                            style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                            Cancelar
+                          </button>
+                          <button type="button" onClick={tomarFoto} disabled={convirtiendo}
+                            style={{ background: '#fff', color: '#111', border: 'none', padding: '6px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                            {convirtiendo ? '⏳ Procesando...' : '📸 Tomar foto'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onDragOver={e => { e.preventDefault(); setExtraDragging(true) }}
+                        onDragLeave={() => setExtraDragging(false)}
+                        onDrop={onGaleriaDrop}
+                        style={{ border: `2px dashed ${extraDragging ? PINK : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${PINK}08` : '#fafafa', transition: 'border-color .15s, background .15s', overflow: 'hidden' }}>
+
+                        {galeria.length > 0 && (
+                          <div className="prov-img-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 12 }}>
+                            {galeria.map((img, i) => (
+                              <div key={i}
+                                draggable
+                                onDragStart={() => onImgDragStart(i)}
+                                onDragOver={e => e.preventDefault()}
+                                onDrop={() => onImgDrop(i)}
+                                style={{ aspectRatio: '1', borderRadius: 10, overflow: 'hidden', position: 'relative', boxShadow: i === 0 ? `0 0 0 2px ${PINK}` : '0 1px 4px rgba(0,0,0,0.12)', cursor: 'grab', background: '#fff' }}>
+                                <img src={img.preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                                {i === 0 && (
+                                  <span style={{ position: 'absolute', top: 5, left: 5, background: PINK, color: '#fff', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20 }}>★ Principal</span>
+                                )}
+                                <button type="button" onClick={() => removeImagenAt(i)}
+                                  style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1 }}>×</button>
+                                {i !== 0 && (
+                                  <button type="button" onClick={() => usarComoPrincipal(i)}
+                                    title="Usar como imagen principal"
+                                    style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', height: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Hacer principal</button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div onClick={() => extraFileRef.current?.click()} style={{ cursor: 'pointer', padding: galeria.length > 0 ? '10px 12px 14px' : '30px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderTop: galeria.length > 0 ? '1px dashed #e5e7eb' : 'none' }}>
+                          {convirtiendo ? (
+                            <><span style={{ fontSize: 26 }}>⏳</span><p style={{ fontSize: 12, color: '#6b7280', margin: 0, fontWeight: 600 }}>Convirtiendo a WebP...</p></>
+                          ) : (
+                            <>
+                              <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🖼️</div>
+                              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#374151' }}>{galeria.length > 0 ? 'Agregar más fotos' : 'Arrastra imágenes aquí o toca para subir'}</p>
+                              <p style={{ margin: 0, fontSize: 10, color: '#9ca3af' }}>PNG, JPG, WEBP · Se convierten a WebP · Puedes elegir varias a la vez</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onFileChange} />
+                    <input ref={extraFileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onGaleriaFileChange} />
+                  </ProvCard>
+
+                  {/* Información básica */}
+                  <ProvCard icon="📦" title="Información básica">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <label style={labelStyle}>Nombre del producto <span style={{ color: PINK }}>*</span></label>
+                          <input style={inputStyle} value={prod.nombre} onChange={e => setPR('nombre', e.target.value)}
+                            placeholder="Ej: Teclado mecánico TKL RGB" onFocus={focus} onBlur={blur} />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>
+                            SKU / Código <span style={{ color: PINK }}>*</span>
+                            <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Único</span>
+                          </label>
+                          <input style={{ ...inputStyle, textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                            value={prod.sku} onChange={e => setPR('sku', e.target.value.toUpperCase())}
+                            placeholder="TEC-001" onFocus={focus} onBlur={blur} />
+                        </div>
+                      </div>
+
+                      <CategoriaSelector
+                        arbol={arbolCategorias}
+                        value={prod.categoria_id}
+                        onChange={id => setPR('categoria_id', id)}
+                        onCrear={async (nombre, parentId) => {
+                          const nueva = await crearCategoriaConPadre(supabase, nombre, parentId)
+                          const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
+                          if (data) setCategorias(data)
+                          return nueva
+                        }}
+                      />
+                    </div>
+                  </ProvCard>
+
+                  {/* Precio e inventario */}
+                  <ProvCard icon="💲" title="Precio e inventario">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <label style={labelStyle}>Precio (MXN) <span style={{ color: PINK }}>*</span></label>
+                          <div style={{ position: 'relative' }}>
+                            <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9ca3af', fontWeight: 700, pointerEvents: 'none' }}>$</span>
+                            <input type="number" min="0" step="0.01" style={{ ...inputStyle, paddingLeft: 26 }}
+                              value={prod.precio} onChange={e => setPR('precio', e.target.value)}
+                              placeholder="0.00" onFocus={focus} onBlur={blur} />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Stock disponible <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Unidades</span></label>
+                          <input type="number" min="0" style={inputStyle} value={prod.stock}
+                            onChange={e => setPR('stock', e.target.value)}
+                            placeholder="0" onFocus={focus} onBlur={blur} />
+                        </div>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>
+                          Precio de promoción (MXN)
+                          <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Opcional, debe ser menor al precio regular</span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9ca3af', fontWeight: 700, pointerEvents: 'none' }}>$</span>
+                          <input type="number" min="0" step="0.01" style={{ ...inputStyle, paddingLeft: 26 }}
+                            value={prod.precioPromocion} onChange={e => setPR('precioPromocion', e.target.value)}
+                            placeholder="Sin promoción" onFocus={focus} onBlur={blur} />
+                        </div>
+                        {prod.precioPromocion && prod.precio && Number(prod.precioPromocion) >= Number(prod.precio) && (
+                          <p style={{ margin: '4px 0 0', fontSize: 11, color: PINK, fontWeight: 600 }}>El precio de promoción debe ser menor al precio regular.</p>
+                        )}
                       </div>
                     </div>
-                    <div>
-                      <label style={labelStyle}>
-                        Stock disponible
-                        <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Unidades</span>
-                      </label>
-                      <input type="number" min="0" style={inputStyle} value={prod.stock}
-                        onChange={e => setPR('stock', e.target.value)}
-                        placeholder="0" onFocus={focus} onBlur={blur} />
-                    </div>
-                  </div>
-
-                  {/* Precio de promoción */}
-                  <div>
-                    <label style={labelStyle}>
-                      Precio de promoción (MXN)
-                      <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Opcional, debe ser menor al precio regular</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9ca3af', fontWeight: 700, pointerEvents: 'none' }}>$</span>
-                      <input type="number" min="0" step="0.01"
-                        style={{ ...inputStyle, paddingLeft: 26 }}
-                        value={prod.precioPromocion} onChange={e => setPR('precioPromocion', e.target.value)}
-                        placeholder="Sin promoción" onFocus={focus} onBlur={blur} />
-                    </div>
-                    {prod.precioPromocion && prod.precio && Number(prod.precioPromocion) >= Number(prod.precio) && (
-                      <p style={{ margin: '4px 0 0', fontSize: 11, color: PINK, fontWeight: 600 }}>El precio de promoción debe ser menor al precio regular.</p>
-                    )}
-                  </div>
+                  </ProvCard>
 
                   {/* Descripción */}
-                  <div>
-                    <label style={labelStyle}>
-                      Descripción
-                      <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: '#9ca3af' }}>Opcional</span>
-                    </label>
-                    <textarea style={{ ...inputStyle, minHeight: 72, resize: 'vertical' } as React.CSSProperties}
+                  <ProvCard icon="📝" title="Descripción" hint="Opcional, pero ayuda a que el producto se venda mejor">
+                    <textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' } as React.CSSProperties}
                       value={prod.descripcion} onChange={e => setPR('descripcion', e.target.value)}
-                      placeholder="Características, materiales, dimensiones, color..."
+                      placeholder="Características, materiales, medidas, color..."
                       onFocus={focus} onBlur={blur} />
-                  </div>
+                  </ProvCard>
 
-                  {/* Toggle campos opcionales */}
-                  <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 4 }}>
-                    <button type="button" onClick={() => setMostrarOpcionales(v => !v)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: '8px 0', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#374151', width: '100%' }}>
-                      <span style={{ fontSize: 10, transform: mostrarOpcionales ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>▶</span>
-                      Datos adicionales
-                      {(prod.colores.length > 0 || prod.tallas.length > 0 || prod.imagenesExtra.length > 0) ? (
-                        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-                          {prod.colores.length > 0 && <span style={{ background: `${NAVY}14`, color: NAVY, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{prod.colores.length} color{prod.colores.length > 1 ? 'es' : ''}</span>}
-                          {prod.tallas.length > 0 && <span style={{ background: `${PINK}14`, color: PINK, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{prod.tallas.length} talla{prod.tallas.length > 1 ? 's' : ''}</span>}
-                          {prod.imagenesExtra.length > 0 && <span style={{ background: '#f0fdf4', color: '#059669', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{prod.imagenesExtra.length} foto{prod.imagenesExtra.length > 1 ? 's' : ''}</span>}
-                        </div>
-                      ) : (
-                        <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 12, marginLeft: 4 }}>colores, tallas, peso, fotos extra</span>
-                      )}
-                    </button>
-                  </div>
+                  {/* Variantes */}
+                  <ProvCollapsible icon="🎨" title="Variantes" hint="Colores y tallas — solo si tu producto las necesita"
+                    abierto={abiertoVariantes} onToggle={() => setAbiertoVariantes(v => !v)}
+                    badges={[
+                      prod.colores.length > 0 ? `${prod.colores.length} color${prod.colores.length > 1 ? 'es' : ''}` : null,
+                      prod.tallas.length > 0 ? `${prod.tallas.length} talla${prod.tallas.length > 1 ? 's' : ''}` : null,
+                    ].filter(Boolean) as string[]}>
 
-                  {mostrarOpcionales && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {/* Colores */}
+                      <div>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colores</p>
+                        {!mostrarColores && prod.colores.length === 0 ? (
+                          <button type="button" onClick={() => setMostrarColores(true)}
+                            style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            🎨 Agregar colores
+                          </button>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                              {PALETA_COLORES.map(({ nombre, hex }) => {
+                                const activo = prod.colores.includes(nombre)
+                                return (
+                                  <button key={nombre} type="button" title={nombre}
+                                    onClick={() => activo ? removeColor(nombre) : addColor(nombre)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 6px', borderRadius: 20, border: `2px solid ${activo ? '#111' : 'transparent'}`, background: activo ? '#f3f4f6' : '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    <span style={{ width: 14, height: 14, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} />
+                                    {nombre}
+                                    {activo && <span style={{ color: '#059669', fontSize: 11 }}>✓</span>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            {prod.colores.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, padding: '8px 10px', background: `${NAVY}06`, borderRadius: 8 }}>
+                                {prod.colores.map(c => {
+                                  const hex = PALETA_COLORES.find(p => p.nombre === c)?.hex
+                                  return (
+                                    <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', border: `1px solid ${NAVY}30`, color: NAVY, fontSize: 12, fontWeight: 700, padding: '3px 8px 3px 6px', borderRadius: 20 }}>
+                                      {hex && <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)' }} />}
+                                      {c}
+                                      <button type="button" onClick={() => removeColor(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <input style={{ ...inputStyle, flex: 1, fontSize: 13 }} value={colorInput}
+                                onChange={e => setColorInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addColor(colorInput) } }}
+                                placeholder="Color personalizado — Enter para agregar" onFocus={focus} onBlur={blur} />
+                              <button type="button" onClick={() => addColor(colorInput)}
+                                style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
 
-                      {/* ---- Colores ---- */}
-                      <div style={{ padding: '14px 0', borderTop: '1px solid #f3f4f6' }}>
-                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#374151' }}>🎨 Colores disponibles</p>
-                        <p style={{ margin: '0 0 10px', fontSize: 11, color: '#9ca3af' }}>Selecciona los colores en que viene el producto</p>
-                        {/* Paleta rápida */}
+                      {/* Tallas */}
+                      <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tallas / tamaños</p>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                          {PALETA_COLORES.map(({ nombre, hex }) => {
-                            const activo = prod.colores.includes(nombre)
+                          {GRUPOS_TALLAS.flatMap(g => g.valores).map(t => {
+                            const activo = prod.tallas.includes(t)
                             return (
-                              <button key={nombre} type="button" title={nombre}
-                                onClick={() => activo ? removeColor(nombre) : addColor(nombre)}
-                                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 6px', borderRadius: 20, border: `2px solid ${activo ? '#111' : 'transparent'}`, background: activo ? '#f3f4f6' : '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                <span style={{ width: 14, height: 14, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} />
-                                {nombre}
-                                {activo && <span style={{ color: '#059669', fontSize: 11 }}>✓</span>}
+                              <button key={t} type="button" onClick={() => activo ? removeTalla(t) : addTalla(t)}
+                                style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                                {t}
                               </button>
                             )
                           })}
                         </div>
-                        {/* Chips seleccionados */}
-                        {prod.colores.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, padding: '8px 10px', background: `${NAVY}06`, borderRadius: 8 }}>
-                            {prod.colores.map(c => {
-                              const hex = PALETA_COLORES.find(p => p.nombre === c)?.hex
-                              return (
-                                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', border: `1px solid ${NAVY}30`, color: NAVY, fontSize: 12, fontWeight: 700, padding: '3px 8px 3px 6px', borderRadius: 20 }}>
-                                  {hex && <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)' }} />}
-                                  {c}
-                                  <button type="button" onClick={() => removeColor(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
-                                </span>
-                              )
-                            })}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <input style={{ ...inputStyle, flex: 1, fontSize: 13 }} value={colorInput}
-                            onChange={e => setColorInput(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addColor(colorInput) } }}
-                            placeholder="Color personalizado (Enter para agregar)" onFocus={focus} onBlur={blur} />
-                          <button type="button" onClick={() => addColor(colorInput)}
-                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                        </div>
-                      </div>
-
-                      {/* ---- Tallas ---- */}
-                      <div style={{ padding: '14px 0', borderTop: '1px solid #f3f4f6' }}>
-                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#374151' }}>📏 Tallas / Tamaños</p>
-                        <p style={{ margin: '0 0 10px', fontSize: 11, color: '#9ca3af' }}>Escribe cada talla o medida y presiona Enter</p>
-                        {prod.tallas.length > 0 && (
+                        {prod.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).length > 0 && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                            {prod.tallas.map(t => (
+                            {prod.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).map(t => (
                               <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
                                 {t}
                                 <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
@@ -1417,17 +1586,16 @@ export default function ProveedoresPage() {
                           <input style={{ ...inputStyle, flex: 1, fontSize: 13 }} value={tallaInput}
                             onChange={e => setTallaInput(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
-                            placeholder="Ej: XS, S, M, L — o 38, 39, 40 — o Único" onFocus={focus} onBlur={blur} />
+                            placeholder="Otra talla o medida — Enter para agregar" onFocus={focus} onBlur={blur} />
                           <button type="button" onClick={() => addTalla(tallaInput)}
                             style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
                         </div>
                       </div>
 
-                      {/* ---- Variantes con stock ---- */}
+                      {/* Stock por variante */}
                       {prod.variantes.length > 0 && (
-                        <div style={{ padding: '14px 0', borderTop: '1px solid #f3f4f6' }}>
-                          <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#374151' }}>📦 Stock por variante</p>
-                          <p style={{ margin: '0 0 10px', fontSize: 11, color: '#9ca3af' }}>Indica las unidades disponibles por combinación</p>
+                        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
+                          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stock por variante</p>
                           <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', background: '#f9fafb', padding: '8px 14px', borderBottom: '1px solid #e5e7eb' }}>
                               <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Variante</span>
@@ -1457,215 +1625,137 @@ export default function ProveedoresPage() {
                           </div>
                         </div>
                       )}
-
-                      {/* ---- Envío ---- */}
-                      <div style={{ padding: '14px 0', borderTop: '1px solid #f3f4f6' }}>
-                        <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#374151' }}>🚚 Envío</p>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                          <div>
-                            <label style={{ ...labelStyle, marginBottom: 6 }}>Peso <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 12 }}>gramos</span></label>
-                            <div style={{ position: 'relative' }}>
-                              <input type="number" min="0" style={{ ...inputStyle, paddingRight: 36 }} value={prod.peso}
-                                onChange={e => setProd(p => ({ ...p, peso: e.target.value }))}
-                                placeholder="Ej: 850" onFocus={focus} onBlur={blur} />
-                              <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#9ca3af', pointerEvents: 'none' as const }}>g</span>
-                            </div>
-                          </div>
-                          <div>
-                            <label style={{ ...labelStyle, marginBottom: 6 }}>Dimensiones <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 12 }}>cm</span></label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                              {([['largo', 'Largo'], ['ancho', 'Ancho'], ['alto', 'Alto']] as const).map(([dim, label]) => (
-                                <div key={dim} style={{ position: 'relative' }}>
-                                  <input type="number" min="0"
-                                    style={{ ...inputStyle, padding: '9px 8px', textAlign: 'center' as const, fontSize: 13 }}
-                                    value={prod[dim]} onChange={e => setProd(p => ({ ...p, [dim]: e.target.value }))}
-                                    placeholder={label[0]} onFocus={focus} onBlur={blur} />
-                                  <span style={{ position: 'absolute', bottom: -16, left: 0, right: 0, textAlign: 'center' as const, fontSize: 10, color: '#9ca3af' }}>{label}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ---- Fotos adicionales ---- */}
-                      <div style={{ padding: '14px 0 4px', borderTop: '1px solid #f3f4f6' }}>
-                        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: '#374151' }}>🖼️ Fotos adicionales</p>
-                        <p style={{ margin: '0 0 10px', fontSize: 11, color: '#9ca3af' }}>Imágenes extra del producto: ángulos, detalles o uso</p>
-                        <div
-                          onDragOver={e => { e.preventDefault(); setExtraDragging(true) }}
-                          onDragLeave={() => setExtraDragging(false)}
-                          onDrop={onExtraDrop}
-                          style={{ border: `2px dashed ${extraDragging ? BLUE : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${BLUE}06` : '#fafafa', transition: 'border-color 0.15s, background 0.15s', overflow: 'hidden' }}>
-                          {prod.imagenesExtra.length > 0 && (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 12 }}>
-                              {prod.imagenesExtra.map((extra, i) => (
-                                <div key={i} style={{ borderRadius: 8, overflow: 'hidden', position: 'relative', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
-                                  <div style={{ aspectRatio: '1', position: 'relative' }}>
-                                    <img src={extra.preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                                    <button type="button" onClick={() => removeExtraImagen(i)}
-                                      style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1 }}>×</button>
-                                  </div>
-                                  <div style={{ display: 'flex', gap: 2, padding: 2, background: '#f3f4f6' }}>
-                                    <button type="button" onClick={() => moverImagenExtra(i, -1)} disabled={i === 0}
-                                      title="Mover a la izquierda"
-                                      style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1 }}>◀</button>
-                                    <button type="button" onClick={() => usarComoPrincipal(i)}
-                                      title="Usar como imagen principal"
-                                      style={{ flex: 2, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Principal</button>
-                                    <button type="button" onClick={() => moverImagenExtra(i, 1)} disabled={i === prod.imagenesExtra.length - 1}
-                                      title="Mover a la derecha"
-                                      style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === prod.imagenesExtra.length - 1 ? 'default' : 'pointer', opacity: i === prod.imagenesExtra.length - 1 ? 0.3 : 1 }}>▶</button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <div onClick={() => extraFileRef.current?.click()} style={{ cursor: 'pointer', padding: prod.imagenesExtra.length > 0 ? '10px 12px 14px' : '28px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderTop: prod.imagenesExtra.length > 0 ? '1px dashed #e5e7eb' : 'none' }}>
-                            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📎</div>
-                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                              {prod.imagenesExtra.length > 0 ? 'Agregar más fotos' : 'Arrastra fotos aquí o haz clic para seleccionar'}
-                            </p>
-                            <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>Puedes seleccionar varias imágenes a la vez</p>
-                          </div>
-                        </div>
-                      </div>
-
                     </div>
-                  )}
+                  </ProvCollapsible>
+
+                  {/* Información de envío */}
+                  <ProvCollapsible icon="🚚" title="Información de envío" hint="Peso y dimensiones — solo si ya los conoces"
+                    abierto={abiertoEnvio} onToggle={() => setAbiertoEnvio(v => !v)}
+                    badges={(prod.peso || prod.largo || prod.ancho || prod.alto) ? ['Configurado'] : []}>
+                    <div className="prov-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20 }}>
+                      <div>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Peso</p>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input type="number" min="0" step="0.01" style={{ ...inputStyle, flex: 1 }} value={pesoValor}
+                            onChange={e => setPesoValor(e.target.value)} placeholder="Ej: 0.5" onFocus={focus} onBlur={blur} />
+                          <select value={pesoUnidad} onChange={e => setPesoUnidad(e.target.value as UnidadPeso)}
+                            style={{ ...inputStyle, width: 80, cursor: 'pointer' }}>
+                            {UNIDADES_PESO.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        </div>
+                        <p style={{ margin: '6px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                          {pesoValor ? `Se guarda como ${Math.round(Number(pesoValor) * FACTOR_A_GRAMOS[pesoUnidad])} g` : 'Ej: 0.5 kg, 500 g, 2 L, 750 ml'}
+                        </p>
+                      </div>
+                      <div>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Dimensiones del paquete (cm)</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                          {([['largo', 'Largo (cm)', '25'], ['ancho', 'Ancho (cm)', '18'], ['alto', 'Alto (cm)', '10']] as const).map(([dim, label, ejemplo]) => (
+                            <div key={dim}>
+                              <input type="number" min="0" style={{ ...inputStyle, textAlign: 'center' }}
+                                value={prod[dim]} onChange={e => setProd(p => ({ ...p, [dim]: e.target.value }))}
+                                placeholder={`Ej: ${ejemplo}`} onFocus={focus} onBlur={blur} />
+                              <p style={{ margin: '4px 0 0', textAlign: 'center', fontSize: 11, color: '#9ca3af' }}>{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </ProvCollapsible>
 
                 </div>
 
-                {/* Columna derecha: imagen */}
-                <div style={{ borderLeft: '1px solid #f3f4f6', padding: '20px', display: 'flex', flexDirection: 'column', gap: 10, background: '#fafafa' }}>
+                {/* ==== Panel lateral: vista previa en vivo ==== */}
+                <div className="prov-registro-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'sticky', top: 72 }}>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', margin: 0 }}>Imagen del producto</p>
-                    {!camaraActiva && !prod.imagenPreview && (
-                      <button type="button" onClick={abrirCamara}
-                        style={{ background: '#f3f4f6', border: 'none', padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        📷 Cámara
-                      </button>
+                  <div style={{ background: '#fff', border: '1px solid #eef0f3', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(16,24,40,0.04)' }}>
+                    <div style={{ aspectRatio: '1', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {galeria[0]?.preview
+                        ? <img src={galeria[0].preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontSize: 34 }}>📦</span>}
+                    </div>
+                    <div style={{ padding: 14 }}>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.nombre || 'Nombre del producto'}</p>
+                      {prod.sku && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{prod.sku}</p>}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                        <span style={{ fontSize: 15, fontWeight: 900, color: PINK }}>
+                          {prod.precio ? `$${Number(prod.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '$0.00'}
+                        </span>
+                        {prod.categoria_id && (
+                          <span style={{ fontSize: 10, fontWeight: 700, background: `${NAVY}10`, color: NAVY, padding: '3px 8px', borderRadius: 20, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {catNombre(prod.categoria_id)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 11, color: '#6b7280' }}>
+                        <span>📦 Stock: {prod.stock || 0}</span>
+                        <span>🖼️ {galeria.length} foto{galeria.length !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progreso */}
+                  <div style={{ background: '#fff', border: '1px solid #eef0f3', borderRadius: 16, padding: 16, boxShadow: '0 1px 3px rgba(16,24,40,0.04)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#374151' }}>Formulario completado</p>
+                      <span style={{ fontSize: 12, fontWeight: 900, color: listoParaAgregar ? '#059669' : PINK }}>{pctCompletado}%</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 3, background: '#f3f4f6', overflow: 'hidden', marginBottom: 12 }}>
+                      <div style={{ height: '100%', width: `${pctCompletado}%`, background: listoParaAgregar ? '#059669' : PINK, borderRadius: 3, transition: 'width 0.25s ease' }} />
+                    </div>
+                    {pendientes.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {pendientes.map(c => (
+                          <p key={c.label} style={{ margin: 0, fontSize: 11, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#d1d5db', flexShrink: 0 }} />
+                            {c.label}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 12, color: '#059669', fontWeight: 700 }}>✓ Todo listo</p>
                     )}
                   </div>
 
-                  <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onFileChange} />
-                  <input ref={extraFileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onExtraFileChange} />
-
-                  {/* Vista de cámara activa */}
-                  {camaraActiva && (
-                    <div style={{ borderRadius: 10, overflow: 'hidden', border: `2px solid ${NAVY}`, position: 'relative', background: '#000' }}>
-                      <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />
-                      <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 10 }}>
-                        <button type="button" onClick={cerrarCamara}
-                          style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                          Cancelar
-                        </button>
-                        <button type="button" onClick={tomarFoto} disabled={convirtiendo}
-                          style={{ background: '#fff', color: '#111', border: 'none', padding: '6px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                          {convirtiendo ? '⏳ Procesando...' : '📸 Tomar foto'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {camaraError && (
-                    <p style={{ fontSize: 11, color: '#dc2626', fontWeight: 600, margin: 0 }}>⚠️ {camaraError}</p>
-                  )}
-
-                  {/* Preview de imagen */}
-                  {!camaraActiva && prod.imagenPreview && (
-                    <div style={{ position: 'relative' }}>
-                      <img src={prod.imagenPreview} alt="preview"
-                        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 12, border: '1px solid #e5e7eb', display: 'block' }} />
-                      <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 5 }}>
-                        <button type="button" onClick={abrirCamara}
-                          style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11 }}>
-                          📷
-                        </button>
-                        <button type="button" onClick={() => fileRef.current?.click()}
-                          style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11 }}>
-                          🖼️
-                        </button>
-                        <button type="button" onClick={() => setProd(p => ({ ...p, imagenFile: null, imagenPreview: null }))}
-                          style={{ background: 'rgba(220,38,38,0.85)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          ×
-                        </button>
-                      </div>
-                      {prod.imagenFile && (
-                        <div style={{ position: 'absolute', bottom: 6, left: 6, background: 'rgba(0,0,0,0.65)', color: '#fff', borderRadius: 6, padding: '2px 7px', fontSize: 10 }}>
-                          ✅ WebP · {(prod.imagenFile.size / 1024).toFixed(0)} KB
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Zona drag & drop */}
-                  {!camaraActiva && !prod.imagenPreview && (
-                    <div
-                      onDragOver={e => { e.preventDefault(); setDragging(true) }}
-                      onDragLeave={() => setDragging(false)}
-                      onDrop={onDrop}
-                      onClick={() => fileRef.current?.click()}
-                      style={{
-                        border: `2px dashed ${dragging ? PINK : '#d1d5db'}`,
-                        borderRadius: 12, padding: '20px 12px', textAlign: 'center',
-                        cursor: 'pointer', background: dragging ? `${PINK}08` : '#fff',
-                        transition: 'all 0.2s', aspectRatio: '1', display: 'flex',
-                        flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      }}>
-                      {convirtiendo ? (
-                        <>
-                          <span style={{ fontSize: 28 }}>⏳</span>
-                          <p style={{ fontSize: 12, color: '#6b7280', margin: 0, fontWeight: 600 }}>Convirtiendo a WebP...</p>
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ fontSize: 32 }}>🖼️</span>
-                          <p style={{ fontSize: 12, fontWeight: 600, color: dragging ? PINK : NAVY, margin: 0, lineHeight: 1.3 }}>
-                            {dragging ? 'Suelta aquí' : 'Arrastra o toca para subir'}
-                          </p>
-                          <p style={{ fontSize: 10, color: '#9ca3af', margin: 0 }}>PNG · JPG · WEBP · Se convierte a WebP</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Mini preview card */}
-                  {(prod.nombre || prod.precio) && !camaraActiva && (
-                    <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '10px 12px' }}>
-                      <p style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 5px' }}>Vista previa</p>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.nombre || '—'}</p>
-                      {prod.sku && <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 3px', fontFamily: 'monospace' }}>{prod.sku}</p>}
-                      {prod.precio && (
-                        <p style={{ fontSize: 13, fontWeight: 900, color: '#059669', margin: 0 }}>
-                          ${Number(prod.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                  {/* Consejos rápidos */}
+                  <div style={{ background: `${NAVY}05`, border: `1px solid ${NAVY}12`, borderRadius: 16, padding: 16 }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800, color: NAVY }}>💡 Consejo rápido</p>
+                    <p style={{ margin: 0, fontSize: 11, color: '#6b7280', lineHeight: 1.6 }}>
+                      {galeria.length === 0
+                        ? 'Los productos con fotos reales se aprueban y venden más rápido.'
+                        : !prod.descripcion.trim()
+                          ? 'Agrega una descripción con materiales y medidas — ayuda a que el comprador confíe más.'
+                          : !prod.stock
+                            ? 'No olvides indicar el stock disponible para evitar ventas sin inventario.'
+                            : 'Tu producto se ve bien. Revisa los datos y agrégalo a la lista.'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Botón agregar producto */}
-              <div style={{ padding: '16px 28px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafafa' }}>
+              {/* Barra de acciones (sticky) */}
+              <div style={{ position: 'sticky', bottom: 12, marginTop: 16, background: '#fff', border: '1px solid #eef0f3', borderRadius: 14, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, boxShadow: '0 8px 24px rgba(16,24,40,0.10)', flexWrap: 'wrap' }}>
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>
                   {productos.length > 0 ? `Ya tienes ${productos.length} producto${productos.length > 1 ? 's' : ''} en la lista` : 'Agrega todos los productos que quieras enviar'}
+                  <span style={{ display: 'block', fontSize: 10, color: '#c1c5cd', marginTop: 2 }}>💾 Tu borrador se guarda automáticamente en este navegador</span>
                 </p>
                 <button type="button" onClick={agregarProducto}
-                  disabled={!prod.nombre.trim() || !prod.sku.trim() || !prod.precio}
+                  disabled={!listoParaAgregar}
                   style={{
-                    background: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? '#f3f4f6' : PINK,
-                    color: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? '#9ca3af' : '#fff',
-                    border: 'none', padding: '11px 24px', borderRadius: 10, fontWeight: 800, fontSize: 14,
-                    cursor: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? 'not-allowed' : 'pointer',
+                    background: !listoParaAgregar ? '#f3f4f6' : PINK,
+                    color: !listoParaAgregar ? '#9ca3af' : '#fff',
+                    border: 'none', padding: '12px 26px', borderRadius: 10, fontWeight: 800, fontSize: 14,
+                    cursor: !listoParaAgregar ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
-                    boxShadow: (!prod.nombre.trim() || !prod.sku.trim() || !prod.precio) ? 'none' : `0 4px 12px ${PINK}40`,
+                    boxShadow: !listoParaAgregar ? 'none' : `0 4px 12px ${PINK}40`,
+                    flexShrink: 0,
                   }}>
                   ＋ Agregar a la lista
                 </button>
               </div>
             </div>
+              )
+            })()}
 
             {/* ---- Aviso legal ---- */}
             <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 18px', marginBottom: 24 }}>

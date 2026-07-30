@@ -75,6 +75,19 @@ body {
   .prov-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
+/* Modal "Agregar producto" (admin): columna principal + barra lateral */
+@media (max-width: 860px) {
+  .prodmodal-grid { grid-template-columns: 1fr !important; }
+  .prodmodal-2col { grid-template-columns: 1fr !important; }
+  .prodmodal-img-grid { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* Registro de producto (proveedor): tarjetas + panel lateral de vista previa */
+@media (max-width: 900px) {
+  .prov-registro-grid { grid-template-columns: 1fr !important; }
+  .prov-registro-sidebar { position: static !important; order: -1; }
+}
+
 
 
 /* ── Portal proveedores: drawer sidebar mobile (CSS garantiza el comportamiento) ── */

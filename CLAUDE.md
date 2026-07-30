@@ -211,6 +211,9 @@ Reemplaza los links externos a la web de cada paquetería (DHL/FedEx/etc.) — e
 - Bottom nav bar móvil (`.oe-bottom-nav`, `storefront.css`) con Inicio/Buscar/Rastreo/Perfil.
 - "Mis solicitudes" del proveedor (`/proveedores`) ahora muestra el `motivo_rechazo` real (la columna ya existía pero el `useState` no la tipaba) y tiene botón "Reenviar a revisión".
 - Nueva sección "Perfil comercial" en Ajustes del proveedor (descripción, redes sociales, métodos de envío, estado de cuenta) — **requiere correr `Doc/database/migration_perfil_proveedor.sql`**, sin eso el guardado no persiste.
+- **Rediseño UX/UI del formulario "Agregar producto" del admin** (`components/ProductoModal.tsx`): tarjetas (Imágenes/Información básica/Inventario y precio/Variantes/Envío/Información adicional) en layout de 2 columnas, galería de imágenes unificada con reordenar arrastrando, peso con selector de unidad (g/kg/ml/L → se guarda siempre en gramos), dimensiones con etiquetas claras, barra sticky con Guardar borrador/Guardar y agregar otro/Guardar producto. "Guardar y agregar otro" se implementó con un `modalKey` en `app/productos/page.tsx` que fuerza remount del modal sin cerrarlo.
+- **Mismo rediseño aplicado al formulario "Registrar producto" del proveedor** (`app/proveedores/page.tsx`, tab `registro`), con un extra: panel lateral fijo con vista previa en vivo + % de formulario completado + campos pendientes, y recuerda la última categoría usada al agregar el siguiente producto de la lista.
+- **Gotcha de encoding, importante**: nunca usar `Get-Content`/`Set-Content` de PowerShell para editar `app/proveedores/page.tsx` (ni otro archivo con tildes/emojis) — corrompió la codificación UTF-8 de todo el archivo en esta sesión (se recuperó con `git checkout` porque el commit anterior ya tenía el trabajo previo a salvo). Usar siempre el editor de archivos.
 - Detalle completo del día: `Doc/sesiones/seccion-29-07-2026.md`.
 
 ---
@@ -379,6 +382,8 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Dashboard del proveedor: 8 métricas + panel de alertas; nueva sección "Perfil comercial" en Ajustes
 - [x] Storefront: bottom nav bar móvil, header de escritorio dinámico (fix de `sticky` roto → `fixed`), badge de oferta + últimas unidades en tarjetas, búsqueda ordenada por relevancia
 - [x] Auditoría de "Pedidos del Proveedor" — ya estaba completo por trabajo de sesiones previas, sin huecos encontrados
+- [x] **Rediseño UX/UI completo del formulario "Agregar producto"** del admin (`ProductoModal.tsx`): tarjetas, galería unificada, peso con unidad, dimensiones claras, borrador, guardar y agregar otro
+- [x] **Mismo rediseño aplicado al formulario "Registrar producto"** del proveedor, con panel lateral de vista previa en vivo + % completado + recordar última categoría
 
 ## Completado (28/07/2026)
 - [x] **Transferencia de productos admin→proveedor** con doble confirmación — ver sección "Transferencia de productos" más arriba

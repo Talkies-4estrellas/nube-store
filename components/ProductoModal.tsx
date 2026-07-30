@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, DragEvent, ChangeEvent } from 'react'
+import { useEffect, useRef, useState, DragEvent, ChangeEvent } from 'react'
 import { convertToWebp } from '@/lib/uploadWebp'
 import CategoriaSelector, { type CategoriaConHijos } from '@/components/CategoriaSelector'
 
@@ -24,22 +24,20 @@ const PALETA_COLORES = [
 ]
 
 const GRUPOS_TALLAS = [
-  { nombre: 'Ropa adulto', valores: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
-  { nombre: 'Infantil',    valores: ['2', '4', '6', '8', '10', '12', '14'] },
-  { nombre: 'Zapato MX',   valores: ['22', '23', '24', '25', '26', '27', '28'] },
-  { nombre: 'Zapato EU',   valores: ['36', '37', '38', '39', '40', '41', '42'] },
+  { nombre: 'Ropa',    valores: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
+  { nombre: 'Calzado', valores: ['22', '23', '24', '25', '26', '27', '28', '38', '39', '40', '41', '42'] },
+  { nombre: 'Otro',    valores: ['Único'] },
 ]
 
-function SeccionAdicional({ titulo, hint, children }: { titulo: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ padding: '16px 0', borderTop: '1px solid #f3f4f6' }}>
-      <div style={{ marginBottom: 12 }}>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#374151' }}>{titulo}</p>
-        {hint && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{hint}</p>}
-      </div>
-      {children}
-    </div>
-  )
+const UNIDADES_PESO = ['g', 'kg', 'ml', 'L'] as const
+type UnidadPeso = typeof UNIDADES_PESO[number]
+// Factor a gramos (ml/L se tratan como equivalente de peso 1:1 para estimar envío)
+const FACTOR_A_GRAMOS: Record<UnidadPeso, number> = { g: 1, kg: 1000, ml: 1, L: 1000 }
+
+function pesoAUnidadMasClara(gramos: number): { valor: string; unidad: UnidadPeso } {
+  if (gramos <= 0) return { valor: '', unidad: 'g' }
+  if (gramos % 1000 === 0 && gramos >= 1000) return { valor: String(gramos / 1000), unidad: 'kg' }
+  return { valor: String(gramos), unidad: 'g' }
 }
 
 export type ProductoExtra = {
@@ -72,9 +70,11 @@ const emptyExtra = (): ProductoExtra => ({
 
 const empty: Producto = { nombre: '', sku: '', categoria_id: '', precio: '', stock: '', descripcion: '', imagen: null, imagenPreview: null, activo: true, ...emptyExtra() }
 
+type SaveOpts = { continuar?: boolean }
+
 type Props = {
   onClose: () => void
-  onSave: (p: Producto) => void
+  onSave: (p: Producto, opts?: SaveOpts) => void
   inicial?: Partial<Producto> & { id?: string }
   arbolCategorias: CategoriaConHijos[]
   onCrearCategoria: (nombre: string, parentId: number | null) => Promise<{ id: number; nombre: string } | null>
@@ -83,6 +83,9 @@ type Props = {
 }
 
 const MAX_IMAGEN_MB = 8
+const DRAFT_KEY = 'admin_producto_draft_v1'
+
+type DraftGuardable = Omit<Producto, 'imagen' | 'imagenPreview' | 'imagenesExtra'>
 
 function buildVariantes(
   colores: string[], tallas: string[],
@@ -97,19 +100,42 @@ function buildVariantes(
 }
 
 export default function ProductoModal({ onClose, onSave, inicial, arbolCategorias, onCrearCategoria, serverError, guardando }: Props) {
+  const esEdicion = !!inicial?.id
   const [form, setForm] = useState<Producto>({ ...empty, ...emptyExtra(), ...inicial })
   const [errors, setErrors] = useState<Partial<Record<keyof Producto, string>>>({})
   const [imagenError, setImagenError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [convirtiendo, setConvirtiendo] = useState(false)
-  const [mostrarOpcionales, setMostrarOpcionales] = useState(false)
   const [colorInput, setColorInput] = useState('')
   const [tallaInput, setTallaInput] = useState('')
-  const [extraSlotTarget, setExtraSlotTarget] = useState(-1)
   const [extraDragging, setExtraDragging] = useState(false)
+  const [draftBanner, setDraftBanner] = useState(false)
+  const [draftMsg, setDraftMsg] = useState('')
+
+  const [abiertoVariantes, setAbiertoVariantes] = useState(!!(inicial?.colores?.length || inicial?.tallas?.length))
+  const [abiertoEnvio, setAbiertoEnvio] = useState(!!(inicial?.peso || inicial?.largo || inicial?.ancho || inicial?.alto))
+
+  // Estado de UI del peso (unidad seleccionada), el valor real siempre se exporta en gramos
+  const pesoInicial = inicial?.peso ? pesoAUnidadMasClara(Number(inicial.peso)) : { valor: '', unidad: 'g' as UnidadPeso }
+  const [pesoValor, setPesoValor] = useState(pesoInicial.valor)
+  const [pesoUnidad, setPesoUnidad] = useState<UnidadPeso>(pesoInicial.unidad)
 
   const fileRef = useRef<HTMLInputElement>(null)
-  const extraFileRef = useRef<HTMLInputElement>(null)
+  const dragImgIndex = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (esEdicion) return
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (raw) setDraftBanner(true)
+    } catch { /* localStorage no disponible */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    setForm(f => ({ ...f, peso: pesoValor ? String(Math.round(Number(pesoValor) * FACTOR_A_GRAMOS[pesoUnidad])) : '' }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pesoValor, pesoUnidad])
 
   /* ---- Colores / Tallas ---- */
   function addColor(val: string) {
@@ -138,8 +164,19 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
     setForm(f => { const v = [...f.variantes]; v[i] = { ...v[i], stock }; return { ...f, variantes: v } })
   }
 
-  /* ---- Imagen extra ---- */
-  async function agregarImagenesExtra(files: FileList | File[]) {
+  /* ---- Galería unificada (principal + extra) ---- */
+  type ImgItem = { file: File | null; preview: string | null }
+  function getGaleria(): ImgItem[] {
+    const list: ImgItem[] = []
+    if (form.imagen || form.imagenPreview) list.push({ file: form.imagen, preview: form.imagenPreview })
+    return [...list, ...form.imagenesExtra]
+  }
+  function setGaleria(list: ImgItem[]) {
+    const [principal, ...resto] = list
+    setForm(f => ({ ...f, imagen: principal?.file ?? null, imagenPreview: principal?.preview ?? null, imagenesExtra: resto }))
+    if (principal) setErrors(e => ({ ...e, imagen: '' }))
+  }
+  async function agregarImagenes(files: FileList | File[]) {
     const todas = Array.from(files).filter(f => f.type.startsWith('image/'))
     const pesadas = todas.filter(f => f.size > MAX_IMAGEN_MB * 1024 * 1024)
     const arr = todas.filter(f => f.size <= MAX_IMAGEN_MB * 1024 * 1024)
@@ -151,71 +188,70 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
         const webp = await convertToWebp(f)
         return { file: webp, preview: URL.createObjectURL(webp) }
       }))
-      setForm(f => ({ ...f, imagenesExtra: [...f.imagenesExtra, ...converted] }))
+      setGaleria([...getGaleria(), ...converted])
     } finally { setConvirtiendo(false) }
   }
-  function moverImagenExtra(i: number, dir: -1 | 1) {
-    setForm(f => {
-      const extras = [...f.imagenesExtra]
-      const j = i + dir
-      if (j < 0 || j >= extras.length) return f
-      ;[extras[i], extras[j]] = [extras[j], extras[i]]
-      return { ...f, imagenesExtra: extras }
-    })
+  function removeImagenAt(i: number) {
+    const list = getGaleria()
+    list.splice(i, 1)
+    setGaleria(list)
   }
   function usarComoPrincipal(i: number) {
-    setForm(f => {
-      const extras = [...f.imagenesExtra]
-      const nuevaPrincipal = extras[i]
-      const principalAnterior = { file: f.imagen, preview: f.imagenPreview }
-      extras[i] = principalAnterior.file || principalAnterior.preview
-        ? { file: principalAnterior.file, preview: principalAnterior.preview }
-        : extras[i]
-      if (!principalAnterior.file && !principalAnterior.preview) extras.splice(i, 1)
-      return { ...f, imagen: nuevaPrincipal.file, imagenPreview: nuevaPrincipal.preview, imagenesExtra: extras }
-    })
-    setErrors(e => ({ ...e, imagen: '' }))
+    const list = getGaleria()
+    const [item] = list.splice(i, 1)
+    list.unshift(item)
+    setGaleria(list)
   }
-  function onExtraFileChange(e: ChangeEvent<HTMLInputElement>) {
-    if (e.target.files?.length) agregarImagenesExtra(e.target.files)
+  function onImgDragStart(i: number) { dragImgIndex.current = i }
+  function onImgDrop(i: number) {
+    const from = dragImgIndex.current
+    dragImgIndex.current = null
+    if (from === null || from === i) return
+    const list = getGaleria()
+    const [moved] = list.splice(from, 1)
+    list.splice(i, 0, moved)
+    setGaleria(list)
+  }
+  function onGaleriaDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault(); setExtraDragging(false)
+    if (e.dataTransfer.files?.length) agregarImagenes(e.dataTransfer.files)
+  }
+  function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    if (e.target.files?.length) agregarImagenes(e.target.files)
     e.target.value = ''
   }
-  function onExtraDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault(); setExtraDragging(false)
-    if (e.dataTransfer.files?.length) agregarImagenesExtra(e.dataTransfer.files)
-  }
-  function removeExtraImagen(i: number) {
-    setForm(f => { const extras = [...f.imagenesExtra]; extras.splice(i, 1); return { ...f, imagenesExtra: extras } })
-  }
 
-  /* ---- Imagen principal ---- */
+  /* ---- Campos simples ---- */
   function set(key: keyof Producto, value: string) {
     setForm(f => ({ ...f, [key]: value }))
     setErrors(e => ({ ...e, [key]: '' }))
   }
-  async function handleFile(file: File) {
-    if (!file.type.startsWith('image/')) return
-    if (file.size > MAX_IMAGEN_MB * 1024 * 1024) {
-      setImagenError(`La imagen supera el máximo de ${MAX_IMAGEN_MB}MB`)
-      return
-    }
-    setImagenError('')
-    setConvirtiendo(true)
+
+  /* ---- Borrador ---- */
+  function guardarBorrador() {
     try {
-      const webp = await convertToWebp(file)
-      const url = URL.createObjectURL(webp)
-      setForm(f => ({ ...f, imagen: webp, imagenPreview: url }))
-      setErrors(e => ({ ...e, imagen: '' }))
-    } finally { setConvirtiendo(false) }
+      const { imagen: _imagen, imagenPreview: _imagenPreview, imagenesExtra: _imagenesExtra, ...guardable } = form
+      void _imagen; void _imagenPreview; void _imagenesExtra
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(guardable satisfies DraftGuardable))
+      setDraftMsg('💾 Borrador guardado (las imágenes no se incluyen en el borrador)')
+      setTimeout(() => setDraftMsg(''), 3000)
+    } catch { setDraftMsg('No se pudo guardar el borrador en este navegador') }
   }
-  function onDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault(); setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
+  function restaurarBorrador() {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const data = JSON.parse(raw) as DraftGuardable
+      setForm(f => ({ ...f, ...data }))
+      if (data.peso) { const p = pesoAUnidadMasClara(Number(data.peso)); setPesoValor(p.valor); setPesoUnidad(p.unidad) }
+      if (data.colores?.length || data.tallas?.length) setAbiertoVariantes(true)
+      if (data.peso || data.largo || data.ancho || data.alto) setAbiertoEnvio(true)
+    } catch { /* borrador corrupto, se ignora */ }
+    setDraftBanner(false)
   }
-  function onFileChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) handleFile(file)
+  function descartarBorrador() {
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
+    setDraftBanner(false)
   }
 
   /* ---- Validación y submit ---- */
@@ -229,31 +265,30 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
     if (!form.imagen && !inicial?.imagenPreview) errs.imagen = 'Sube una imagen del producto'
     return errs
   }
-  function handleSubmit() {
+  function handleSubmit(opts?: SaveOpts) {
     const errs = validate()
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
-    onSave(form)
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
+    onSave(form, opts)
   }
 
-  const chip = (label: string, onRemove: () => void, color = NAVY) => (
-    <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: `${color}14`, color, fontSize: 12, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>
-      {label}
-      <button type="button" onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
-    </span>
-  )
+  const galeria = getGaleria()
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div style={{ background: '#f6f7f9', borderRadius: 16, width: '100%', maxWidth: 940, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid #f3f4f6', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111' }}>{inicial?.id ? 'Editar producto' : 'Agregar producto'}</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af' }}>×</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 28px', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111' }}>{esEdicion ? 'Editar producto' : 'Agregar producto'}</h2>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#9ca3af' }}>{esEdicion ? 'Actualiza la información del producto' : 'Completa los datos para publicarlo en el catálogo'}</p>
+          </div>
+          <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, width: 32, height: 32, fontSize: 18, cursor: 'pointer', color: '#6b7280' }}>×</button>
         </div>
 
-        <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {serverError && (
             <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600 }}>
@@ -261,291 +296,363 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
             </div>
           )}
 
-          {/* Imagen principal */}
-          <div>
-            <label style={labelStyle}>Imagen del producto</label>
-            {imagenError && <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '4px 0 0' }}>{imagenError}</p>}
-            {form.imagenPreview ? (
-              <div onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
-                style={{ position: 'relative', marginTop: 8, borderRadius: 10, outline: dragging ? '2px dashed #0049ff' : 'none', outlineOffset: 2, transition: 'outline 0.15s' }}>
-                <img src={form.imagenPreview} alt="preview" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 10, border: '1px solid #e5e7eb', display: 'block', opacity: dragging ? 0.5 : 1 }} />
-                {dragging && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239,246,255,0.85)', borderRadius: 10, pointerEvents: 'none' }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: '#0049ff' }}>Suelta la imagen aquí</p>
-                  </div>
-                )}
-                <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
-                  <button onClick={() => fileRef.current?.click()} style={{ background: 'rgba(0,0,0,0.65)', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>🖼️ Cambiar</button>
-                  <button onClick={() => setForm(f => ({ ...f, imagen: null, imagenPreview: null }))} style={{ background: 'rgba(220,38,38,0.85)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-                </div>
-                {form.imagen && <div style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.65)', color: '#fff', borderRadius: 6, padding: '3px 8px', fontSize: 11 }}>✅ WebP · {(form.imagen.size / 1024).toFixed(0)} KB</div>}
+          {draftBanner && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 14px' }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#1e40af', fontWeight: 600 }}>📝 Tienes un borrador guardado de un producto sin terminar.</p>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button type="button" onClick={restaurarBorrador} style={{ background: BLUE, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Restaurar</button>
+                <button type="button" onClick={descartarBorrador} style={{ background: 'none', color: '#6b7280', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Descartar</button>
               </div>
-            ) : (
-              <div onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop} onClick={() => fileRef.current?.click()}
-                style={{ marginTop: 8, border: `2px dashed ${dragging ? '#0049ff' : errors.imagen ? '#dc2626' : '#d1d5db'}`, borderRadius: 10, padding: '32px 20px', textAlign: 'center', cursor: 'pointer', background: dragging ? '#eff6ff' : '#fafafa', transition: 'all 0.2s' }}>
-                {convirtiendo
-                  ? <><p style={{ fontSize: 32, marginBottom: 8 }}>⏳</p><p style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Convirtiendo a WebP...</p></>
-                  : <><p style={{ fontSize: 32, marginBottom: 8 }}>🖼️</p><p style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 4 }}>{dragging ? 'Suelta la imagen aquí' : 'Arrastra una imagen o haz clic para seleccionar'}</p><p style={{ fontSize: 12, color: '#9ca3af' }}>PNG, JPG, WEBP, AVIF · Se convierte a WebP automáticamente</p></>}
-                {errors.imagen && <p style={{ fontSize: 12, color: '#dc2626', marginTop: 8, fontWeight: 600 }}>{errors.imagen}</p>}
-              </div>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onFileChange} />
-            <input ref={extraFileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onExtraFileChange} />
-          </div>
-
-          {/* Nombre y SKU */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Field label="Nombre del producto" error={errors.nombre}>
-              <input value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Bolso Morelia Negro" style={inputStyle(!!errors.nombre)} />
-            </Field>
-            <Field label="SKU" error={errors.sku}>
-              <input value={form.sku} onChange={e => set('sku', e.target.value.toUpperCase())} placeholder="Ej: BOL-001" style={inputStyle(!!errors.sku)} />
-            </Field>
-          </div>
-
-          {/* Categoría */}
-          <CategoriaSelector
-            arbol={arbolCategorias}
-            value={form.categoria_id}
-            onChange={id => set('categoria_id', id)}
-            onCrear={onCrearCategoria}
-            error={errors.categoria_id}
-          />
-
-          {/* Precio y Stock */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Field label="Precio (MXN)" error={errors.precio}>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontWeight: 600 }}>$</span>
-                <input value={form.precio} onChange={e => set('precio', e.target.value)} placeholder="0.00" type="number" min="0" style={{ ...inputStyle(!!errors.precio), paddingLeft: 28 }} />
-              </div>
-            </Field>
-            <Field label="Stock disponible" error={errors.stock}>
-              <input value={form.stock} onChange={e => set('stock', e.target.value)} placeholder="0" type="number" min="0" style={inputStyle(!!errors.stock)} />
-            </Field>
-          </div>
-
-          {/* Descripción */}
-          <Field label="Descripción" error={errors.descripcion}>
-            <textarea value={form.descripcion} onChange={e => set('descripcion', e.target.value)}
-              placeholder="Describe el producto: materiales, medidas, características..."
-              rows={3} style={{ ...inputStyle(false), resize: 'vertical' }} />
-          </Field>
-
-          {/* Visibilidad */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: 10, background: '#fafafa' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#374151' }}>Producto visible</p>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>Si lo desactivas, deja de mostrarse en la tienda en línea aunque tenga stock</p>
             </div>
-            <button type="button" onClick={() => setForm(f => ({ ...f, activo: !f.activo }))}
-              style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: form.activo ? '#0049ff' : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-              <span style={{ position: 'absolute', top: 2, left: form.activo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-            </button>
-          </div>
+          )}
 
-          {/* ---- Datos adicionales ---- */}
-          <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 4 }}>
-            <button type="button" onClick={() => setMostrarOpcionales(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: '8px 0', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: '#374151', width: '100%' }}>
-              <span style={{ fontSize: 10, transform: mostrarOpcionales ? 'rotate(90deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>▶</span>
-              Datos adicionales
-              {(form.colores.length > 0 || form.tallas.length > 0 || form.peso || form.imagenesExtra.length > 0) ? (
-                <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-                  {form.colores.length > 0 && <span style={{ background: `${NAVY}14`, color: NAVY, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{form.colores.length} color{form.colores.length > 1 ? 'es' : ''}</span>}
-                  {form.tallas.length > 0 && <span style={{ background: `${PINK}14`, color: PINK, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{form.tallas.length} talla{form.tallas.length > 1 ? 's' : ''}</span>}
-                  {form.imagenesExtra.length > 0 && <span style={{ background: '#f0fdf4', color: '#059669', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{form.imagenesExtra.length} foto{form.imagenesExtra.length > 1 ? 's' : ''}</span>}
-                </div>
-              ) : (
-                <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 12, marginLeft: 4 }}>colores, tallas, peso, fotos extra</span>
-              )}
-            </button>
-          </div>
+          {/* Layout principal: columna + barra lateral */}
+          <div className="prodmodal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, alignItems: 'start' }}>
 
-          {mostrarOpcionales && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {/* ==== Columna principal ==== */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
 
-              {/* ---- Colores ---- */}
-              <SeccionAdicional titulo="🎨 Colores disponibles" hint="Agrega los colores en que viene el producto">
-                {/* Paleta rápida */}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                  {PALETA_COLORES.map(({ nombre, hex }) => {
-                    const activo = form.colores.includes(nombre)
-                    return (
-                      <button key={nombre} type="button" title={nombre}
-                        onClick={() => activo ? removeColor(nombre) : addColor(nombre)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 6px', borderRadius: 20, border: `2px solid ${activo ? '#111' : 'transparent'}`, background: activo ? '#f3f4f6' : '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151', transition: 'border-color 0.15s' }}>
-                        <span style={{ width: 14, height: 14, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} />
-                        {nombre}
-                        {activo && <span style={{ color: '#059669', fontSize: 11 }}>✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-                {/* Chips seleccionados */}
-                {form.colores.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, padding: '8px 10px', background: `${NAVY}06`, borderRadius: 8 }}>
-                    {form.colores.map(c => {
-                      const hex = PALETA_COLORES.find(p => p.nombre === c)?.hex
-                      return (
-                        <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', border: `1px solid ${NAVY}30`, color: NAVY, fontSize: 12, fontWeight: 700, padding: '3px 8px 3px 6px', borderRadius: 20 }}>
-                          {hex && <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)' }} />}
-                          {c}
-                          <button type="button" onClick={() => removeColor(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-                {/* Input custom */}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={colorInput}
-                    onChange={e => setColorInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addColor(colorInput) } }}
-                    placeholder="Color personalizado (Enter para agregar)" />
-                  <button type="button" onClick={() => addColor(colorInput)}
-                    style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                </div>
-              </SeccionAdicional>
-
-              {/* ---- Tallas ---- */}
-              <SeccionAdicional titulo="📏 Tallas / Tamaños" hint="Escribe cada talla o medida y presiona Enter para agregarla">
-                {form.tallas.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                    {form.tallas.map(t => (
-                      <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
-                        {t}
-                        <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={tallaInput}
-                    onChange={e => setTallaInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
-                    placeholder="Ej: XS, S, M, L, XL — o 38, 39, 40 — o Único" />
-                  <button type="button" onClick={() => addTalla(tallaInput)}
-                    style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                </div>
-              </SeccionAdicional>
-
-              {/* ---- Variantes con stock ---- */}
-              {form.variantes.length > 0 && (
-                <SeccionAdicional titulo="📦 Stock por variante" hint="Indica las unidades disponibles por combinación">
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', background: '#f9fafb', padding: '8px 14px', borderBottom: '1px solid #e5e7eb' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Variante</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Stock</span>
-                    </div>
-                    {form.variantes.map((v, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', padding: '8px 14px', borderBottom: i < form.variantes.length - 1 ? '1px solid #f3f4f6' : 'none', gap: 12 }}>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          {v.color && (() => { const hex = PALETA_COLORES.find(p => p.nombre === v.color)?.hex; return hex ? <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} /> : null })()}
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{[v.color, v.talla].filter(Boolean).join(' · ')}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <button type="button" onClick={() => setVarianteStock(i, String(Math.max(0, Number(v.stock || 0) - 1)))}
-                            style={{ width: 24, height: 24, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151' }}>−</button>
-                          <input type="number" min="0"
-                            style={{ width: 56, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, textAlign: 'center', outline: 'none', background: '#fff' }}
-                            value={v.stock} onChange={e => setVarianteStock(i, e.target.value)} />
-                          <button type="button" onClick={() => setVarianteStock(i, String(Number(v.stock || 0) + 1))}
-                            style={{ width: 24, height: 24, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151' }}>+</button>
-                        </div>
-                      </div>
-                    ))}
-                    <div style={{ background: '#f9fafb', padding: '8px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, color: '#6b7280' }}>{form.variantes.length} variante{form.variantes.length > 1 ? 's' : ''}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>Total: {form.variantes.reduce((t, v) => t + (Number(v.stock) || 0), 0)} uds</span>
-                    </div>
-                  </div>
-                </SeccionAdicional>
-              )}
-
-              {/* ---- Envío / Peso y dimensiones ---- */}
-              <SeccionAdicional titulo="🚚 Envío" hint="Datos para calcular el costo de envío">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div>
-                    <label style={{ ...labelStyle, marginBottom: 6, display: 'block' }}>Peso <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 12 }}>gramos</span></label>
-                    <div style={{ position: 'relative' }}>
-                      <input type="number" min="0" style={{ ...inputStyle(false), paddingRight: 36 }} value={form.peso}
-                        onChange={e => setForm(f => ({ ...f, peso: e.target.value }))} placeholder="Ej: 850" />
-                      <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#9ca3af', pointerEvents: 'none' }}>g</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ ...labelStyle, marginBottom: 6, display: 'block' }}>Dimensiones <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 12 }}>cm</span></label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                      {([['largo', 'Largo'], ['ancho', 'Ancho'], ['alto', 'Alto']] as const).map(([dim, label]) => (
-                        <div key={dim} style={{ position: 'relative' }}>
-                          <input type="number" min="0"
-                            style={{ ...inputStyle(false), padding: '9px 8px 9px 8px', textAlign: 'center', fontSize: 13 }}
-                            value={form[dim]} onChange={e => setForm(f => ({ ...f, [dim]: e.target.value }))}
-                            placeholder={label[0]} />
-                          <span style={{ position: 'absolute', bottom: -16, left: 0, right: 0, textAlign: 'center', fontSize: 10, color: '#9ca3af' }}>{label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </SeccionAdicional>
-
-              {/* ---- Fotos adicionales ---- */}
-              <SeccionAdicional titulo="🖼️ Fotos adicionales" hint="Imágenes extra del producto: ángulos, detalles o uso">
+              {/* 📷 Imágenes */}
+              <Card icon="📷" title="Imágenes">
+                {imagenError && <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px' }}>{imagenError}</p>}
+                {errors.imagen && <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px' }}>{errors.imagen}</p>}
                 <div
                   onDragOver={e => { e.preventDefault(); setExtraDragging(true) }}
                   onDragLeave={() => setExtraDragging(false)}
-                  onDrop={onExtraDrop}
-                  style={{ border: `2px dashed ${extraDragging ? BLUE : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${BLUE}06` : '#fafafa', transition: 'border-color 0.15s, background 0.15s', overflow: 'hidden' }}>
+                  onDrop={onGaleriaDrop}
+                  style={{ border: `2px dashed ${extraDragging ? BLUE : errors.imagen ? '#fca5a5' : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${BLUE}08` : '#fafafa', transition: 'border-color .15s, background .15s', overflow: 'hidden' }}>
 
-                  {/* Grid de imágenes ya cargadas */}
-                  {form.imagenesExtra.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 12 }}>
-                      {form.imagenesExtra.map((extra, i) => (
-                        <div key={i} style={{ aspectRatio: '1', borderRadius: 8, overflow: 'hidden', position: 'relative', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
-                          <img src={extra.preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                          <button type="button" onClick={() => removeExtraImagen(i)}
-                            style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1, backdropFilter: 'blur(2px)' }}>×</button>
-                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', gap: 3, padding: 4, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))' }}>
-                            <button type="button" onClick={() => moverImagenExtra(i, -1)} disabled={i === 0}
-                              title="Mover a la izquierda"
-                              style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.3 : 1 }}>◀</button>
+                  {galeria.length > 0 && (
+                    <div className="prodmodal-img-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, padding: 12 }}>
+                      {galeria.map((img, i) => (
+                        <div key={i}
+                          draggable
+                          onDragStart={() => onImgDragStart(i)}
+                          onDragOver={e => e.preventDefault()}
+                          onDrop={() => onImgDrop(i)}
+                          style={{ aspectRatio: '1', borderRadius: 10, overflow: 'hidden', position: 'relative', boxShadow: i === 0 ? `0 0 0 2px ${BLUE}` : '0 1px 4px rgba(0,0,0,0.12)', cursor: 'grab', background: '#fff' }}>
+                          <img src={img.preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+                          {i === 0 && (
+                            <span style={{ position: 'absolute', top: 5, left: 5, background: BLUE, color: '#fff', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20 }}>★ Principal</span>
+                          )}
+                          <button type="button" onClick={() => removeImagenAt(i)}
+                            style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1 }}>×</button>
+                          {i !== 0 && (
                             <button type="button" onClick={() => usarComoPrincipal(i)}
                               title="Usar como imagen principal"
-                              style={{ flex: 2, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Principal</button>
-                            <button type="button" onClick={() => moverImagenExtra(i, 1)} disabled={i === form.imagenesExtra.length - 1}
-                              title="Mover a la derecha"
-                              style={{ flex: 1, background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 4, height: 20, fontSize: 11, cursor: i === form.imagenesExtra.length - 1 ? 'default' : 'pointer', opacity: i === form.imagenesExtra.length - 1 ? 0.3 : 1 }}>▶</button>
-                          </div>
+                              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', height: 22, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Hacer principal</button>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* Zona de drop / botón agregar */}
-                  <div onClick={() => extraFileRef.current?.click()} style={{ cursor: 'pointer', padding: form.imagenesExtra.length > 0 ? '10px 12px 14px' : '32px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderTop: form.imagenesExtra.length > 0 ? '1px dashed #e5e7eb' : 'none' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📎</div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                      {form.imagenesExtra.length > 0 ? 'Agregar más fotos' : 'Arrastra fotos aquí o haz clic para seleccionar'}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>Puedes seleccionar varias imágenes a la vez</p>
+                  <div onClick={() => fileRef.current?.click()} style={{ cursor: 'pointer', padding: galeria.length > 0 ? '10px 12px 14px' : '36px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderTop: galeria.length > 0 ? '1px dashed #e5e7eb' : 'none' }}>
+                    {convirtiendo ? (
+                      <><p style={{ fontSize: 28, margin: 0 }}>⏳</p><p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: 0 }}>Convirtiendo a WebP...</p></>
+                    ) : (
+                      <>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🖼️</div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                          {galeria.length > 0 ? 'Agregar más fotos' : 'Arrastra imágenes aquí o haz clic para seleccionar'}
+                        </p>
+                        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>
+                          {galeria.length > 0 ? 'Arrastra una foto para reordenar — la primera es la principal' : 'PNG, JPG, WEBP · Se convierten a WebP automáticamente · Puedes seleccionar varias'}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
-              </SeccionAdicional>
+                <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onFileChange} />
+              </Card>
+
+              {/* 📦 Información básica */}
+              <Card icon="📦" title="Información básica">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="prodmodal-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <Field label="Nombre del producto" error={errors.nombre}>
+                      <input value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Bolso Morelia Negro" style={inputStyle(!!errors.nombre)} />
+                    </Field>
+                    <Field label="SKU" error={errors.sku}>
+                      <input value={form.sku} onChange={e => set('sku', e.target.value.toUpperCase())} placeholder="Ej: BOL-001" style={inputStyle(!!errors.sku)} />
+                    </Field>
+                  </div>
+                  <CategoriaSelector
+                    arbol={arbolCategorias}
+                    value={form.categoria_id}
+                    onChange={id => set('categoria_id', id)}
+                    onCrear={onCrearCategoria}
+                    error={errors.categoria_id}
+                  />
+                  <Field label="Descripción">
+                    <textarea value={form.descripcion} onChange={e => set('descripcion', e.target.value)}
+                      placeholder="Describe el producto: materiales, medidas, características..."
+                      rows={3} style={{ ...inputStyle(false), resize: 'vertical' }} />
+                  </Field>
+                </div>
+              </Card>
+
+              {/* 💲 Inventario y precio */}
+              <Card icon="💲" title="Inventario y precio">
+                <div className="prodmodal-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  <Field label="Precio (MXN)" error={errors.precio}>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontWeight: 600 }}>$</span>
+                      <input value={form.precio} onChange={e => set('precio', e.target.value)} placeholder="0.00" type="number" min="0" style={{ ...inputStyle(!!errors.precio), paddingLeft: 28 }} />
+                    </div>
+                  </Field>
+                  <Field label="Stock disponible" error={errors.stock}>
+                    <input value={form.stock} onChange={e => set('stock', e.target.value)} placeholder="0" type="number" min="0" style={inputStyle(!!errors.stock)} />
+                  </Field>
+                </div>
+              </Card>
+
+              {/* 🎨 Variantes */}
+              <CollapsibleCard icon="🎨" title="Variantes" hint="Colores, tallas y stock por combinación"
+                abierto={abiertoVariantes} onToggle={() => setAbiertoVariantes(v => !v)}
+                badges={[
+                  form.colores.length > 0 ? `${form.colores.length} color${form.colores.length > 1 ? 'es' : ''}` : null,
+                  form.tallas.length > 0 ? `${form.tallas.length} talla${form.tallas.length > 1 ? 's' : ''}` : null,
+                ].filter(Boolean) as string[]}>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Colores */}
+                  <div>
+                    <p style={subLabelStyle}>Colores disponibles</p>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      {PALETA_COLORES.map(({ nombre, hex }) => {
+                        const activo = form.colores.includes(nombre)
+                        return (
+                          <button key={nombre} type="button" title={nombre}
+                            onClick={() => activo ? removeColor(nombre) : addColor(nombre)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 6px', borderRadius: 20, border: `2px solid ${activo ? '#111' : 'transparent'}`, background: activo ? '#f3f4f6' : '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151', transition: 'border-color 0.15s' }}>
+                            <span style={{ width: 14, height: 14, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} />
+                            {nombre}
+                            {activo && <span style={{ color: '#059669', fontSize: 11 }}>✓</span>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {form.colores.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, padding: '8px 10px', background: `${NAVY}06`, borderRadius: 8 }}>
+                        {form.colores.map(c => {
+                          const hex = PALETA_COLORES.find(p => p.nombre === c)?.hex
+                          return (
+                            <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', border: `1px solid ${NAVY}30`, color: NAVY, fontSize: 12, fontWeight: 700, padding: '3px 8px 3px 6px', borderRadius: 20 }}>
+                              <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex ?? '#e5e7eb', border: '1px solid rgba(0,0,0,0.12)' }} />
+                              {c}
+                              <button type="button" onClick={() => removeColor(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={colorInput}
+                        onChange={e => setColorInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addColor(colorInput) } }}
+                        placeholder="Color personalizado — Enter para agregar" />
+                      <button type="button" onClick={() => addColor(colorInput)}
+                        style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                    </div>
+                  </div>
+
+                  {/* Tallas */}
+                  <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
+                    <p style={subLabelStyle}>Tallas / tamaños</p>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      {GRUPOS_TALLAS.flatMap(g => g.valores).map(t => {
+                        const activo = form.tallas.includes(t)
+                        return (
+                          <button key={t} type="button" onClick={() => activo ? removeTalla(t) : addTalla(t)}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            {t}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {form.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                        {form.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).map(t => (
+                          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
+                            {t}
+                            <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={tallaInput}
+                        onChange={e => setTallaInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
+                        placeholder="Otra talla o medida — Enter para agregar" />
+                      <button type="button" onClick={() => addTalla(tallaInput)}
+                        style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                    </div>
+                  </div>
+
+                  {/* Stock por variante */}
+                  {form.variantes.length > 0 && (
+                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
+                      <p style={subLabelStyle}>Stock por variante</p>
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', background: '#f9fafb', padding: '8px 14px', borderBottom: '1px solid #e5e7eb' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Variante</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Stock</span>
+                        </div>
+                        {form.variantes.map((v, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', padding: '8px 14px', borderBottom: i < form.variantes.length - 1 ? '1px solid #f3f4f6' : 'none', gap: 12 }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              {v.color && (() => { const hex = PALETA_COLORES.find(p => p.nombre === v.color)?.hex; return hex ? <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} /> : null })()}
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{[v.color, v.talla].filter(Boolean).join(' · ')}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <button type="button" onClick={() => setVarianteStock(i, String(Math.max(0, Number(v.stock || 0) - 1)))}
+                                style={{ width: 24, height: 24, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151' }}>−</button>
+                              <input type="number" min="0"
+                                style={{ width: 56, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 13, textAlign: 'center', outline: 'none', background: '#fff' }}
+                                value={v.stock} onChange={e => setVarianteStock(i, e.target.value)} />
+                              <button type="button" onClick={() => setVarianteStock(i, String(Number(v.stock || 0) + 1))}
+                                style={{ width: 24, height: 24, border: '1px solid #e5e7eb', borderRadius: 6, background: '#f9fafb', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151' }}>+</button>
+                            </div>
+                          </div>
+                        ))}
+                        <div style={{ background: '#f9fafb', padding: '8px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, color: '#6b7280' }}>{form.variantes.length} variante{form.variantes.length > 1 ? 's' : ''}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>Total: {form.variantes.reduce((t, v) => t + (Number(v.stock) || 0), 0)} uds</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleCard>
+
+              {/* 🚚 Envío */}
+              <CollapsibleCard icon="🚚" title="Envío" hint="Peso y dimensiones para calcular el costo de envío"
+                abierto={abiertoEnvio} onToggle={() => setAbiertoEnvio(v => !v)}
+                badges={(form.peso || form.largo || form.ancho || form.alto) ? ['Configurado'] : []}>
+                <div className="prodmodal-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 20 }}>
+                  <div>
+                    <p style={subLabelStyle}>Peso</p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input type="number" min="0" step="0.01" style={{ ...inputStyle(false), flex: 1 }} value={pesoValor}
+                        onChange={e => setPesoValor(e.target.value)} placeholder="Ej: 0.5" />
+                      <select value={pesoUnidad} onChange={e => setPesoUnidad(e.target.value as UnidadPeso)}
+                        style={{ ...inputStyle(false), width: 76, cursor: 'pointer' }}>
+                        {UNIDADES_PESO.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                    <p style={{ margin: '6px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                      {pesoValor ? `Se guarda como ${Math.round(Number(pesoValor) * FACTOR_A_GRAMOS[pesoUnidad])} g` : 'Ej: 0.5 kg, 500 g, 2 L, 750 ml'}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={subLabelStyle}>Dimensiones del paquete (cm)</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                      {([['largo', 'Largo (cm)', '30'], ['ancho', 'Ancho (cm)', '20'], ['alto', 'Alto (cm)', '10']] as const).map(([dim, label, ejemplo]) => (
+                        <div key={dim}>
+                          <input type="number" min="0"
+                            style={{ ...inputStyle(false), textAlign: 'center' }}
+                            value={form[dim]} onChange={e => setForm(f => ({ ...f, [dim]: e.target.value }))}
+                            placeholder={`Ej: ${ejemplo}`} />
+                          <p style={{ margin: '4px 0 0', textAlign: 'center', fontSize: 11, color: '#9ca3af' }}>{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleCard>
 
             </div>
-          )}
 
-          {/* Acciones */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
-            <button onClick={onClose} style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
-            <button onClick={handleSubmit} disabled={convirtiendo || guardando} style={{ background: convirtiendo || guardando ? '#93c5fd' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: convirtiendo || guardando ? 'default' : 'pointer' }}>
-              {guardando ? 'Guardando...' : inicial?.id ? 'Actualizar producto' : 'Guardar producto'}
-            </button>
+            {/* ==== Barra lateral ==== */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+
+              {/* ⚙ Información adicional */}
+              <Card icon="⚙️" title="Información adicional">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#374151' }}>Producto visible</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>Si lo desactivas, no se muestra en la tienda aunque tenga stock</p>
+                  </div>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, activo: !f.activo }))}
+                    style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: form.activo ? BLUE : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <span style={{ position: 'absolute', top: 2, left: form.activo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </button>
+                </div>
+              </Card>
+
+              {/* Resumen rápido */}
+              {(form.nombre || form.precio) && (
+                <Card icon="👁️" title="Vista previa">
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {form.imagenPreview
+                      ? <img src={form.imagenPreview} alt="" style={{ width: 52, height: 52, borderRadius: 8, objectFit: 'cover', border: '1px solid #e5e7eb', flexShrink: 0 }} />
+                      : <div style={{ width: 52, height: 52, borderRadius: 8, background: '#f3f4f6', flexShrink: 0 }} />}
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.nombre || 'Nombre del producto'}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 800, color: BLUE }}>{form.precio ? `$${Number(form.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '$0.00'}</p>
+                    </div>
+                  </div>
+                </Card>
+              )}
+            </div>
           </div>
+
+          {draftMsg && (
+            <p style={{ margin: 0, fontSize: 12, color: '#059669', fontWeight: 600, textAlign: 'right' }}>{draftMsg}</p>
+          )}
+        </div>
+
+        {/* Acciones (sticky) */}
+        <div style={{ position: 'sticky', bottom: 0, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '14px 28px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button onClick={onClose} style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer', marginRight: 'auto' }}>Cancelar</button>
+          {!esEdicion && (
+            <button onClick={guardarBorrador} style={{ background: '#fff', color: '#374151', border: '1px solid #e5e7eb', padding: '10px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>💾 Guardar borrador</button>
+          )}
+          {!esEdicion && (
+            <button onClick={() => handleSubmit({ continuar: true })} disabled={convirtiendo || guardando}
+              style={{ background: '#fff', color: NAVY, border: `1px solid ${NAVY}40`, padding: '10px 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: convirtiendo || guardando ? 'default' : 'pointer', opacity: convirtiendo || guardando ? 0.6 : 1 }}>
+              + Guardar y agregar otro
+            </button>
+          )}
+          <button onClick={() => handleSubmit()} disabled={convirtiendo || guardando} style={{ background: convirtiendo || guardando ? '#93c5fd' : BLUE, color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: convirtiendo || guardando ? 'default' : 'pointer' }}>
+            {guardando ? 'Guardando...' : esEdicion ? 'Actualizar producto' : 'Guardar producto'}
+          </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function Card({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 18 }}>
+      <p style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 800, color: '#111', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span>{icon}</span>{title}
+      </p>
+      {children}
+    </div>
+  )
+}
+
+function CollapsibleCard({ icon, title, hint, abierto, onToggle, badges, children }: {
+  icon: string; title: string; hint?: string; abierto: boolean; onToggle: () => void; badges: string[]; children: React.ReactNode
+}) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+      <button type="button" onClick={onToggle} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 18, cursor: 'pointer', textAlign: 'left' }}>
+        <span>{icon}</span>
+        <div style={{ minWidth: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#111' }}>{title}</span>
+          {hint && !abierto && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{hint}</p>}
+        </div>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto', flexShrink: 0 }}>
+          {badges.map(b => <span key={b} style={{ background: `${NAVY}14`, color: NAVY, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>{b}</span>)}
+        </div>
+        <span style={{ fontSize: 11, color: '#9ca3af', transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>▶</span>
+      </button>
+      {abierto && <div style={{ padding: '0 18px 18px' }}>{children}</div>}
     </div>
   )
 }
@@ -561,6 +668,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 }
 
 const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151' }
+const subLabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: '#6b7280', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '0.04em' }
 function inputStyle(hasError: boolean): React.CSSProperties {
   return { width: '100%', padding: '9px 12px', border: `1px solid ${hasError ? '#dc2626' : '#e5e7eb'}`, borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff', color: '#111', boxSizing: 'border-box' }
 }
