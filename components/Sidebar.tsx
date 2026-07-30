@@ -42,6 +42,7 @@ const TIENDA_EN_LINEA_SUBITEMS = [
   { href: '/tienda-en-linea/redes-sociales',  label: 'Redes sociales' },
   { href: '/tienda-en-linea/legal',           label: 'Legal / Envíos' },
   { href: '/tienda-en-linea/footer',          label: 'Footer', badge: 'Nuevo' },
+  { href: '/tienda-en-linea/navegacion-movil', label: 'Navegación móvil', badge: 'Nuevo' },
 ]
 
 

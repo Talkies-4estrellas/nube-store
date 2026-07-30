@@ -2720,6 +2720,15 @@
     color: var(--pink, #e7226d);
   }
 
+  /* Fondo azul (config Diseño > Fondo del logo) — íconos/texto claros para contraste */
+  .oe-store .oe-bottom-nav-item.on-azul {
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .oe-store .oe-bottom-nav-item.on-azul.active,
+  .oe-store .oe-bottom-nav-item.on-azul:active {
+    color: #fff;
+  }
+
   .oe-store .oe-bottom-nav-avatar {
     width: 20px;
     height: 20px;

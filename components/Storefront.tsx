@@ -7,7 +7,7 @@ import {
   Home, ShoppingBag, Sparkles, Heart, BadgePercent, ShoppingCart, Headphones, LifeBuoy,
   Search, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Plus, SlidersHorizontal,
   Keyboard, Gamepad2, Speaker, Watch, Check, PackageCheck, ShieldCheck, Truck, Send,
-  Grid2x2, SearchX, MessageCircle, LogIn, Trash2, type LucideIcon,
+  Grid2x2, SearchX, MessageCircle, LogIn, Trash2, UserCircle2, type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { isValidEmail } from '@/lib/validation'
@@ -26,6 +26,7 @@ const ICONS: Record<string, LucideIcon> = {
   speaker: Speaker, watch: Watch, check: Check, 'package-check': PackageCheck,
   'shield-check': ShieldCheck, truck: Truck, send: Send, 'grid-2x2': Grid2x2,
   'search-x': SearchX, 'message-circle': MessageCircle, 'log-in': LogIn, trash: Trash2,
+  'user-circle': UserCircle2,
 }
 function SupportAgentIcon() {
   return (
@@ -45,6 +46,21 @@ function Ic({ n }: { n: string }) {
   if (n === 'support-agent') return <SupportAgentIcon />
   const C = ICONS[n]
   return C ? <C /> : null
+}
+
+type NavMovilItem = { label: string; icon: string }
+type NavMovilConfig = {
+  inicio?: NavMovilItem
+  buscar?: NavMovilItem
+  rastreo?: NavMovilItem
+  perfil?: NavMovilItem
+  extra?: { id: string; label: string; icon: string; url: string; nueva_pestana: boolean }[]
+}
+const NAV_MOVIL_DEFAULT: Required<Pick<NavMovilConfig, 'inicio' | 'buscar' | 'rastreo' | 'perfil'>> = {
+  inicio: { label: 'Inicio', icon: 'home' },
+  buscar: { label: 'Buscar', icon: 'search' },
+  rastreo: { label: 'Rastreo', icon: 'truck' },
+  perfil: { label: 'Perfil', icon: 'user-circle' },
 }
 
 /* ---- Fallback images ---- */
@@ -331,6 +347,7 @@ export default function Storefront() {
     menu_extra: [] as { id: string; label: string; icono: string; url: string; nueva_pestana: boolean }[],
     filtros_extra: [] as { id: string; label: string; view: string; activo: boolean }[],
     destacados: null as { imagen: string; kicker?: string; titulo: string; texto: string; cta: string }[] | null,
+    nav_movil: null as NavMovilConfig | null,
   })
   const [configLoaded, setConfigLoaded] = useState(false)
   const [mostrarGarantias, setMostrarGarantias] = useState(false)
@@ -1968,28 +1985,42 @@ export default function Storefront() {
       )}
 
       {/* Barra de navegación inferior — solo móvil (ver storefront.css) */}
-      <nav className="oe-bottom-nav" aria-label="Navegación principal móvil">
-        <button type="button" className={`oe-bottom-nav-item${view === 'inicio' ? ' active' : ''}`} onClick={() => goView('inicio')}>
-          <Ic n="home" />
-          <span>Inicio</span>
-        </button>
-        <button type="button" className="oe-bottom-nav-item" onClick={() => { setHeaderHidden(false); setMobileSearchOpen(true) }}>
-          <Ic n="search" />
-          <span>Buscar</span>
-        </button>
-        <a href={panelUser ? '/mi-cuenta' : '/login?redirect=/mi-cuenta'} className="oe-bottom-nav-item">
-          <Ic n="truck" />
-          <span>Rastreo</span>
-        </a>
-        <a href={panelUser ? ROLE_HOME[panelUser.role] : '/login'} className="oe-bottom-nav-item">
-          {panelUser ? (
-            <span className="oe-bottom-nav-avatar">{panelUser.nombre.charAt(0).toUpperCase()}</span>
-          ) : (
-            <Ic n="log-in" />
-          )}
-          <span>{panelUser ? 'Perfil' : 'Entrar'}</span>
-        </a>
-      </nav>
+      {(() => {
+        const navCfg = { ...NAV_MOVIL_DEFAULT, ...(storeConfig.nav_movil ?? {}) }
+        const azul = storeConfig.fondo_logo === 'azul'
+        return (
+        <nav className="oe-bottom-nav" aria-label="Navegación principal móvil"
+          style={azul ? { background: '#252855', borderTopColor: 'rgba(255,255,255,0.1)' } : undefined}>
+          <button type="button" className={`oe-bottom-nav-item${view === 'inicio' ? ' active' : ''}${azul ? ' on-azul' : ''}`} onClick={() => goView('inicio')}>
+            <Ic n={navCfg.inicio.icon} />
+            <span>{navCfg.inicio.label}</span>
+          </button>
+          <button type="button" className={`oe-bottom-nav-item${azul ? ' on-azul' : ''}`} onClick={() => { setHeaderHidden(false); setMobileSearchOpen(true) }}>
+            <Ic n={navCfg.buscar.icon} />
+            <span>{navCfg.buscar.label}</span>
+          </button>
+          <a href={panelUser ? '/mi-cuenta' : '/login?redirect=/mi-cuenta'} className={`oe-bottom-nav-item${azul ? ' on-azul' : ''}`}>
+            <Ic n={navCfg.rastreo.icon} />
+            <span>{navCfg.rastreo.label}</span>
+          </a>
+          <a href={panelUser ? ROLE_HOME[panelUser.role] : '/login'} className={`oe-bottom-nav-item${azul ? ' on-azul' : ''}`}>
+            {panelUser ? (
+              <span className="oe-bottom-nav-avatar">{panelUser.nombre.charAt(0).toUpperCase()}</span>
+            ) : (
+              <Ic n={navCfg.perfil.icon} />
+            )}
+            <span>{panelUser ? navCfg.perfil.label : 'Entrar'}</span>
+          </a>
+          {(navCfg.extra ?? []).filter(b => b.label.trim() && b.url.trim()).map(b => (
+            <a key={b.id} href={b.url} target={b.nueva_pestana ? '_blank' : undefined} rel={b.nueva_pestana ? 'noopener noreferrer' : undefined}
+              className={`oe-bottom-nav-item${azul ? ' on-azul' : ''}`}>
+              <Ic n={b.icon} />
+              <span>{b.label}</span>
+            </a>
+          ))}
+        </nav>
+        )
+      })()}
     </div>
   )
 }
