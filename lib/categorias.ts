@@ -5,6 +5,13 @@ export function normalizarCategoria(nombre: string): string {
   return nombre.trim().replace(/\s+/g, ' ')
 }
 
+/** Primera letra en mayúscula, el resto en minúsculas — sin importar cómo se haya escrito. */
+function capitalizarCategoria(nombre: string): string {
+  const limpio = normalizarCategoria(nombre)
+  if (!limpio) return limpio
+  return limpio.charAt(0).toUpperCase() + limpio.slice(1).toLowerCase()
+}
+
 /**
  * Busca una categoría por nombre sin distinguir mayúsculas/minúsculas ni espacios
  * sobrantes; si no existe, la crea. Pensado para altas sueltas (un producto a la vez).
@@ -136,8 +143,16 @@ export async function crearCategoriaConPadre(
   nombreCrudo: string,
   parentId: number | null,
 ): Promise<{ id: number; nombre: string } | null> {
-  const nombre = normalizarCategoria(nombreCrudo)
+  const nombre = capitalizarCategoria(nombreCrudo)
   if (!nombre) return null
+
+  // Si ya existe (sin distinguir mayúsculas) bajo el mismo padre, se reutiliza en vez de duplicar
+  const busqueda = parentId === null
+    ? supabase.from('categorias').select('id, nombre').is('parent_id', null).ilike('nombre', nombre)
+    : supabase.from('categorias').select('id, nombre').eq('parent_id', parentId).ilike('nombre', nombre)
+  const { data: existente } = await busqueda.maybeSingle()
+  if (existente) return existente
+
   const { data, error } = await supabase
     .from('categorias')
     .insert({ nombre, parent_id: parentId })

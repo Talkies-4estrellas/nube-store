@@ -274,6 +274,34 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
 
   const galeria = getGaleria()
 
+  function nombreCategoria(id: string): string | null {
+    const idNum = Number(id)
+    if (!idNum) return null
+    for (const padre of arbolCategorias) {
+      if (padre.id === idNum) return padre.nombre
+      const hijo = padre.hijos.find(h => h.id === idNum)
+      if (hijo) return hijo.nombre
+    }
+    return null
+  }
+
+  const camposObligatorios = [
+    { label: 'Nombre del producto', ok: !!form.nombre.trim() },
+    { label: 'SKU', ok: !!form.sku.trim() },
+    { label: 'Categoría', ok: !!form.categoria_id },
+    { label: 'Precio', ok: !!form.precio && Number(form.precio) > 0 },
+    { label: 'Al menos una fotografía', ok: galeria.length > 0 },
+  ]
+  const camposRecomendados = [
+    { label: 'Stock disponible', ok: !!form.stock && Number(form.stock) > 0 },
+    { label: 'Descripción', ok: !!form.descripcion.trim() },
+  ]
+  const totalCampos = camposObligatorios.length + camposRecomendados.length
+  const hechos = [...camposObligatorios, ...camposRecomendados].filter(c => c.ok).length
+  const pctCompletado = Math.round((hechos / totalCampos) * 100)
+  const listoParaGuardar = camposObligatorios.every(c => c.ok)
+  const pendientes = [...camposObligatorios, ...camposRecomendados].filter(c => !c.ok)
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
@@ -312,6 +340,20 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
             {/* ==== Columna principal ==== */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
 
+              {/* ⚙ Información adicional */}
+              <Card icon="⚙️" title="Información adicional">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#374151' }}>Producto visible</p>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>Si lo desactivas, no se muestra en la tienda aunque tenga stock</p>
+                  </div>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, activo: !f.activo }))}
+                    style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: form.activo ? BLUE : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <span style={{ position: 'absolute', top: 2, left: form.activo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </button>
+                </div>
+              </Card>
+
               {/* 📷 Imágenes */}
               <Card icon="📷" title="Imágenes">
                 {imagenError && <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px' }}>{imagenError}</p>}
@@ -322,7 +364,7 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                   onDrop={onGaleriaDrop}
                   style={{ border: `2px dashed ${extraDragging ? BLUE : errors.imagen ? '#fca5a5' : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${BLUE}08` : '#fafafa', transition: 'border-color .15s, background .15s', overflow: 'hidden' }}>
 
-                  {galeria.length > 0 && (
+                  {galeria.length > 0 ? (
                     <div className="prodmodal-img-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, padding: 12 }}>
                       {galeria.map((img, i) => (
                         <div key={i}
@@ -344,24 +386,35 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                           )}
                         </div>
                       ))}
+
+                      {/* Recuadro de instrucción: siempre visible junto a las imágenes ya cargadas */}
+                      <div onClick={() => fileRef.current?.click()}
+                        style={{ aspectRatio: '1', borderRadius: 10, border: `2px dashed ${BLUE}`, background: `${BLUE}0d`, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, textAlign: 'center', padding: 6, transition: 'background .15s' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = `${BLUE}1a` }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = `${BLUE}0d` }}>
+                        {convirtiendo ? (
+                          <span style={{ fontSize: 18 }}>⏳</span>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: 22, fontWeight: 900, color: BLUE, lineHeight: 1 }}>+</span>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: BLUE, lineHeight: 1.3 }}>Agregar más imágenes</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div onClick={() => fileRef.current?.click()} style={{ cursor: 'pointer', padding: '36px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                      {convirtiendo ? (
+                        <><p style={{ fontSize: 28, margin: 0 }}>⏳</p><p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: 0 }}>Convirtiendo a WebP...</p></>
+                      ) : (
+                        <>
+                          <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🖼️</div>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#374151' }}>Arrastra imágenes aquí o haz clic para seleccionar</p>
+                          <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>PNG, JPG, WEBP · Se convierten a WebP automáticamente · Puedes seleccionar varias</p>
+                        </>
+                      )}
                     </div>
                   )}
-
-                  <div onClick={() => fileRef.current?.click()} style={{ cursor: 'pointer', padding: galeria.length > 0 ? '10px 12px 14px' : '36px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderTop: galeria.length > 0 ? '1px dashed #e5e7eb' : 'none' }}>
-                    {convirtiendo ? (
-                      <><p style={{ fontSize: 28, margin: 0 }}>⏳</p><p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: 0 }}>Convirtiendo a WebP...</p></>
-                    ) : (
-                      <>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🖼️</div>
-                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                          {galeria.length > 0 ? 'Agregar más fotos' : 'Arrastra imágenes aquí o haz clic para seleccionar'}
-                        </p>
-                        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>
-                          {galeria.length > 0 ? 'Arrastra una foto para reordenar — la primera es la principal' : 'PNG, JPG, WEBP · Se convierten a WebP automáticamente · Puedes seleccionar varias'}
-                        </p>
-                      </>
-                    )}
-                  </div>
                 </div>
                 <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onFileChange} />
               </Card>
@@ -566,36 +619,71 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
             </div>
 
             {/* ==== Barra lateral ==== */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0, position: 'sticky', top: 0 }}>
 
-              {/* ⚙ Información adicional */}
-              <Card icon="⚙️" title="Información adicional">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#374151' }}>Producto visible</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>Si lo desactivas, no se muestra en la tienda aunque tenga stock</p>
-                  </div>
-                  <button type="button" onClick={() => setForm(f => ({ ...f, activo: !f.activo }))}
-                    style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: form.activo ? BLUE : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                    <span style={{ position: 'absolute', top: 2, left: form.activo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                  </button>
+              {/* Vista previa en vivo */}
+              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ aspectRatio: '1', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {galeria[0]?.preview
+                    ? <img src={galeria[0].preview!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontSize: 34 }}>📦</span>}
                 </div>
-              </Card>
-
-              {/* Resumen rápido */}
-              {(form.nombre || form.precio) && (
-                <Card icon="👁️" title="Vista previa">
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    {form.imagenPreview
-                      ? <img src={form.imagenPreview} alt="" style={{ width: 52, height: 52, borderRadius: 8, objectFit: 'cover', border: '1px solid #e5e7eb', flexShrink: 0 }} />
-                      : <div style={{ width: 52, height: 52, borderRadius: 8, background: '#f3f4f6', flexShrink: 0 }} />}
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.nombre || 'Nombre del producto'}</p>
-                      <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 800, color: BLUE }}>{form.precio ? `$${Number(form.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '$0.00'}</p>
-                    </div>
+                <div style={{ padding: 14 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.nombre || 'Nombre del producto'}</p>
+                  {form.sku && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{form.sku}</p>}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 900, color: BLUE }}>
+                      {form.precio ? `$${Number(form.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '$0.00'}
+                    </span>
+                    {form.categoria_id && nombreCategoria(form.categoria_id) && (
+                      <span style={{ fontSize: 10, fontWeight: 700, background: `${NAVY}10`, color: NAVY, padding: '3px 8px', borderRadius: 20, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {nombreCategoria(form.categoria_id)}
+                      </span>
+                    )}
                   </div>
-                </Card>
-              )}
+                  <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 11, color: '#6b7280' }}>
+                    <span>📦 Stock: {form.stock || 0}</span>
+                    <span>🖼️ {galeria.length} foto{galeria.length !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progreso */}
+              <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#374151' }}>Formulario completado</p>
+                  <span style={{ fontSize: 12, fontWeight: 900, color: listoParaGuardar ? '#059669' : PINK }}>{pctCompletado}%</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: '#f3f4f6', overflow: 'hidden', marginBottom: 12 }}>
+                  <div style={{ height: '100%', width: `${pctCompletado}%`, background: listoParaGuardar ? '#059669' : PINK, borderRadius: 3, transition: 'width 0.25s ease' }} />
+                </div>
+                {pendientes.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {pendientes.map(c => (
+                      <p key={c.label} style={{ margin: 0, fontSize: 11, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#d1d5db', flexShrink: 0 }} />
+                        {c.label}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 12, color: '#059669', fontWeight: 700 }}>✓ Todo listo</p>
+                )}
+              </div>
+
+              {/* Consejo rápido */}
+              <div style={{ background: `${NAVY}05`, border: `1px solid ${NAVY}12`, borderRadius: 12, padding: 16 }}>
+                <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 800, color: NAVY }}>💡 Consejo rápido</p>
+                <p style={{ margin: 0, fontSize: 11, color: '#6b7280', lineHeight: 1.6 }}>
+                  {galeria.length === 0
+                    ? 'Los productos con fotos reales se ven más profesionales y venden más.'
+                    : !form.descripcion.trim()
+                      ? 'Agrega una descripción con materiales y medidas — ayuda a que el comprador confíe más.'
+                      : !form.stock
+                        ? 'No olvides indicar el stock disponible para evitar ventas sin inventario.'
+                        : 'Tu producto se ve bien. Revisa los datos antes de guardar.'}
+                </p>
+              </div>
             </div>
           </div>
 

@@ -185,6 +185,20 @@ export default function Storefront() {
   const { user: panelUser } = useAuth()
   const [view, setView] = useState('inicio')
   const [navCollapsed, setNavCollapsed] = useState(false)
+  // Home en escritorio: encoge el menú lateral a su versión angosta (solo
+  // íconos, igual que el toggle manual) 2s después de que el cursor lo
+  // abandona; si vuelve a entrar antes, se cancela y sigue expandido.
+  const [sidebarRetracted, setSidebarRetracted] = useState(false)
+  const sidebarHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function onSidebarMouseEnter() {
+    if (sidebarHideTimer.current) { clearTimeout(sidebarHideTimer.current); sidebarHideTimer.current = null }
+    setSidebarRetracted(false)
+  }
+  function onSidebarMouseLeave() {
+    if (sidebarHideTimer.current) clearTimeout(sidebarHideTimer.current)
+    sidebarHideTimer.current = setTimeout(() => setSidebarRetracted(true), 2000)
+  }
+  useEffect(() => () => { if (sidebarHideTimer.current) clearTimeout(sidebarHideTimer.current) }, [])
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [headerHidden, setHeaderHidden] = useState(false)
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
@@ -1486,8 +1500,9 @@ export default function Storefront() {
   }
 
   return (
-    <div className={`oe-store${navCollapsed ? ' nav-collapsed' : ''}`} data-view={view}>
-      <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}${headerHidden ? ' nav-hidden' : ''}`} aria-label="Navegacion principal">
+    <div className={`oe-store${navCollapsed || (sidebarRetracted && view === 'inicio') ? ' nav-collapsed' : ''}`} data-view={view}>
+      <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}${headerHidden ? ' nav-hidden' : ''}`} aria-label="Navegacion principal"
+        onMouseEnter={onSidebarMouseEnter} onMouseLeave={onSidebarMouseLeave}>
         <div className="sidebar-head" style={{ background: storeConfig.fondo_logo === 'azul' ? '#252855' : '#fff' }}>
           <button
             type="button"

@@ -1371,13 +1371,12 @@ export default function ProveedoresPage() {
                         </div>
                       </div>
                     ) : (
-                      <div
-                        onDragOver={e => { e.preventDefault(); setExtraDragging(true) }}
-                        onDragLeave={() => setExtraDragging(false)}
-                        onDrop={onGaleriaDrop}
-                        style={{ border: `2px dashed ${extraDragging ? PINK : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${PINK}08` : '#fafafa', transition: 'border-color .15s, background .15s', overflow: 'hidden' }}>
-
-                        {galeria.length > 0 && (
+                      galeria.length > 0 ? (
+                        <div
+                          onDragOver={e => { e.preventDefault(); setExtraDragging(true) }}
+                          onDragLeave={() => setExtraDragging(false)}
+                          onDrop={onGaleriaDrop}
+                          style={{ border: `2px dashed ${extraDragging ? PINK : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${PINK}08` : '#fafafa', transition: 'border-color .15s, background .15s', overflow: 'hidden' }}>
                           <div className="prov-img-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: 12 }}>
                             {galeria.map((img, i) => (
                               <div key={i}
@@ -1399,21 +1398,41 @@ export default function ProveedoresPage() {
                                 )}
                               </div>
                             ))}
-                          </div>
-                        )}
 
-                        <div onClick={() => extraFileRef.current?.click()} style={{ cursor: 'pointer', padding: galeria.length > 0 ? '10px 12px 14px' : '30px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderTop: galeria.length > 0 ? '1px dashed #e5e7eb' : 'none' }}>
+                            {/* Recuadro de instrucción: siempre visible junto a las imágenes ya cargadas */}
+                            <div onClick={() => extraFileRef.current?.click()}
+                              style={{ aspectRatio: '1', borderRadius: 10, border: `2px dashed ${BLUE}`, background: `${BLUE}0d`, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, textAlign: 'center', padding: 6, transition: 'background .15s' }}
+                              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = `${BLUE}1a` }}
+                              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = `${BLUE}0d` }}>
+                              {convirtiendo ? (
+                                <span style={{ fontSize: 18 }}>⏳</span>
+                              ) : (
+                                <>
+                                  <span style={{ fontSize: 22, fontWeight: 900, color: BLUE, lineHeight: 1 }}>+</span>
+                                  <span style={{ fontSize: 10, fontWeight: 800, color: BLUE, lineHeight: 1.3 }}>Agregar más imágenes</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onDragOver={e => { e.preventDefault(); setExtraDragging(true) }}
+                          onDragLeave={() => setExtraDragging(false)}
+                          onDrop={onGaleriaDrop}
+                          onClick={() => extraFileRef.current?.click()}
+                          style={{ border: `2px dashed ${extraDragging ? PINK : '#d1d5db'}`, borderRadius: 12, background: extraDragging ? `${PINK}08` : '#fafafa', transition: 'border-color .15s, background .15s', cursor: 'pointer', padding: '30px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                           {convirtiendo ? (
                             <><span style={{ fontSize: 26 }}>⏳</span><p style={{ fontSize: 12, color: '#6b7280', margin: 0, fontWeight: 600 }}>Convirtiendo a WebP...</p></>
                           ) : (
                             <>
                               <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🖼️</div>
-                              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#374151' }}>{galeria.length > 0 ? 'Agregar más fotos' : 'Arrastra imágenes aquí o toca para subir'}</p>
+                              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#374151' }}>Arrastra imágenes aquí o toca para subir</p>
                               <p style={{ margin: 0, fontSize: 10, color: '#9ca3af' }}>PNG, JPG, WEBP · Se convierten a WebP · Puedes elegir varias a la vez</p>
                             </>
                           )}
                         </div>
-                      </div>
+                      )
                     )}
                     <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onFileChange} />
                     <input ref={extraFileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={onGaleriaFileChange} />
