@@ -11,6 +11,18 @@ const inp: React.CSSProperties = {
 }
 const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }
 
+/** Fusiona con los valores por defecto sin dejar pasar `null` — columnas que
+ * nunca se llenaron vienen `null` desde Supabase, y un `<input>` controlado
+ * no acepta `value={null}` (React se queja en consola). */
+function conDefaults<T extends object>(defaults: T, data: Partial<Record<keyof T, unknown>>): T {
+  const resultado = { ...defaults }
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const val = data[key]
+    if (val !== null && val !== undefined) resultado[key] = val as T[keyof T]
+  }
+  return resultado
+}
+
 type Pagina = { label: string; url: string }
 type Envio = { nombre: string; logo_url: string }
 
@@ -43,7 +55,7 @@ export default function FooterPage() {
       .eq('id', 1).single()
       .then(({ data }) => {
         if (!data) return
-        setF({ ...DEFAULTS, ...data })
+        setF(conDefaults(DEFAULTS, data))
         setPaginas(Array.isArray(data.footer_paginas) ? data.footer_paginas : [])
         setEnvios(Array.isArray(data.footer_envios_logos) ? data.footer_envios_logos : [])
       })

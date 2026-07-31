@@ -11,6 +11,18 @@ const inp: React.CSSProperties = {
 }
 const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }
 
+/** Fusiona con los valores por defecto sin dejar pasar `null` — columnas que
+ * nunca se llenaron vienen `null` desde Supabase, y un `<input>` controlado
+ * no acepta `value={null}` (React se queja en consola). */
+function conDefaults<T extends object>(defaults: T, data: Partial<Record<keyof T, unknown>>): T {
+  const resultado = { ...defaults }
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const val = data[key]
+    if (val !== null && val !== undefined) resultado[key] = val as T[keyof T]
+  }
+  return resultado
+}
+
 type Fields = {
   hero_titulo: string; hero_subtitulo: string; hero_cta: string
   hero_tag1: string; hero_tag2: string; hero_tag3: string
@@ -46,7 +58,7 @@ export default function PaginasPage() {
       .select('hero_titulo,hero_subtitulo,hero_cta,hero_tag1,hero_tag2,hero_tag3,meta_titulo,meta_descripcion,og_imagen,destacados')
       .eq('id', 1).single()
       .then(({ data }) => {
-        if (data) setF({ ...DEFAULTS, ...data })
+        if (data) setF(conDefaults(DEFAULTS, data))
         if (data?.destacados && data.destacados.length > 0) setDestacados(data.destacados)
       })
   }, [])

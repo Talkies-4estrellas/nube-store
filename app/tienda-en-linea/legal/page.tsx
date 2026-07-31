@@ -11,6 +11,18 @@ const ta: React.CSSProperties = {
 }
 const lbl: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }
 
+/** Fusiona con los valores por defecto sin dejar pasar `null` — las columnas
+ * opcionales que nunca se llenaron vienen `null` desde Supabase, y un
+ * `<input>` controlado no acepta `value={null}` (React se queja en consola). */
+function conDefaults<T extends object>(defaults: T, data: Partial<Record<keyof T, unknown>>): T {
+  const resultado = { ...defaults }
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const val = data[key]
+    if (val !== null && val !== undefined) resultado[key] = val as T[keyof T]
+  }
+  return resultado
+}
+
 type Fields = { politica_envio: string; politica_devolucion: string; terminos: string; quienes_somos: string }
 const DEFAULTS: Fields = { politica_envio: '', politica_devolucion: '', terminos: '', quienes_somos: '' }
 
@@ -81,13 +93,13 @@ export default function LegalPage() {
   useEffect(() => {
     supabase.from('config_storefront').select('politica_envio,politica_devolucion,terminos,quienes_somos,preguntas_frecuentes').eq('id', 1).single()
       .then(({ data }) => {
-        if (data) setF({ ...DEFAULTS, ...data })
+        if (data) setF(conDefaults(DEFAULTS, data))
         if (Array.isArray(data?.preguntas_frecuentes)) setFaq(data.preguntas_frecuentes)
       })
     supabase.from('config_pagos_secretos').select('*').eq('id', 1).maybeSingle()
       .then(({ data, error }) => {
         if (error) { setErrorPagos('No se pudieron cargar las llaves: ' + error.message); return }
-        if (data) setPagos({ ...PAGOS_DEFAULTS, ...data })
+        if (data) setPagos(conDefaults(PAGOS_DEFAULTS, data))
       })
   }, [])
 
