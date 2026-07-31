@@ -1829,7 +1829,11 @@
 .oe-store .product-card.wide {
   grid-column: span 2;
   display: grid;
-  grid-template-columns: 1fr 0.9fr;
+  /* minmax(0, ...) en vez de fr solo: un <img width:100%> no aporta ancho
+     propio al cálculo de la pista (los porcentajes cuentan como "auto" ahí),
+     así que con títulos largos en la otra columna la pista de la imagen
+     podía colapsar a 0 y la foto desaparecía por completo. */
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.9fr);
   gap: 22px;
   align-items: center;
 }
@@ -1851,7 +1855,10 @@
 
 .oe-store .product-card.compact {
   display: grid;
-  grid-template-columns: 0.95fr 1fr;
+  /* Mismo motivo que .wide: sin un mínimo explícito, la pista de la imagen
+     (un <img width:100%>, que no aporta ancho propio al cálculo) podía
+     colapsar a 0 cuando el título/categoría de la otra columna era largo. */
+  grid-template-columns: minmax(140px, 0.95fr) minmax(0, 1fr);
   gap: 20px;
   align-items: center;
 }
