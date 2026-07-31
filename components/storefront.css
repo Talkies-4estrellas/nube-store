@@ -586,10 +586,20 @@
   transition: width var(--nav-dur) var(--nav-ease), margin-left var(--nav-dur) var(--nav-ease);
 }
 
-.oe-store[data-view="inicio"] .topbar,
 .oe-store[data-view="inicio"] .view-preview {
   position: relative;
   z-index: 2;
+}
+
+/* El topbar necesita quedar por encima de la tarjeta "Inicio" (.view-preview):
+   ambos eran z-index:2, y al tener el mismo valor gana el que aparece después
+   en el DOM (.view-preview), tapando el dropdown de sugerencias del buscador
+   que vive dentro del topbar. Debe quedar por debajo de .sidebar (z-index:5,
+   el header sticky en móvil) — si no, el contenido del héroe se filtra sobre
+   el buscador móvil, que vive dentro del sidebar. */
+.oe-store[data-view="inicio"] .topbar {
+  position: relative;
+  z-index: 3;
 }
 
 .oe-store[data-view="inicio"] .topbar h1 {
@@ -2081,6 +2091,13 @@
     border-color: transparent;
     box-shadow: none;
     border-radius: 0;
+  }
+
+  /* Con el buscador móvil abierto, el desplegable de sugerencias (dentro
+     de .head-search-bar) queda recortado por el overflow:hidden del
+     .sidebar — se libera solo mientras se busca. */
+  .oe-store .sidebar.searching {
+    overflow: visible;
   }
 
   /* Barra: [☰] [logo] [🔍] [🛒] — el logo ocupa el espacio sobrante */
