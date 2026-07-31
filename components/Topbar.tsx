@@ -237,18 +237,25 @@ export default function Topbar() {
 
       {/* Buscador expandible */}
       {searchOpen ? (
-        <div style={{ position: 'relative', flex: 1, maxWidth: 440 }}>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Escape' && setSearchOpen(false)}
-            placeholder="Buscar productos, clientes, ventas..."
-            style={{ width: '100%', padding: '8px 36px 8px 14px', border: '2px solid #0049ff', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-          />
-          <button onClick={() => setSearchOpen(false)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#9ca3af' }}>×</button>
+        <div style={isMobile
+          ? { position: 'fixed', top: 64, left: 12, right: 12, zIndex: 300 }
+          : { position: 'relative', flex: 1, maxWidth: 440 }}>
+          <div style={{ position: 'relative' }}>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Escape' && setSearchOpen(false)}
+              placeholder="Buscar productos, clientes, ventas..."
+              style={{ width: '100%', padding: '10px 40px 10px 14px', border: '2px solid #0049ff', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box', background: '#fff', boxShadow: isMobile ? '0 8px 24px rgba(0,0,0,0.14)' : 'none' }}
+            />
+            <button
+              onClick={() => { if (query) { setQuery(''); inputRef.current?.focus() } else { setSearchOpen(false) } }}
+              title={query ? 'Borrar búsqueda' : 'Cerrar'}
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#9ca3af', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
           {(results.length > 0 || searching) && (
-            <div style={{ position: 'absolute', top: '110%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden', zIndex: 200 }}>
+            <div style={{ position: isMobile ? 'static' : 'absolute', marginTop: isMobile ? 8 : 0, top: '110%', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden', zIndex: 200 }}>
               {searching && <p style={{ padding: '12px 16px', fontSize: 13, color: '#9ca3af' }}>Buscando...</p>}
               {results.map(r => (
                 <button key={r.id} onClick={() => { router.push(r.href); setSearchOpen(false) }}
