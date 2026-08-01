@@ -352,6 +352,8 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Correr en Supabase `Doc/database/migration_nav_movil.sql`** (30/07) — bloquea el guardado en `/tienda-en-linea/navegacion-movil` (columna `nav_movil` en `config_storefront`)
+- [ ] El botón "Reenviar a revisión" se probó en vivo el 31/07 sobre el producto real "Prueba" (SKU `323565`) — quedó otra vez en estado "pendiente"; volver a rechazarlo desde el panel admin si se quiere esa fila de prueba como estaba
 - [ ] **Correr en Supabase `Doc/database/migration_perfil_proveedor.sql`** (29/07) — bloquea el guardado de "Perfil comercial" del proveedor en Ajustes
 - [ ] El botón "Reenviar a revisión" se probó en vivo el 29/07 sobre el producto real "Prueba" (SKU `323565`) — quedó en estado "pendiente"; volver a rechazarlo desde el panel admin si se quiere esa fila de prueba como estaba
 - [ ] **Confirmar que se corrió en Supabase todo el SQL del 28/07**: `migration_transferencias.sql`, `fix_origen_csv_productos.sql`, `migration_paquetes_envio.sql` y sobre todo **`fix_rls_recursion_venta_items.sql`** (corrige un 500 real que afecta a cualquier proveedor consultando sus ventas — el más urgente de confirmar)
@@ -374,6 +376,21 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
+
+## Completado (31/07/2026)
+- [x] Selector de categorías con autocompletado (cuadro de texto + sugerencias en vivo); nueva categoría se normaliza a "Primera mayúscula, resto minúsculas" y ya no duplica si existe con otra combinación de mayúsculas
+- [x] `ProductoModal.tsx`: recuadro "+ Agregar más imágenes" dentro de la cuadrícula (en azul, con hover), "Información adicional" movida arriba de "Imágenes", panel lateral de Vista previa/Progreso/Consejo siempre visible — mismo recuadro de imágenes portado al formulario del proveedor
+- [x] Menú lateral del Home en escritorio se encoge a su versión angosta tras 2s sin el cursor encima, y se restaura al instante si vuelve a entrar
+- [x] Buscador del panel admin flotante en móvil (ya no se superpone con el logo); botón "×" borra el texto antes de cerrar
+- [x] **Fix de bug real de CSS Grid**: la imagen de las tarjetas `.compact`/`.wide` del Home podía colapsar a 0px con títulos largos — corregido con `minmax()` en las columnas
+- [x] Corregidos dos bugs de `z-index` encadenados: resultados del buscador del Storefront tapados por la tarjeta "Inicio" (escritorio) y recortados por `overflow:hidden` del sidebar (móvil)
+- [x] **Fix de warning de React** `value={null}` en 4 páginas de configuración de la tienda (legal, filtros, páginas, footer) — columnas nunca llenadas en Supabase venían `null` en vez de `''`
+
+## Completado (30/07/2026)
+- [x] Nuevo apartado admin **Tienda en línea → Navegación móvil**: editar nombre/ícono de los botones fijos de la barra inferior + agregar botones extra
+- [x] El fondo de la barra inferior móvil respeta el ajuste "Fondo del logo" (blanco/azul) de Diseño — antes solo aplicaba al sidebar de escritorio
+- [x] Ícono de "Entrar" del bottom nav cambiado de flecha a persona en círculo
+- [x] Barra de navegación inferior rediseñada como "pastilla flotante" (separada de los bordes, esquinas redondeadas, blur) que se encoge un poco al deslizar hacia abajo y vuelve a su tamaño al subir
 
 ## Completado (29/07/2026)
 - [x] **Fix de bug real**: `aprobarSolicitud()` ya copia `detalles` (colores/tallas/variantes/peso/dimensiones/fotos extra) al producto aprobado — antes se perdían en silencio
