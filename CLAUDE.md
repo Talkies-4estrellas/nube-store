@@ -352,6 +352,7 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Correr en Supabase `Doc/database/migration_categorias_campos_extra.sql`** (01/08) — agrega la columna `campos_extra` (jsonb) a `categorias` y siembra la config de "Ropa"; sin ella, el panel "Tienda en línea > Filtros > Campos contextuales por categoría" y las tarjetas contextuales de `ProductoModal.tsx`/`app/proveedores/page.tsx` fallan al leer/guardar
 - [ ] **Correr en Supabase `Doc/database/migration_nav_movil.sql`** (30/07) — bloquea el guardado en `/tienda-en-linea/navegacion-movil` (columna `nav_movil` en `config_storefront`)
 - [ ] El botón "Reenviar a revisión" se probó en vivo el 31/07 sobre el producto real "Prueba" (SKU `323565`) — quedó otra vez en estado "pendiente"; volver a rechazarlo desde el panel admin si se quiere esa fila de prueba como estaba
 - [ ] **Correr en Supabase `Doc/database/migration_perfil_proveedor.sql`** (29/07) — bloquea el guardado de "Perfil comercial" del proveedor en Ajustes

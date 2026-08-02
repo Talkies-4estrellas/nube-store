@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { convertToWebp, captureFrameAsWebp, uploadToSupabase } from '@/lib/uploadWebp'
 import { useSidebar } from '@/lib/sidebar-context'
 import { useAuth } from '@/lib/auth-context'
-import { construirArbolCategorias, crearCategoriaConPadre, type CategoriaPlana } from '@/lib/categorias'
+import { construirArbolCategorias, crearCategoriaConPadre, type CategoriaPlana, type CamposExtraConfig } from '@/lib/categorias'
 import CategoriaSelector from '@/components/CategoriaSelector'
 import ChatPanel from '@/components/ChatPanel'
 import type { Conversacion } from '@/lib/mensajeria'
@@ -33,11 +33,6 @@ const PALETA_COLORES = [
   { nombre: 'Beige',    hex: '#d2b48c' },
 ]
 
-const GRUPOS_TALLAS = [
-  { nombre: 'Ropa',    valores: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
-  { nombre: 'Calzado', valores: ['22', '23', '24', '25', '26', '27', '28', '38', '39', '40', '41', '42'] },
-  { nombre: 'Otro',    valores: ['Único'] },
-]
 
 const UNIDADES_PESO = ['g', 'kg', 'ml', 'L'] as const
 type UnidadPeso = typeof UNIDADES_PESO[number]
@@ -146,6 +141,7 @@ type ProductoLocal = {
   // Opcionales
   colores: string[]
   tallas: string[]
+  camposExtra: Record<string, string[]>
   variantes: Array<{ color: string; talla: string; stock: string }>
   peso: string
   largo: string
@@ -157,7 +153,7 @@ type ProductoLocal = {
 const emptyProducto = (): ProductoLocal => ({
   nombre: '', sku: '', descripcion: '', precio: '', precioPromocion: '',
   stock: '', categoria_id: '', imagenFile: null, imagenPreview: null,
-  colores: [], tallas: [], variantes: [],
+  colores: [], tallas: [], camposExtra: {}, variantes: [],
   peso: '', largo: '', ancho: '', alto: '', imagenesExtra: [],
 })
 
@@ -503,13 +499,17 @@ export default function ProveedoresPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [draftBanner, setDraftBanner] = useState(false)
+  const draftPendiente = useRef<{ proveedor: typeof proveedor; prod: Partial<ProductoLocal> } | null>(null)
 
   // Chips colores/tallas
   const [colorInput, setColorInput] = useState('')
   const [tallaInput, setTallaInput] = useState('')
+  const [otroInput, setOtroInput] = useState('')
   const [mostrarColores, setMostrarColores] = useState(false)
   const [abiertoVariantes, setAbiertoVariantes] = useState(false)
   const [abiertoEnvio, setAbiertoEnvio] = useState(false)
+  const [abiertoContextual, setAbiertoContextual] = useState(false)
   const dragImgIndex = useRef<number | null>(null)
 
   // Peso: unidad seleccionada en UI (el valor real de prod.peso siempre va en gramos)
@@ -563,6 +563,15 @@ export default function ProveedoresPage() {
   function removeTalla(t: string) {
     const newTallas = prod.tallas.filter(x => x !== t)
     setProd(p => ({ ...p, tallas: newTallas, variantes: buildVariantes(p.colores, newTallas, p.variantes) }))
+  }
+  function toggleContextual(grupoLabel: string, val: string) {
+    const v = val.trim()
+    if (!v) return
+    setProd(p => {
+      const actuales = p.camposExtra[grupoLabel] ?? []
+      const nuevos = actuales.includes(v) ? actuales.filter(x => x !== v) : [...actuales, v]
+      return { ...p, camposExtra: { ...p.camposExtra, [grupoLabel]: nuevos } }
+    })
   }
   function setVarianteStock(idx: number, stock: string) {
     setProd(p => {
@@ -696,22 +705,41 @@ export default function ProveedoresPage() {
       const raw = localStorage.getItem(DRAFT_KEY)
       if (raw) {
         const { proveedor: p, prod: pr } = JSON.parse(raw)
-        if (p) setProveedor(p)
-        if (pr) {
-          setProd({ ...emptyProducto(), ...pr, imagenFile: null, imagenPreview: null })
-          if (pr.peso) {
-            const pesoUi = pesoAUnidadMasClara(Number(pr.peso) || 0)
-            setPesoValor(pesoUi.valor)
-            setPesoUnidad(pesoUi.unidad)
-          }
-          if (pr.colores?.length) setMostrarColores(true)
-          if (pr.colores?.length || pr.tallas?.length) setAbiertoVariantes(true)
-          if (pr.peso || pr.largo || pr.ancho || pr.alto) setAbiertoEnvio(true)
+        // Solo hay algo que ofrecer restaurar si el producto en curso tenía datos reales —
+        // si no, no tiene sentido mostrar el aviso.
+        if (pr && (pr.nombre?.trim() || pr.sku?.trim() || pr.categoria_id)) {
+          draftPendiente.current = { proveedor: p, prod: pr }
+          setDraftBanner(true)
+        } else if (p) {
+          setProveedor(p)
         }
       }
     } catch { /* ignorar */ }
 
   }, [])
+
+  function restaurarBorradorProducto() {
+    const pendiente = draftPendiente.current
+    if (!pendiente) return
+    if (pendiente.proveedor) setProveedor(pendiente.proveedor)
+    const pr = pendiente.prod
+    setProd({ ...emptyProducto(), ...pr, imagenFile: null, imagenPreview: null })
+    if (pr.peso) {
+      const pesoUi = pesoAUnidadMasClara(Number(pr.peso) || 0)
+      setPesoValor(pesoUi.valor)
+      setPesoUnidad(pesoUi.unidad)
+    }
+    if (pr.colores?.length) setMostrarColores(true)
+    if (pr.colores?.length || pr.tallas?.length) setAbiertoVariantes(true)
+    if (pr.peso || pr.largo || pr.ancho || pr.alto) setAbiertoEnvio(true)
+    setDraftBanner(false)
+  }
+
+  function descartarBorradorProducto() {
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignorar */ }
+    draftPendiente.current = null
+    setDraftBanner(false)
+  }
 
   // Con sesión real, cargar el historial del email de la cuenta logueada
   useEffect(() => {
@@ -755,7 +783,7 @@ export default function ProveedoresPage() {
   }, [proveedor, prod])
 
   useEffect(() => {
-    supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
+    supabase.from('categorias').select('id, nombre, parent_id, activo, campos_extra').order('nombre')
       .then(({ data }) => { if (data) setCategorias(data) })
   }, [])
 
@@ -881,6 +909,8 @@ export default function ProveedoresPage() {
       const detalles: Record<string, unknown> = {}
       if (p.colores.length)    detalles.colores   = p.colores
       if (p.tallas.length)     detalles.tallas    = p.tallas
+      const camposExtraConValores = Object.fromEntries(Object.entries(p.camposExtra).filter(([, v]) => v.length > 0))
+      if (Object.keys(camposExtraConValores).length) detalles.campos_extra = camposExtraConValores
       if (p.variantes.length)  detalles.variantes = p.variantes
       if (p.peso)              detalles.peso_g    = Number(p.peso)
       if (p.largo || p.ancho || p.alto) detalles.dimensiones = { largo: Number(p.largo)||0, ancho: Number(p.ancho)||0, alto: Number(p.alto)||0 }
@@ -941,6 +971,17 @@ export default function ProveedoresPage() {
   }
 
   const catNombre = (id: string) => categorias.find(c => String(c.id) === id)?.nombre ?? '—'
+
+  /** Busca la categoría padre (aunque el valor seleccionado sea una subcategoría)
+   * para leer sus campos contextuales configurados en Tienda en línea > Filtros. */
+  const camposContextuales: CamposExtraConfig | null = (() => {
+    const idNum = Number(prod.categoria_id)
+    if (!idNum) return null
+    const cat = categorias.find(c => c.id === idNum)
+    if (!cat) return null
+    const padre = cat.parent_id === null ? cat : categorias.find(c => c.id === cat.parent_id)
+    return padre?.campos_extra ?? null
+  })()
 
   const navItem = (id: 'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'transferencias' | 'ajustes', label: string, emoji: string, badge?: number) => {
     const active = tab === id
@@ -1155,6 +1196,22 @@ export default function ProveedoresPage() {
             {errorMsg && (
               <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 24 }}>
                 {errorMsg}
+              </div>
+            )}
+
+            {draftBanner && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 12, padding: '12px 18px', marginBottom: 20 }}>
+                <p style={{ margin: 0, fontSize: 13, color: '#1e40af', fontWeight: 600 }}>📝 Tienes un producto sin terminar guardado en este navegador.</p>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button type="button" onClick={restaurarBorradorProducto}
+                    style={{ background: NAVY, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    Restaurar
+                  </button>
+                  <button type="button" onClick={descartarBorradorProducto}
+                    style={{ background: 'none', color: '#6b7280', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Descartar
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1462,9 +1519,10 @@ export default function ProveedoresPage() {
                         arbol={arbolCategorias}
                         value={prod.categoria_id}
                         onChange={id => setPR('categoria_id', id)}
+                        permitirCrear={false}
                         onCrear={async (nombre, parentId) => {
                           const nueva = await crearCategoriaConPadre(supabase, nombre, parentId)
-                          const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
+                          const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo, campos_extra').order('nombre')
                           if (data) setCategorias(data)
                           return nueva
                         }}
@@ -1519,7 +1577,7 @@ export default function ProveedoresPage() {
                   </ProvCard>
 
                   {/* Variantes */}
-                  <ProvCollapsible icon="🎨" title="Variantes" hint="Colores y tallas — solo si tu producto las necesita"
+                  <ProvCollapsible icon="🎨" title="Variantes" hint="Colores y stock por combinación"
                     abierto={abiertoVariantes} onToggle={() => setAbiertoVariantes(v => !v)}
                     badges={[
                       prod.colores.length > 0 ? `${prod.colores.length} color${prod.colores.length > 1 ? 'es' : ''}` : null,
@@ -1577,39 +1635,6 @@ export default function ProveedoresPage() {
                         )}
                       </div>
 
-                      {/* Tallas */}
-                      <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
-                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tallas / tamaños</p>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                          {GRUPOS_TALLAS.flatMap(g => g.valores).map(t => {
-                            const activo = prod.tallas.includes(t)
-                            return (
-                              <button key={t} type="button" onClick={() => activo ? removeTalla(t) : addTalla(t)}
-                                style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                                {t}
-                              </button>
-                            )
-                          })}
-                        </div>
-                        {prod.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                            {prod.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).map(t => (
-                              <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
-                                {t}
-                                <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <input style={{ ...inputStyle, flex: 1, fontSize: 13 }} value={tallaInput}
-                            onChange={e => setTallaInput(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
-                            placeholder="Otra talla o medida — Enter para agregar" onFocus={focus} onBlur={blur} />
-                          <button type="button" onClick={() => addTalla(tallaInput)}
-                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                        </div>
-                      </div>
 
                       {/* Stock por variante */}
                       {prod.variantes.length > 0 && (
@@ -1681,6 +1706,84 @@ export default function ProveedoresPage() {
                       </div>
                     </div>
                   </ProvCollapsible>
+
+                  {camposContextuales && (
+                    <ProvCollapsible icon={camposContextuales.icon} title={camposContextuales.titulo} hint={camposContextuales.hint}
+                      abierto={abiertoContextual} onToggle={() => setAbiertoContextual(v => !v)}
+                      badges={(() => {
+                        const total = prod.tallas.length + camposContextuales.grupos.reduce((acc, g) => acc + (prod.camposExtra[g.label]?.length ?? 0), 0)
+                        return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
+                      })()}>
+                      <div style={{ marginBottom: 14 }}>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tallas</p>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                          {camposContextuales.tallas.map(t => {
+                            const activo = prod.tallas.includes(t)
+                            return (
+                              <button key={t} type="button" onClick={() => activo ? removeTalla(t) : addTalla(t)}
+                                style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                                {t}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {prod.tallas.filter(t => !camposContextuales.tallas.includes(t)).length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                            {prod.tallas.filter(t => !camposContextuales.tallas.includes(t)).map(t => (
+                              <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
+                                {t}
+                                <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input style={{ ...inputStyle, flex: 1, fontSize: 13 }} value={tallaInput}
+                            onChange={e => setTallaInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
+                            placeholder="Otra talla — Enter para agregar" onFocus={focus} onBlur={blur} />
+                          <button type="button" onClick={() => addTalla(tallaInput)}
+                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                        </div>
+                      </div>
+
+                      {camposContextuales.grupos.map((grupo, i) => {
+                        const valores = prod.camposExtra[grupo.label] ?? []
+                        return (
+                          <div key={grupo.label} style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, marginBottom: i < camposContextuales.grupos.length - 1 ? 14 : 0 }}>
+                            <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{grupo.label}</p>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: grupo.permitirOtro ? 8 : 0 }}>
+                              {grupo.opciones.map(op => {
+                                const activo = valores.includes(op)
+                                return (
+                                  <button key={op} type="button" onClick={() => toggleContextual(grupo.label, op)}
+                                    style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                                    {op}
+                                  </button>
+                                )
+                              })}
+                              {grupo.permitirOtro && valores.filter(v => !grupo.opciones.includes(v)).map(v => (
+                                <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
+                                  {v}
+                                  <button type="button" onClick={() => toggleContextual(grupo.label, v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                                </span>
+                              ))}
+                            </div>
+                            {grupo.permitirOtro && (
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <input style={{ ...inputStyle, flex: 1, fontSize: 13 }} value={otroInput}
+                                  onChange={e => setOtroInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); toggleContextual(grupo.label, otroInput); setOtroInput('') } }}
+                                  placeholder={`Otro ${grupo.label.toLowerCase()} — Enter para agregar`} onFocus={focus} onBlur={blur} />
+                                <button type="button" onClick={() => { toggleContextual(grupo.label, otroInput); setOtroInput('') }}
+                                  style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </ProvCollapsible>
+                  )}
 
                 </div>
 

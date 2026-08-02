@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 export type CategoriaHijo = { id: number; nombre: string }
-export type CategoriaConHijos = { id: number; nombre: string; hijos: CategoriaHijo[] }
+export type CategoriaConHijos = { id: number; nombre: string; hijos: CategoriaHijo[]; campos_extra?: unknown }
 
 type Props = {
   arbol: CategoriaConHijos[]
@@ -11,6 +11,8 @@ type Props = {
   onChange: (id: string) => void
   onCrear: (nombre: string, parentId: number | null) => Promise<{ id: number; nombre: string } | null>
   error?: string
+  /** Si es false, oculta el botón "+ Nueva" — solo puede elegir entre las categorías existentes. */
+  permitirCrear?: boolean
 }
 
 const inputStyle: React.CSSProperties = {
@@ -98,7 +100,7 @@ function ComboBox({ query, onQueryChange, opciones, onSeleccionar, onCerrar, pla
   )
 }
 
-export default function CategoriaSelector({ arbol, value, onChange, onCrear, error }: Props) {
+export default function CategoriaSelector({ arbol, value, onChange, onCrear, error, permitirCrear = true }: Props) {
   const [nuevoPadreMode, setNuevoPadreMode] = useState(false)
   const [nuevoPadreNombre, setNuevoPadreNombre] = useState('')
   const [nuevoHijoMode, setNuevoHijoMode] = useState(false)
@@ -150,9 +152,11 @@ export default function CategoriaSelector({ arbol, value, onChange, onCrear, err
               onCerrar={() => setPadreQuery(padreActual?.nombre ?? '')}
               placeholder="Escribe para buscar una categoría..."
               borderColor={error ? '#dc2626' : undefined}
-              sinResultadosHint='No existe — usa "+ Nueva" para crearla'
+              sinResultadosHint={permitirCrear ? 'No existe — usa "+ Nueva" para crearla' : 'No existe esa categoría'}
             />
-            <button type="button" onClick={() => setNuevoPadreMode(true)} style={btnSecundario}>+ Nueva</button>
+            {permitirCrear && (
+              <button type="button" onClick={() => setNuevoPadreMode(true)} style={btnSecundario}>+ Nueva</button>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 8 }}>
@@ -186,9 +190,11 @@ export default function CategoriaSelector({ arbol, value, onChange, onCrear, err
                 onSeleccionar={op => onChange(op.id === padreActual.id ? String(padreActual.id) : String(op.id))}
                 onCerrar={() => setHijoQuery(hijoActual?.nombre ?? '')}
                 placeholder="Escribe para buscar una subcategoría..."
-                sinResultadosHint='No existe — usa "+ Nueva" para crearla'
+                sinResultadosHint={permitirCrear ? 'No existe — usa "+ Nueva" para crearla' : 'No existe esa subcategoría'}
               />
-              <button type="button" onClick={() => setNuevoHijoMode(true)} style={btnSecundario}>+ Nueva</button>
+              {permitirCrear && (
+                <button type="button" onClick={() => setNuevoHijoMode(true)} style={btnSecundario}>+ Nueva</button>
+              )}
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 8 }}>

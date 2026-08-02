@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { construirArbolCategorias } from '@/lib/categorias'
+import { construirArbolCategorias, type CamposExtraConfig, type GrupoContextual } from '@/lib/categorias'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -27,7 +27,63 @@ function conDefaults<T extends object>(defaults: T, data: Partial<Record<keyof T
 type Fields = { topbar_btn1: string; topbar_btn2: string; topbar_btn1_activo: boolean; topbar_btn2_activo: boolean }
 const DEFAULTS: Fields = { topbar_btn1: 'Nuevo', topbar_btn2: 'Ofertas', topbar_btn1_activo: true, topbar_btn2_activo: true }
 
-type Categoria = { id: number; nombre: string; activo: boolean; parent_id: number | null }
+type Categoria = { id: number; nombre: string; activo: boolean; parent_id: number | null; campos_extra?: CamposExtraConfig | null }
+
+const CONFIG_VACIA = (): CamposExtraConfig => ({ icon: '🏷️', titulo: '', hint: '', tallas: [], grupos: [] })
+
+/** Editor genérico de una lista de texto libre (chips + input) — reutilizado para
+ * tallas y para las opciones de cada apartado. */
+function ChipListEditor({ values, onChange, placeholder }: { values: string[]; onChange: (v: string[]) => void; placeholder: string }) {
+  const [input, setInput] = useState('')
+  function add() {
+    const v = input.trim()
+    if (!v || values.includes(v)) { setInput(''); return }
+    onChange([...values, v])
+    setInput('')
+  }
+  function remove(v: string) { onChange(values.filter(x => x !== v)) }
+  return (
+    <div>
+      {values.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+          {values.map(v => (
+            <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f3f4f6', color: '#374151', fontSize: 13, fontWeight: 600, padding: '5px 12px', borderRadius: 8 }}>
+              {v}
+              <button type="button" onClick={() => remove(v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input style={{ ...inp, fontSize: 13 }} value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
+          placeholder={placeholder} />
+        <button type="button" onClick={add}
+          style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+      </div>
+    </div>
+  )
+}
+
+function GrupoEditor({ grupo, onChange, onDelete }: { grupo: GrupoContextual; onChange: (g: GrupoContextual) => void; onDelete: () => void }) {
+  return (
+    <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input style={{ ...inp, flex: 1 }} value={grupo.label} onChange={e => onChange({ ...grupo, label: e.target.value })}
+          placeholder="Nombre del apartado, ej: Género" />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#374151', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+          <input type="checkbox" checked={!!grupo.permitirOtro} onChange={e => onChange({ ...grupo, permitirOtro: e.target.checked })} />
+          Permitir &quot;otro&quot;
+        </label>
+        <button type="button" onClick={onDelete}
+          style={{ background: '#fef2f2', color: '#dc2626', border: 'none', width: 30, height: 30, borderRadius: 8, cursor: 'pointer', fontSize: 14, flexShrink: 0 }}>
+          🗑
+        </button>
+      </div>
+      <ChipListEditor values={grupo.opciones} onChange={opciones => onChange({ ...grupo, opciones })} placeholder="Agregar opción — Enter para agregar" />
+    </div>
+  )
+}
 
 type BotonFiltro = { id: string; label: string; view: string; activo: boolean }
 const VISTAS_DISPONIBLES = [
@@ -54,6 +110,12 @@ export default function FiltrosPage() {
   const [errorCategoria, setErrorCategoria] = useState('')
   const [paginaCategorias, setPaginaCategorias] = useState(1)
   const POR_PAGINA = 10
+
+  const [catConfigId, setCatConfigId] = useState('')
+  const [draftConfig, setDraftConfig] = useState<CamposExtraConfig | null>(null)
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [savedConfig, setSavedConfig] = useState(false)
+  const categoriasPadre = useMemo(() => categorias.filter(c => c.parent_id === null), [categorias])
 
   const arbolCategorias = useMemo(() => construirArbolCategorias(categorias), [categorias])
 
@@ -90,8 +152,35 @@ export default function FiltrosPage() {
 
   function cargarCategorias() {
     setCargandoCategorias(true)
-    supabase.from('categorias').select('id, nombre, activo, parent_id').order('nombre')
+    supabase.from('categorias').select('id, nombre, activo, parent_id, campos_extra').order('nombre')
       .then(({ data }) => { setCategorias(data || []); setCargandoCategorias(false) })
+  }
+
+  useEffect(() => {
+    if (!catConfigId) { setDraftConfig(null); return }
+    const cat = categorias.find(c => String(c.id) === catConfigId)
+    setDraftConfig(cat?.campos_extra ?? CONFIG_VACIA())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catConfigId])
+
+  async function guardarConfigContextual() {
+    if (!catConfigId || !draftConfig) return
+    setSavingConfig(true)
+    const limpio: CamposExtraConfig = { ...draftConfig, grupos: draftConfig.grupos.filter(g => g.label.trim() && g.opciones.length > 0) }
+    const debeGuardar = !!limpio.titulo.trim() || limpio.tallas.length > 0 || limpio.grupos.length > 0
+    const valor = debeGuardar ? limpio : null
+    await supabase.from('categorias').update({ campos_extra: valor }).eq('id', Number(catConfigId))
+    setCategorias(prev => prev.map(c => c.id === Number(catConfigId) ? { ...c, campos_extra: valor } : c))
+    setSavingConfig(false); setSavedConfig(true)
+    setTimeout(() => setSavedConfig(false), 2500)
+  }
+
+  async function quitarConfigContextual() {
+    if (!catConfigId) return
+    if (!confirm('¿Quitar los campos contextuales configurados para esta categoría?')) return
+    await supabase.from('categorias').update({ campos_extra: null }).eq('id', Number(catConfigId))
+    setCategorias(prev => prev.map(c => c.id === Number(catConfigId) ? { ...c, campos_extra: null } : c))
+    setDraftConfig(CONFIG_VACIA())
   }
 
   const totalPaginasCategorias = Math.max(1, Math.ceil(categoriasOrdenadas.length / POR_PAGINA))
@@ -348,6 +437,82 @@ export default function FiltrosPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Campos contextuales por categoría (fase 2) */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Campos contextuales por categoría</p>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+            Define apartados opcionales extra (tallas, género, material y lo que necesites) que aparecen en el formulario de productos solo cuando la categoría padre coincide — sin tocar código.
+          </p>
+
+          <label style={lbl}>Categoría padre a configurar</label>
+          <select style={{ ...inp, marginBottom: 20, cursor: 'pointer' }} value={catConfigId} onChange={e => setCatConfigId(e.target.value)}>
+            <option value="">— Selecciona una categoría —</option>
+            {categoriasPadre.map(c => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+
+          {catConfigId && draftConfig && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 12 }}>
+                <div>
+                  <label style={lbl}>Ícono</label>
+                  <input style={{ ...inp, textAlign: 'center', fontSize: 18 }} value={draftConfig.icon}
+                    onChange={e => setDraftConfig(d => d && { ...d, icon: e.target.value })} placeholder="🏷️" maxLength={4} />
+                </div>
+                <div>
+                  <label style={lbl}>Título de la tarjeta</label>
+                  <input style={inp} value={draftConfig.titulo}
+                    onChange={e => setDraftConfig(d => d && { ...d, titulo: e.target.value })} placeholder="Ej: Detalles de ropa" />
+                </div>
+              </div>
+
+              <div>
+                <label style={lbl}>Texto de ayuda</label>
+                <input style={inp} value={draftConfig.hint}
+                  onChange={e => setDraftConfig(d => d && { ...d, hint: e.target.value })} placeholder="Ej: Tallas, género, material y más — todo opcional" />
+              </div>
+
+              <div>
+                <label style={lbl}>Tallas <span style={{ fontWeight: 400, color: '#9ca3af' }}>(opcional — deja vacío si no aplica)</span></label>
+                <ChipListEditor values={draftConfig.tallas} onChange={tallas => setDraftConfig(d => d && { ...d, tallas })} placeholder="Agregar talla — Enter para agregar" />
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <label style={{ ...lbl, marginBottom: 0 }}>Apartados</label>
+                  <button type="button" onClick={() => setDraftConfig(d => d && { ...d, grupos: [...d.grupos, { label: '', opciones: [], permitirOtro: false }] })}
+                    style={{ background: '#eff6ff', color: '#0049ff', border: 'none', padding: '6px 12px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    + Agregar apartado
+                  </button>
+                </div>
+                {draftConfig.grupos.length === 0 ? (
+                  <p style={{ fontSize: 13, color: '#9ca3af' }}>Sin apartados extra todavía.</p>
+                ) : (
+                  draftConfig.grupos.map((grupo, i) => (
+                    <GrupoEditor key={i} grupo={grupo}
+                      onChange={g => setDraftConfig(d => d && { ...d, grupos: d.grupos.map((x, idx) => idx === i ? g : x) })}
+                      onDelete={() => setDraftConfig(d => d && { ...d, grupos: d.grupos.filter((_, idx) => idx !== i) })} />
+                  ))
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
+                <button type="button" onClick={quitarConfigContextual}
+                  style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '9px 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                  Quitar configuración
+                </button>
+                <button type="button" onClick={guardarConfigContextual} disabled={savingConfig} style={{
+                  background: savedConfig ? '#059669' : NAVY, color: '#fff', border: 'none',
+                  padding: '9px 20px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                }}>
+                  {savingConfig ? 'Guardando...' : savedConfig ? '¡Guardado!' : 'Guardar apartado'}
+                </button>
+              </div>
             </div>
           )}
         </div>

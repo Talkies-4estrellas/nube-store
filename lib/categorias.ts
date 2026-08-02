@@ -118,9 +118,14 @@ export async function mapearSubcategorias(
 
 /* ---- Jerarquía padre/hijo (2 niveles) ---- */
 
-export type CategoriaPlana = { id: number; nombre: string; parent_id: number | null; activo?: boolean }
+/** Campos adicionales configurables (fase 2) que un admin define para una
+ * categoría padre desde Tienda en línea > Filtros — sin tocar código. */
+export type GrupoContextual = { label: string; opciones: string[]; permitirOtro?: boolean }
+export type CamposExtraConfig = { icon: string; titulo: string; hint: string; tallas: string[]; grupos: GrupoContextual[] }
+
+export type CategoriaPlana = { id: number; nombre: string; parent_id: number | null; activo?: boolean; campos_extra?: CamposExtraConfig | null }
 export type CategoriaHijo = { id: number; nombre: string }
-export type CategoriaConHijos = { id: number; nombre: string; hijos: CategoriaHijo[] }
+export type CategoriaConHijos = { id: number; nombre: string; hijos: CategoriaHijo[]; campos_extra?: CamposExtraConfig | null }
 
 /** Agrupa la lista plana (como viene de Supabase) en padres con su array de hijos. */
 export function construirArbolCategorias(planas: CategoriaPlana[]): CategoriaConHijos[] {
@@ -129,6 +134,7 @@ export function construirArbolCategorias(planas: CategoriaPlana[]): CategoriaCon
     .map(p => ({
       id: p.id,
       nombre: p.nombre,
+      campos_extra: p.campos_extra ?? null,
       hijos: planas
         .filter(c => c.parent_id === p.id)
         .map(h => ({ id: h.id, nombre: h.nombre }))

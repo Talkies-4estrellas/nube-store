@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, DragEvent, ChangeEvent } from 'react'
 import { convertToWebp } from '@/lib/uploadWebp'
 import CategoriaSelector, { type CategoriaConHijos } from '@/components/CategoriaSelector'
+import type { CamposExtraConfig } from '@/lib/categorias'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -23,12 +24,6 @@ const PALETA_COLORES = [
   { nombre: 'Beige',     hex: '#d2b48c' },
 ]
 
-const GRUPOS_TALLAS = [
-  { nombre: 'Ropa',    valores: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
-  { nombre: 'Calzado', valores: ['22', '23', '24', '25', '26', '27', '28', '38', '39', '40', '41', '42'] },
-  { nombre: 'Otro',    valores: ['Único'] },
-]
-
 const UNIDADES_PESO = ['g', 'kg', 'ml', 'L'] as const
 type UnidadPeso = typeof UNIDADES_PESO[number]
 // Factor a gramos (ml/L se tratan como equivalente de peso 1:1 para estimar envío)
@@ -43,6 +38,7 @@ function pesoAUnidadMasClara(gramos: number): { valor: string; unidad: UnidadPes
 export type ProductoExtra = {
   colores: string[]
   tallas: string[]
+  camposExtra: Record<string, string[]>
   variantes: Array<{ color: string; talla: string; stock: string }>
   peso: string
   largo: string
@@ -64,7 +60,7 @@ type Producto = {
 } & ProductoExtra
 
 const emptyExtra = (): ProductoExtra => ({
-  colores: [], tallas: [], variantes: [],
+  colores: [], tallas: [], camposExtra: {}, variantes: [],
   peso: '', largo: '', ancho: '', alto: '', imagenesExtra: [],
 })
 
@@ -108,12 +104,15 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
   const [convirtiendo, setConvirtiendo] = useState(false)
   const [colorInput, setColorInput] = useState('')
   const [tallaInput, setTallaInput] = useState('')
+  const [otroInput, setOtroInput] = useState('')
   const [extraDragging, setExtraDragging] = useState(false)
   const [draftBanner, setDraftBanner] = useState(false)
   const [draftMsg, setDraftMsg] = useState('')
 
   const [abiertoVariantes, setAbiertoVariantes] = useState(!!(inicial?.colores?.length || inicial?.tallas?.length))
   const [abiertoEnvio, setAbiertoEnvio] = useState(!!(inicial?.peso || inicial?.largo || inicial?.ancho || inicial?.alto))
+  const [abiertoContextual, setAbiertoContextual] = useState(!!(inicial?.tallas?.length || Object.values(inicial?.camposExtra ?? {}).some(arr => arr?.length)))
+  const [mostrarColores, setMostrarColores] = useState(!!inicial?.colores?.length)
 
   // Estado de UI del peso (unidad seleccionada), el valor real siempre se exporta en gramos
   const pesoInicial = inicial?.peso ? pesoAUnidadMasClara(Number(inicial.peso)) : { valor: '', unidad: 'g' as UnidadPeso }
@@ -159,6 +158,15 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
   function removeTalla(t: string) {
     const newT = form.tallas.filter(x => x !== t)
     setForm(f => ({ ...f, tallas: newT, variantes: buildVariantes(f.colores, newT, f.variantes) }))
+  }
+  function toggleContextual(grupoLabel: string, val: string) {
+    const v = val.trim()
+    if (!v) return
+    setForm(f => {
+      const actuales = f.camposExtra[grupoLabel] ?? []
+      const nuevos = actuales.includes(v) ? actuales.filter(x => x !== v) : [...actuales, v]
+      return { ...f, camposExtra: { ...f.camposExtra, [grupoLabel]: nuevos } }
+    })
   }
   function setVarianteStock(i: number, stock: string) {
     setForm(f => { const v = [...f.variantes]; v[i] = { ...v[i], stock }; return { ...f, variantes: v } })
@@ -245,6 +253,8 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
       setForm(f => ({ ...f, ...data }))
       if (data.peso) { const p = pesoAUnidadMasClara(Number(data.peso)); setPesoValor(p.valor); setPesoUnidad(p.unidad) }
       if (data.colores?.length || data.tallas?.length) setAbiertoVariantes(true)
+      if (data.colores?.length) setMostrarColores(true)
+      if (data.tallas?.length || Object.values(data.camposExtra ?? {}).some(arr => arr?.length)) setAbiertoContextual(true)
       if (data.peso || data.largo || data.ancho || data.alto) setAbiertoEnvio(true)
     } catch { /* borrador corrupto, se ignora */ }
     setDraftBanner(false)
@@ -284,6 +294,15 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
     }
     return null
   }
+
+  /** Busca la categoría padre (aunque el valor seleccionado sea una subcategoría)
+   * para leer sus campos contextuales configurados en Tienda en línea > Filtros. */
+  const camposContextuales: CamposExtraConfig | null = (() => {
+    const idNum = Number(form.categoria_id)
+    if (!idNum) return null
+    const padre = arbolCategorias.find(p => p.id === idNum || p.hijos.some(h => h.id === idNum))
+    return (padre?.campos_extra as CamposExtraConfig | null | undefined) ?? null
+  })()
 
   const camposObligatorios = [
     { label: 'Nombre del producto', ok: !!form.nombre.trim() },
@@ -461,7 +480,7 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
               </Card>
 
               {/* 🎨 Variantes */}
-              <CollapsibleCard icon="🎨" title="Variantes" hint="Colores, tallas y stock por combinación"
+              <CollapsibleCard icon="🎨" title="Variantes" hint="Colores y stock por combinación"
                 abierto={abiertoVariantes} onToggle={() => setAbiertoVariantes(v => !v)}
                 badges={[
                   form.colores.length > 0 ? `${form.colores.length} color${form.colores.length > 1 ? 'es' : ''}` : null,
@@ -472,76 +491,51 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                   {/* Colores */}
                   <div>
                     <p style={subLabelStyle}>Colores disponibles</p>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                      {PALETA_COLORES.map(({ nombre, hex }) => {
-                        const activo = form.colores.includes(nombre)
-                        return (
-                          <button key={nombre} type="button" title={nombre}
-                            onClick={() => activo ? removeColor(nombre) : addColor(nombre)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 6px', borderRadius: 20, border: `2px solid ${activo ? '#111' : 'transparent'}`, background: activo ? '#f3f4f6' : '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151', transition: 'border-color 0.15s' }}>
-                            <span style={{ width: 14, height: 14, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} />
-                            {nombre}
-                            {activo && <span style={{ color: '#059669', fontSize: 11 }}>✓</span>}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    {form.colores.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, padding: '8px 10px', background: `${NAVY}06`, borderRadius: 8 }}>
-                        {form.colores.map(c => {
-                          const hex = PALETA_COLORES.find(p => p.nombre === c)?.hex
-                          return (
-                            <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', border: `1px solid ${NAVY}30`, color: NAVY, fontSize: 12, fontWeight: 700, padding: '3px 8px 3px 6px', borderRadius: 20 }}>
-                              <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex ?? '#e5e7eb', border: '1px solid rgba(0,0,0,0.12)' }} />
-                              {c}
-                              <button type="button" onClick={() => removeColor(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
-                            </span>
-                          )
-                        })}
-                      </div>
+                    {!mostrarColores && form.colores.length === 0 ? (
+                      <button type="button" onClick={() => setMostrarColores(true)}
+                        style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        🎨 Agregar colores
+                      </button>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                          {PALETA_COLORES.map(({ nombre, hex }) => {
+                            const activo = form.colores.includes(nombre)
+                            return (
+                              <button key={nombre} type="button" title={nombre}
+                                onClick={() => activo ? removeColor(nombre) : addColor(nombre)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 6px', borderRadius: 20, border: `2px solid ${activo ? '#111' : 'transparent'}`, background: activo ? '#f3f4f6' : '#f9fafb', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#374151', transition: 'border-color 0.15s' }}>
+                                <span style={{ width: 14, height: 14, borderRadius: '50%', background: hex, border: '1px solid rgba(0,0,0,0.12)', flexShrink: 0 }} />
+                                {nombre}
+                                {activo && <span style={{ color: '#059669', fontSize: 11 }}>✓</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {form.colores.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, padding: '8px 10px', background: `${NAVY}06`, borderRadius: 8 }}>
+                            {form.colores.map(c => {
+                              const hex = PALETA_COLORES.find(p => p.nombre === c)?.hex
+                              return (
+                                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fff', border: `1px solid ${NAVY}30`, color: NAVY, fontSize: 12, fontWeight: 700, padding: '3px 8px 3px 6px', borderRadius: 20 }}>
+                                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: hex ?? '#e5e7eb', border: '1px solid rgba(0,0,0,0.12)' }} />
+                                  {c}
+                                  <button type="button" onClick={() => removeColor(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={colorInput}
+                            onChange={e => setColorInput(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addColor(colorInput) } }}
+                            placeholder="Color personalizado — Enter para agregar" />
+                          <button type="button" onClick={() => addColor(colorInput)}
+                            style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                        </div>
+                      </>
                     )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={colorInput}
-                        onChange={e => setColorInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addColor(colorInput) } }}
-                        placeholder="Color personalizado — Enter para agregar" />
-                      <button type="button" onClick={() => addColor(colorInput)}
-                        style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                    </div>
-                  </div>
-
-                  {/* Tallas */}
-                  <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
-                    <p style={subLabelStyle}>Tallas / tamaños</p>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                      {GRUPOS_TALLAS.flatMap(g => g.valores).map(t => {
-                        const activo = form.tallas.includes(t)
-                        return (
-                          <button key={t} type="button" onClick={() => activo ? removeTalla(t) : addTalla(t)}
-                            style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                            {t}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    {form.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                        {form.tallas.filter(t => !GRUPOS_TALLAS.some(g => g.valores.includes(t))).map(t => (
-                          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
-                            {t}
-                            <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={tallaInput}
-                        onChange={e => setTallaInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
-                        placeholder="Otra talla o medida — Enter para agregar" />
-                      <button type="button" onClick={() => addTalla(tallaInput)}
-                        style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                    </div>
                   </div>
 
                   {/* Stock por variante */}
@@ -615,6 +609,85 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                   </div>
                 </div>
               </CollapsibleCard>
+
+              {/* Campos contextuales según la categoría padre — configurables en Tienda en línea > Filtros */}
+              {camposContextuales && (
+                <CollapsibleCard icon={camposContextuales.icon} title={camposContextuales.titulo} hint={camposContextuales.hint}
+                  abierto={abiertoContextual} onToggle={() => setAbiertoContextual(v => !v)}
+                  badges={(() => {
+                    const total = form.tallas.length + camposContextuales.grupos.reduce((acc, g) => acc + (form.camposExtra[g.label]?.length ?? 0), 0)
+                    return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
+                  })()}>
+                  <div style={{ marginBottom: 14 }}>
+                    <p style={subLabelStyle}>Tallas</p>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                      {camposContextuales.tallas.map(t => {
+                        const activo = form.tallas.includes(t)
+                        return (
+                          <button key={t} type="button" onClick={() => activo ? removeTalla(t) : addTalla(t)}
+                            style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            {t}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {form.tallas.filter(t => !camposContextuales.tallas.includes(t)).length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                        {form.tallas.filter(t => !camposContextuales.tallas.includes(t)).map(t => (
+                          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
+                            {t}
+                            <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={tallaInput}
+                        onChange={e => setTallaInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
+                        placeholder="Otra talla — Enter para agregar" />
+                      <button type="button" onClick={() => addTalla(tallaInput)}
+                        style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                    </div>
+                  </div>
+
+                  {camposContextuales.grupos.map((grupo, i) => {
+                    const valores = form.camposExtra[grupo.label] ?? []
+                    return (
+                      <div key={grupo.label} style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, marginBottom: i < camposContextuales.grupos.length - 1 ? 14 : 0 }}>
+                        <p style={subLabelStyle}>{grupo.label}</p>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: grupo.permitirOtro ? 8 : 0 }}>
+                          {grupo.opciones.map(op => {
+                            const activo = valores.includes(op)
+                            return (
+                              <button key={op} type="button" onClick={() => toggleContextual(grupo.label, op)}
+                                style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                                {op}
+                              </button>
+                            )
+                          })}
+                          {grupo.permitirOtro && valores.filter(v => !grupo.opciones.includes(v)).map(v => (
+                            <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
+                              {v}
+                              <button type="button" onClick={() => toggleContextual(grupo.label, v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                            </span>
+                          ))}
+                        </div>
+                        {grupo.permitirOtro && (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={otroInput}
+                              onChange={e => setOtroInput(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); toggleContextual(grupo.label, otroInput); setOtroInput('') } }}
+                              placeholder={`Otro ${grupo.label.toLowerCase()} — Enter para agregar`} />
+                            <button type="button" onClick={() => { toggleContextual(grupo.label, otroInput); setOtroInput('') }}
+                              style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </CollapsibleCard>
+              )}
 
             </div>
 

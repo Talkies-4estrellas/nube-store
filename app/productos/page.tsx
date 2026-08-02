@@ -24,6 +24,7 @@ const BLUE  = '#0049ff'
 type DetallesSolicitud = {
   colores?: string[]
   tallas?: string[]
+  campos_extra?: Record<string, string[]>
   variantes?: Array<{ color: string; talla: string; stock: number }>
   peso_g?: number
   dimensiones?: { largo: number; ancho: number; alto: number }
@@ -282,7 +283,7 @@ export default function ProductosPage() {
   }
 
   async function fetchCategorias() {
-    const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo').order('nombre')
+    const { data } = await supabase.from('categorias').select('id, nombre, parent_id, activo, campos_extra').order('nombre')
     if (data) setCategoriasRaw(data)
   }
 
@@ -317,7 +318,8 @@ export default function ProductosPage() {
     nombre: string; sku: string; categoria_id: string; precio: string
     stock: string; descripcion: string; imagen: File | null; imagenPreview: string | null
     activo: boolean
-    colores: string[]; tallas: string[]; variantes: Array<{ color: string; talla: string; stock: string }>
+    colores: string[]; tallas: string[]; camposExtra: Record<string, string[]>
+    variantes: Array<{ color: string; talla: string; stock: string }>
     peso: string; largo: string; ancho: string; alto: string
     imagenesExtra: Array<{ file: File | null; preview: string | null }>
   }, opts?: { continuar?: boolean }) {
@@ -348,10 +350,12 @@ export default function ProductosPage() {
 
     const categoria_id = form.categoria_id ? Number(form.categoria_id) : null
 
-    const tieneDetalles = form.colores.length > 0 || form.tallas.length > 0 || form.variantes.length > 0 || form.peso || form.largo || urlsExtra.length > 0
+    const camposExtraConValores = Object.fromEntries(Object.entries(form.camposExtra).filter(([, v]) => v.length > 0))
+    const tieneDetalles = form.colores.length > 0 || form.tallas.length > 0 || Object.keys(camposExtraConValores).length > 0 || form.variantes.length > 0 || form.peso || form.largo || urlsExtra.length > 0
     const detalles = tieneDetalles ? {
       colores: form.colores,
       tallas: form.tallas,
+      campos_extra: Object.keys(camposExtraConValores).length > 0 ? camposExtraConValores : undefined,
       variantes: form.variantes.map(v => ({ ...v, stock: parseInt(v.stock) || 0 })),
       peso_g: form.peso ? parseInt(form.peso) : null,
       dimensiones: (form.largo || form.ancho || form.alto) ? { largo: form.largo, ancho: form.ancho, alto: form.alto } : null,
@@ -880,6 +884,21 @@ export default function ProductosPage() {
                   </div>
                 </div>
               )}
+
+              {/* Campos contextuales configurables (género, material, temporada, etc.) */}
+              {solicitudDetalle.detalles?.campos_extra && Object.entries(solicitudDetalle.detalles.campos_extra).map(([label, valores]) => {
+                if (!valores || valores.length === 0) return null
+                return (
+                  <div key={label}>
+                    <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>{label}</p>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {valores.map(v => (
+                        <span key={v} style={{ padding: '4px 14px', borderRadius: 6, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 13, fontWeight: 700, color: BLUE }}>{v}</span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
 
               {/* Variantes */}
               {solicitudDetalle.detalles?.variantes && solicitudDetalle.detalles.variantes.length > 0 && (
