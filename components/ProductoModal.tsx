@@ -35,6 +35,102 @@ function pesoAUnidadMasClara(gramos: number): { valor: string; unidad: UnidadPes
   return { valor: String(gramos), unidad: 'g' }
 }
 
+/** Devuelve true si una config de campos contextuales tiene algo que mostrar. */
+function tieneContenido(c: CamposExtraConfig | null | undefined): c is CamposExtraConfig {
+  return !!c && (c.tallas.length > 0 || c.grupos.length > 0)
+}
+
+/** Cuerpo de una tarjeta de campos contextuales (tallas + apartados) — se usa
+ * tanto para los campos propios de la categoría elegida como para los del
+ * padre cuando se activan aparte. Cada instancia lleva sus propios inputs de
+ * texto, así que dos tarjetas abiertas a la vez no se pisan entre sí. */
+function ContextualFieldsBody({ config, tallasSeleccionadas, onAddTalla, onRemoveTalla, camposExtra, onToggleExtra }: {
+  config: CamposExtraConfig
+  tallasSeleccionadas: string[]
+  onAddTalla: (t: string) => void
+  onRemoveTalla: (t: string) => void
+  camposExtra: Record<string, string[]>
+  onToggleExtra: (label: string, val: string) => void
+}) {
+  const [tallaInput, setTallaInput] = useState('')
+  const [otroInput, setOtroInput] = useState('')
+
+  return (
+    <>
+      {config.tallas.length > 0 && (
+        <div style={{ marginBottom: config.grupos.length > 0 ? 14 : 0 }}>
+          <p style={subLabelStyle}>Tallas</p>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            {config.tallas.map(t => {
+              const activo = tallasSeleccionadas.includes(t)
+              return (
+                <button key={t} type="button" onClick={() => activo ? onRemoveTalla(t) : onAddTalla(t)}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  {t}
+                </button>
+              )
+            })}
+          </div>
+          {tallasSeleccionadas.filter(t => !config.tallas.includes(t)).length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {tallasSeleccionadas.filter(t => !config.tallas.includes(t)).map(t => (
+                <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
+                  {t}
+                  <button type="button" onClick={() => onRemoveTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={tallaInput}
+              onChange={e => setTallaInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); onAddTalla(tallaInput); setTallaInput('') } }}
+              placeholder="Otra talla — Enter para agregar" />
+            <button type="button" onClick={() => { onAddTalla(tallaInput); setTallaInput('') }}
+              style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+          </div>
+        </div>
+      )}
+
+      {config.grupos.map((grupo, i) => {
+        const valores = camposExtra[grupo.label] ?? []
+        return (
+          <div key={grupo.label} style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, marginBottom: i < config.grupos.length - 1 ? 14 : 0 }}>
+            <p style={subLabelStyle}>{grupo.label}</p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: grupo.permitirOtro ? 8 : 0 }}>
+              {grupo.opciones.map(op => {
+                const activo = valores.includes(op)
+                return (
+                  <button key={op} type="button" onClick={() => onToggleExtra(grupo.label, op)}
+                    style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                    {op}
+                  </button>
+                )
+              })}
+              {grupo.permitirOtro && valores.filter(v => !grupo.opciones.includes(v)).map(v => (
+                <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
+                  {v}
+                  <button type="button" onClick={() => onToggleExtra(grupo.label, v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                </span>
+              ))}
+            </div>
+            {grupo.permitirOtro && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={otroInput}
+                  onChange={e => setOtroInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); onToggleExtra(grupo.label, otroInput); setOtroInput('') } }}
+                  placeholder={`Otro ${grupo.label.toLowerCase()} — Enter para agregar`} />
+                <button type="button" onClick={() => { onToggleExtra(grupo.label, otroInput); setOtroInput('') }}
+                  style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
 export type ProductoExtra = {
   colores: string[]
   tallas: string[]
@@ -103,8 +199,6 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
   const [dragging, setDragging] = useState(false)
   const [convirtiendo, setConvirtiendo] = useState(false)
   const [colorInput, setColorInput] = useState('')
-  const [tallaInput, setTallaInput] = useState('')
-  const [otroInput, setOtroInput] = useState('')
   const [extraDragging, setExtraDragging] = useState(false)
   const [draftBanner, setDraftBanner] = useState(false)
   const [draftMsg, setDraftMsg] = useState('')
@@ -112,6 +206,8 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
   const [abiertoVariantes, setAbiertoVariantes] = useState(!!(inicial?.colores?.length || inicial?.tallas?.length))
   const [abiertoEnvio, setAbiertoEnvio] = useState(!!(inicial?.peso || inicial?.largo || inicial?.ancho || inicial?.alto))
   const [abiertoContextual, setAbiertoContextual] = useState(!!(inicial?.tallas?.length || Object.values(inicial?.camposExtra ?? {}).some(arr => arr?.length)))
+  const [mostrarPadreExtra, setMostrarPadreExtra] = useState(false)
+  const [abiertoPadreExtra, setAbiertoPadreExtra] = useState(true)
   const [mostrarColores, setMostrarColores] = useState(!!inicial?.colores?.length)
 
   // Estado de UI del peso (unidad seleccionada), el valor real siempre se exporta en gramos
@@ -150,10 +246,9 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
   }
   function addTalla(val: string) {
     const v = val.trim()
-    if (!v || form.tallas.includes(v)) { setTallaInput(''); return }
+    if (!v || form.tallas.includes(v)) return
     const newT = [...form.tallas, v]
     setForm(f => ({ ...f, tallas: newT, variantes: buildVariantes(f.colores, newT, f.variantes) }))
-    setTallaInput('')
   }
   function removeTalla(t: string) {
     const newT = form.tallas.filter(x => x !== t)
@@ -295,14 +390,25 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
     return null
   }
 
-  /** Busca la categoría padre (aunque el valor seleccionado sea una subcategoría)
-   * para leer sus campos contextuales configurados en Tienda en línea > Filtros. */
-  const camposContextuales: CamposExtraConfig | null = (() => {
+  /** Cada categoría (padre o subcategoría) puede tener su propia config de campos
+   * contextuales. Si la seleccionada es una subcategoría, la del padre NO se
+   * aplica automáticamente — queda disponible como "activable" aparte. */
+  const catSeleccionada = (() => {
     const idNum = Number(form.categoria_id)
     if (!idNum) return null
-    const padre = arbolCategorias.find(p => p.id === idNum || p.hijos.some(h => h.id === idNum))
-    return (padre?.campos_extra as CamposExtraConfig | null | undefined) ?? null
+    for (const padre of arbolCategorias) {
+      if (padre.id === idNum) return { propio: (padre.campos_extra as CamposExtraConfig | null | undefined) ?? null, padre: null as CamposExtraConfig | null, padreNombre: null as string | null }
+      const hijo = padre.hijos.find(h => h.id === idNum)
+      if (hijo) return {
+        propio: (hijo.campos_extra as CamposExtraConfig | null | undefined) ?? null,
+        padre: (padre.campos_extra as CamposExtraConfig | null | undefined) ?? null,
+        padreNombre: padre.nombre,
+      }
+    }
+    return null
   })()
+  const camposContextuales = tieneContenido(catSeleccionada?.propio) ? catSeleccionada!.propio : null
+  const camposContextualesPadre = catSeleccionada?.padreNombre && tieneContenido(catSeleccionada.padre) ? catSeleccionada.padre : null
 
   const camposObligatorios = [
     { label: 'Nombre del producto', ok: !!form.nombre.trim() },
@@ -610,7 +716,8 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                 </div>
               </CollapsibleCard>
 
-              {/* Campos contextuales según la categoría padre — configurables en Tienda en línea > Filtros */}
+              {/* Campos contextuales de la categoría elegida — configurables en Tienda en línea > Filtros.
+                  Si no tiene tallas ni apartados propios, no se muestra nada. */}
               {camposContextuales && (
                 <CollapsibleCard icon={camposContextuales.icon} title={camposContextuales.titulo} hint={camposContextuales.hint}
                   abierto={abiertoContextual} onToggle={() => setAbiertoContextual(v => !v)}
@@ -618,75 +725,34 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                     const total = form.tallas.length + camposContextuales.grupos.reduce((acc, g) => acc + (form.camposExtra[g.label]?.length ?? 0), 0)
                     return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
                   })()}>
-                  <div style={{ marginBottom: 14 }}>
-                    <p style={subLabelStyle}>Tallas</p>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                      {camposContextuales.tallas.map(t => {
-                        const activo = form.tallas.includes(t)
-                        return (
-                          <button key={t} type="button" onClick={() => activo ? removeTalla(t) : addTalla(t)}
-                            style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                            {t}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    {form.tallas.filter(t => !camposContextuales.tallas.includes(t)).length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                        {form.tallas.filter(t => !camposContextuales.tallas.includes(t)).map(t => (
-                          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
-                            {t}
-                            <button type="button" onClick={() => removeTalla(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={tallaInput}
-                        onChange={e => setTallaInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTalla(tallaInput) } }}
-                        placeholder="Otra talla — Enter para agregar" />
-                      <button type="button" onClick={() => addTalla(tallaInput)}
-                        style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                    </div>
-                  </div>
-
-                  {camposContextuales.grupos.map((grupo, i) => {
-                    const valores = form.camposExtra[grupo.label] ?? []
-                    return (
-                      <div key={grupo.label} style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, marginBottom: i < camposContextuales.grupos.length - 1 ? 14 : 0 }}>
-                        <p style={subLabelStyle}>{grupo.label}</p>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: grupo.permitirOtro ? 8 : 0 }}>
-                          {grupo.opciones.map(op => {
-                            const activo = valores.includes(op)
-                            return (
-                              <button key={op} type="button" onClick={() => toggleContextual(grupo.label, op)}
-                                style={{ padding: '5px 12px', borderRadius: 8, border: `2px solid ${activo ? PINK : '#e5e7eb'}`, background: activo ? PINK : '#f9fafb', color: activo ? '#fff' : '#374151', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                                {op}
-                              </button>
-                            )
-                          })}
-                          {grupo.permitirOtro && valores.filter(v => !grupo.opciones.includes(v)).map(v => (
-                            <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: PINK, color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 12px', borderRadius: 8 }}>
-                              {v}
-                              <button type="button" onClick={() => toggleContextual(grupo.label, v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
-                            </span>
-                          ))}
-                        </div>
-                        {grupo.permitirOtro && (
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <input style={{ ...inputStyle(false), flex: 1, fontSize: 13 }} value={otroInput}
-                              onChange={e => setOtroInput(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); toggleContextual(grupo.label, otroInput); setOtroInput('') } }}
-                              placeholder={`Otro ${grupo.label.toLowerCase()} — Enter para agregar`} />
-                            <button type="button" onClick={() => { toggleContextual(grupo.label, otroInput); setOtroInput('') }}
-                              style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                  <ContextualFieldsBody config={camposContextuales}
+                    tallasSeleccionadas={form.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
+                    camposExtra={form.camposExtra} onToggleExtra={toggleContextual} />
                 </CollapsibleCard>
+              )}
+
+              {/* Campos contextuales del padre de una subcategoría — no se aplican solos,
+                  hay que activarlos si hacen falta. */}
+              {camposContextualesPadre && (
+                mostrarPadreExtra ? (
+                  <CollapsibleCard icon={camposContextualesPadre.icon}
+                    title={camposContextualesPadre.titulo || `Detalles de ${catSeleccionada?.padreNombre}`}
+                    hint={`De la categoría ${catSeleccionada?.padreNombre}`}
+                    abierto={abiertoPadreExtra} onToggle={() => setAbiertoPadreExtra(v => !v)}
+                    badges={(() => {
+                      const total = form.tallas.length + camposContextualesPadre.grupos.reduce((acc, g) => acc + (form.camposExtra[g.label]?.length ?? 0), 0)
+                      return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
+                    })()}>
+                    <ContextualFieldsBody config={camposContextualesPadre}
+                      tallasSeleccionadas={form.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
+                      camposExtra={form.camposExtra} onToggleExtra={toggleContextual} />
+                  </CollapsibleCard>
+                ) : (
+                  <button type="button" onClick={() => setMostrarPadreExtra(true)}
+                    style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {camposContextualesPadre.icon} Agregar {(camposContextualesPadre.titulo || `detalles de ${catSeleccionada?.padreNombre}`).toLowerCase()}
+                  </button>
+                )
               )}
 
             </div>

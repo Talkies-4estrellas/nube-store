@@ -124,10 +124,13 @@ export type GrupoContextual = { label: string; opciones: string[]; permitirOtro?
 export type CamposExtraConfig = { icon: string; titulo: string; hint: string; tallas: string[]; grupos: GrupoContextual[] }
 
 export type CategoriaPlana = { id: number; nombre: string; parent_id: number | null; activo?: boolean; campos_extra?: CamposExtraConfig | null }
-export type CategoriaHijo = { id: number; nombre: string }
+export type CategoriaHijo = { id: number; nombre: string; campos_extra?: CamposExtraConfig | null }
 export type CategoriaConHijos = { id: number; nombre: string; hijos: CategoriaHijo[]; campos_extra?: CamposExtraConfig | null }
 
-/** Agrupa la lista plana (como viene de Supabase) en padres con su array de hijos. */
+/** Agrupa la lista plana (como viene de Supabase) en padres con su array de hijos.
+ * Tanto los padres como los hijos pueden traer su propia `campos_extra` — cada
+ * subcategoría puede tener sus propios campos contextuales, independientes de
+ * los del padre (que además quedan disponibles como "activables" en el form). */
 export function construirArbolCategorias(planas: CategoriaPlana[]): CategoriaConHijos[] {
   const padres = planas.filter(c => c.parent_id === null)
   return padres
@@ -137,7 +140,7 @@ export function construirArbolCategorias(planas: CategoriaPlana[]): CategoriaCon
       campos_extra: p.campos_extra ?? null,
       hijos: planas
         .filter(c => c.parent_id === p.id)
-        .map(h => ({ id: h.id, nombre: h.nombre }))
+        .map(h => ({ id: h.id, nombre: h.nombre, campos_extra: h.campos_extra ?? null }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre)),
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))

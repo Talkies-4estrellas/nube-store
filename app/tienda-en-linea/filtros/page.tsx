@@ -32,9 +32,13 @@ type Categoria = { id: number; nombre: string; activo: boolean; parent_id: numbe
 const CONFIG_VACIA = (): CamposExtraConfig => ({ icon: '🏷️', titulo: '', hint: '', tallas: [], grupos: [] })
 
 /** Editor genérico de una lista de texto libre (chips + input) — reutilizado para
- * tallas y para las opciones de cada apartado. */
+ * tallas y para las opciones de cada apartado. Los chips ya creados se pueden
+ * editar haciendo clic sobre su texto, no solo borrarlos. */
 function ChipListEditor({ values, onChange, placeholder }: { values: string[]; onChange: (v: string[]) => void; placeholder: string }) {
   const [input, setInput] = useState('')
+  const [editando, setEditando] = useState<number | null>(null)
+  const [editInput, setEditInput] = useState('')
+
   function add() {
     const v = input.trim()
     if (!v || values.includes(v)) { setInput(''); return }
@@ -42,15 +46,33 @@ function ChipListEditor({ values, onChange, placeholder }: { values: string[]; o
     setInput('')
   }
   function remove(v: string) { onChange(values.filter(x => x !== v)) }
+  function empezarEdicion(i: number) { setEditando(i); setEditInput(values[i]) }
+  function guardarEdicion() {
+    if (editando === null) return
+    const v = editInput.trim()
+    if (v && !values.some((x, idx) => idx !== editando && x === v)) {
+      onChange(values.map((x, idx) => idx === editando ? v : x))
+    }
+    setEditando(null)
+  }
+
   return (
     <div>
       {values.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-          {values.map(v => (
-            <span key={v} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f3f4f6', color: '#374151', fontSize: 13, fontWeight: 600, padding: '5px 12px', borderRadius: 8 }}>
-              {v}
-              <button type="button" onClick={() => remove(v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
-            </span>
+          {values.map((v, i) => (
+            editando === i ? (
+              <input key={i} autoFocus value={editInput} onChange={e => setEditInput(e.target.value)}
+                onBlur={guardarEdicion}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarEdicion() } if (e.key === 'Escape') setEditando(null) }}
+                style={{ border: '1.5px solid #0049ff', borderRadius: 8, padding: '4px 10px', fontSize: 13, fontWeight: 600, outline: 'none', width: Math.max(70, editInput.length * 8 + 28) }} />
+            ) : (
+              <span key={i} onClick={() => empezarEdicion(i)} title="Clic para editar"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f3f4f6', color: '#374151', fontSize: 13, fontWeight: 600, padding: '5px 12px', borderRadius: 8, cursor: 'pointer' }}>
+                {v}
+                <button type="button" onClick={e => { e.stopPropagation(); remove(v) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 15, lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+              </span>
+            )
           ))}
         </div>
       )}
@@ -61,6 +83,63 @@ function ChipListEditor({ values, onChange, placeholder }: { values: string[]; o
         <button type="button" onClick={add}
           style={{ background: NAVY, color: '#fff', border: 'none', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+</button>
       </div>
+    </div>
+  )
+}
+
+/** Combobox de categorías (padres y subcategorías) — funciona como cuadro de
+ * texto: escribe para filtrar y hace clic en una sugerencia para seleccionarla. */
+function CategoriaComboBox({ categorias, value, onChange }: { categorias: Categoria[]; value: string; onChange: (id: string) => void }) {
+  const seleccionada = categorias.find(c => String(c.id) === value)
+  const [query, setQuery] = useState(seleccionada?.nombre ?? '')
+  const [abierto, setAbierto] = useState(false)
+
+  useEffect(() => { setQuery(seleccionada?.nombre ?? '') }, [seleccionada])
+
+  const filtradas = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return categorias
+    return categorias.filter(c => c.nombre.toLowerCase().includes(q))
+  }, [categorias, query])
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); setAbierto(true) }}
+        onFocus={() => setAbierto(true)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') setAbierto(false)
+          if (e.key === 'Enter' && filtradas.length === 1) { e.preventDefault(); onChange(String(filtradas[0].id)); setAbierto(false) }
+        }}
+        placeholder="Escribe para buscar una categoría..."
+        autoComplete="off"
+        style={inp}
+      />
+      {abierto && (
+        <>
+          <div onClick={() => setAbierto(false)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, zIndex: 21,
+            background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+            boxShadow: '0 10px 28px rgba(0,0,0,0.12)', maxHeight: 240, overflowY: 'auto',
+          }}>
+            {filtradas.length === 0 ? (
+              <p style={{ margin: 0, padding: '10px 12px', fontSize: 12, color: '#9ca3af' }}>Sin coincidencias</p>
+            ) : (
+              filtradas.map(c => (
+                <button key={c.id} type="button"
+                  onMouseDown={e => { e.preventDefault(); onChange(String(c.id)); setAbierto(false) }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: c.parent_id ? '#4b5563' : '#111', fontWeight: c.parent_id ? 400 : 600 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}>
+                  {c.parent_id ? '↳ ' : ''}{c.nombre}
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -108,6 +187,9 @@ export default function FiltrosPage() {
   const [nuevaCategoriaPadre, setNuevaCategoriaPadre] = useState('')
   const [creando, setCreando] = useState(false)
   const [errorCategoria, setErrorCategoria] = useState('')
+  const [editandoCatId, setEditandoCatId] = useState<number | null>(null)
+  const [editandoNombre, setEditandoNombre] = useState('')
+  const [errorRenombrar, setErrorRenombrar] = useState('')
   const [paginaCategorias, setPaginaCategorias] = useState(1)
   const POR_PAGINA = 10
 
@@ -115,7 +197,6 @@ export default function FiltrosPage() {
   const [draftConfig, setDraftConfig] = useState<CamposExtraConfig | null>(null)
   const [savingConfig, setSavingConfig] = useState(false)
   const [savedConfig, setSavedConfig] = useState(false)
-  const categoriasPadre = useMemo(() => categorias.filter(c => c.parent_id === null), [categorias])
 
   const arbolCategorias = useMemo(() => construirArbolCategorias(categorias), [categorias])
 
@@ -221,6 +302,29 @@ export default function FiltrosPage() {
   async function alternarActivo(cat: Categoria) {
     setCategorias(prev => prev.map(c => c.id === cat.id ? { ...c, activo: !c.activo } : c))
     await supabase.from('categorias').update({ activo: !cat.activo }).eq('id', cat.id)
+  }
+
+  function empezarEdicionCategoria(cat: Categoria) {
+    setEditandoCatId(cat.id)
+    setEditandoNombre(cat.nombre)
+    setErrorRenombrar('')
+  }
+  function cancelarEdicionCategoria() {
+    setEditandoCatId(null)
+    setEditandoNombre('')
+    setErrorRenombrar('')
+  }
+  async function guardarEdicionCategoria(cat: Categoria) {
+    const nombre = editandoNombre.trim().replace(/\s+/g, ' ')
+    if (!nombre || nombre === cat.nombre) { cancelarEdicionCategoria(); return }
+    if (categorias.some(c => c.id !== cat.id && c.parent_id === cat.parent_id && c.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
+      setErrorRenombrar(cat.parent_id ? 'Esa subcategoría ya existe en ese padre.' : 'Esa categoría ya existe.')
+      return
+    }
+    setCategorias(prev => prev.map(c => c.id === cat.id ? { ...c, nombre } : c))
+    setEditandoCatId(null)
+    setErrorRenombrar('')
+    await supabase.from('categorias').update({ nombre }).eq('id', cat.id)
   }
 
   async function eliminarCategoria(cat: Categoria) {
@@ -384,38 +488,56 @@ export default function FiltrosPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {categoriasPagina.map(cat => (
-                <div key={cat.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                  marginLeft: cat.parent_id ? 24 : 0,
-                  border: '1px solid #e5e7eb', borderRadius: 8,
-                  background: cat.activo ? '#fff' : '#f9fafb',
-                }}>
-                  <span style={{
-                    flex: 1, fontSize: 14, fontWeight: cat.parent_id ? 500 : 600,
-                    color: cat.activo ? '#111' : '#9ca3af',
-                    textDecoration: cat.activo ? 'none' : 'line-through',
+                <div key={cat.id}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                    marginLeft: cat.parent_id ? 24 : 0,
+                    border: '1px solid #e5e7eb', borderRadius: 8,
+                    background: cat.activo ? '#fff' : '#f9fafb',
                   }}>
-                    {cat.parent_id ? '↳ ' : ''}{cat.nombre}
-                  </span>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-                    background: cat.activo ? '#d1fae5' : '#f3f4f6',
-                    color: cat.activo ? '#065f46' : '#6b7280',
-                  }}>
-                    {cat.activo ? 'Activa' : 'Inactiva'}
-                  </span>
-                  <button type="button" onClick={() => alternarActivo(cat)} style={{
-                    background: '#fff', color: '#374151', border: '1px solid #d1d5db',
-                    padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer',
-                  }}>
-                    {cat.activo ? 'Desactivar' : 'Activar'}
-                  </button>
-                  <button type="button" onClick={() => eliminarCategoria(cat)} style={{
-                    background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
-                    padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer',
-                  }}>
-                    Eliminar
-                  </button>
+                    {editandoCatId === cat.id ? (
+                      <input autoFocus value={editandoNombre} onChange={e => setEditandoNombre(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarEdicionCategoria(cat) } if (e.key === 'Escape') cancelarEdicionCategoria() }}
+                        onBlur={() => guardarEdicionCategoria(cat)}
+                        style={{ ...inp, flex: 1, padding: '6px 10px' }} />
+                    ) : (
+                      <span onClick={() => empezarEdicionCategoria(cat)} title="Clic para renombrar" style={{
+                        flex: 1, fontSize: 14, fontWeight: cat.parent_id ? 500 : 600, cursor: 'pointer',
+                        color: cat.activo ? '#111' : '#9ca3af',
+                        textDecoration: cat.activo ? 'none' : 'line-through',
+                      }}>
+                        {cat.parent_id ? '↳ ' : ''}{cat.nombre}
+                      </span>
+                    )}
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+                      background: cat.activo ? '#d1fae5' : '#f3f4f6',
+                      color: cat.activo ? '#065f46' : '#6b7280',
+                    }}>
+                      {cat.activo ? 'Activa' : 'Inactiva'}
+                    </span>
+                    <button type="button" onClick={() => empezarEdicionCategoria(cat)} title="Renombrar" style={{
+                      background: '#fff', color: '#374151', border: '1px solid #d1d5db',
+                      width: 30, height: 30, borderRadius: 8, cursor: 'pointer', fontSize: 13, flexShrink: 0,
+                    }}>
+                      ✏️
+                    </button>
+                    <button type="button" onClick={() => alternarActivo(cat)} style={{
+                      background: '#fff', color: '#374151', border: '1px solid #d1d5db',
+                      padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                    }}>
+                      {cat.activo ? 'Desactivar' : 'Activar'}
+                    </button>
+                    <button type="button" onClick={() => eliminarCategoria(cat)} style={{
+                      background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+                      padding: '6px 14px', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                    }}>
+                      Eliminar
+                    </button>
+                  </div>
+                  {editandoCatId === cat.id && errorRenombrar && (
+                    <p style={{ fontSize: 12, color: '#dc2626', margin: '4px 0 0 14px', fontWeight: 600 }}>{errorRenombrar}</p>
+                  )}
                 </div>
               ))}
 
@@ -445,16 +567,14 @@ export default function FiltrosPage() {
         <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Campos contextuales por categoría</p>
           <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
-            Define apartados opcionales extra (tallas, género, material y lo que necesites) que aparecen en el formulario de productos solo cuando la categoría padre coincide — sin tocar código.
+            Define apartados opcionales extra (tallas, género, material y lo que necesites) que aparecen en el formulario de productos según la categoría elegida — sin tocar código.
+            Tanto las categorías principales como las subcategorías pueden tener su propia configuración; si una subcategoría no tiene la suya, los campos del padre quedan disponibles como un botón "Agregar..." en vez de aparecer solos.
           </p>
 
-          <label style={lbl}>Categoría padre a configurar</label>
-          <select style={{ ...inp, marginBottom: 20, cursor: 'pointer' }} value={catConfigId} onChange={e => setCatConfigId(e.target.value)}>
-            <option value="">— Selecciona una categoría —</option>
-            {categoriasPadre.map(c => (
-              <option key={c.id} value={c.id}>{c.nombre}</option>
-            ))}
-          </select>
+          <label style={lbl}>Categoría a configurar</label>
+          <div style={{ marginBottom: 20 }}>
+            <CategoriaComboBox categorias={categoriasOrdenadas} value={catConfigId} onChange={setCatConfigId} />
+          </div>
 
           {catConfigId && draftConfig && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -478,7 +598,15 @@ export default function FiltrosPage() {
               </div>
 
               <div>
-                <label style={lbl}>Tallas <span style={{ fontWeight: 400, color: '#9ca3af' }}>(opcional — deja vacío si no aplica)</span></label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ ...lbl, marginBottom: 0 }}>Tallas <span style={{ fontWeight: 400, color: '#9ca3af' }}>(opcional — deja vacío si no aplica)</span></label>
+                  {draftConfig.tallas.length > 0 && (
+                    <button type="button" onClick={() => setDraftConfig(d => d && { ...d, tallas: [] })} title="Quitar todas las tallas"
+                      style={{ background: '#fef2f2', color: '#dc2626', border: 'none', width: 28, height: 28, borderRadius: 8, cursor: 'pointer', fontSize: 13, flexShrink: 0 }}>
+                      🗑
+                    </button>
+                  )}
+                </div>
                 <ChipListEditor values={draftConfig.tallas} onChange={tallas => setDraftConfig(d => d && { ...d, tallas })} placeholder="Agregar talla — Enter para agregar" />
               </div>
 

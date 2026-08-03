@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
-export type CategoriaHijo = { id: number; nombre: string }
+export type CategoriaHijo = { id: number; nombre: string; campos_extra?: unknown }
 export type CategoriaConHijos = { id: number; nombre: string; hijos: CategoriaHijo[]; campos_extra?: unknown }
 
 type Props = {
