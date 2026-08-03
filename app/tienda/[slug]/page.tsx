@@ -17,6 +17,7 @@ const FALLBACK = 'https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?a
 type Detalles = {
   colores?: string[]
   tallas?: string[]
+  campos_extra?: Record<string, string[]>
   variantes?: { color: string; talla: string; stock: number }[]
   peso_g?: number | null
   dimensiones?: { largo: string; ancho: string; alto: string } | null
@@ -401,6 +402,21 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
                     </div>
                   </div>
                 )}
+
+                {/* Campos contextuales (género, material, temporada, y cualquier otro definido por categoría) */}
+                {producto.detalles?.campos_extra && Object.entries(producto.detalles.campos_extra).map(([label, valores]) => {
+                  if (!valores || valores.length === 0) return null
+                  return (
+                    <div key={label} style={{ marginBottom: 14 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>{label}</p>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {valores.map(v => (
+                          <span key={v} style={{ background: '#f3f4f6', color: '#374151', fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 20, border: '1px solid #e5e7eb' }}>{v}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, marginTop: 8 }}>
                   <button onClick={addToCart} disabled={producto.stock === 0} style={{
