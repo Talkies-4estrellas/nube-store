@@ -352,6 +352,8 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Correr en Supabase `Doc/database/migration_solicitudes_categorias.sql`** (04/08) — crea la tabla `solicitudes_categorias`; sin ella, el botón "🏷️ Solicitar categoría" del proveedor y la tarjeta "Solicitudes de categorías" en Filtros fallan al leer/guardar
+- [ ] **Correr en Supabase `Doc/database/migration_solicitudes_actualizacion.sql`** (04/08) — agrega `tipo` ('nuevo'/'actualizacion') y `producto_id` a `solicitudes_productos`; sin ella, "🔄 Solicitar actualización" en el panel de proveedores y la edición de solicitudes pendientes fallan al guardar
 - [ ] **Correr en Supabase `Doc/database/migration_fix_actualizar_mi_perfil.sql`** (03/08) — error real reproducido en vivo al guardar el nombre desde Ajustes ("Could not choose the best candidate function..."): quedaron dos versiones de `actualizar_mi_perfil` (con y sin `nuevo_avatar_url`) y Postgres no sabe cuál usar cuando se llama solo con `nuevo_nombre`; esta migración las reemplaza por una sola
 - [ ] **Correr en Supabase `Doc/database/migration_categorias_campos_extra.sql`** (01/08) — agrega la columna `campos_extra` (jsonb) a `categorias` y siembra la config de "Ropa"; sin ella, el panel "Tienda en línea > Filtros > Campos contextuales por categoría" y las tarjetas contextuales de `ProductoModal.tsx`/`app/proveedores/page.tsx` fallan al leer/guardar
 - [ ] **Correr en Supabase `Doc/database/migration_nav_movil.sql`** (30/07) — bloquea el guardado en `/tienda-en-linea/navegacion-movil` (columna `nav_movil` en `config_storefront`)

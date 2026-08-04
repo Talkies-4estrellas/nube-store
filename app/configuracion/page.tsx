@@ -64,8 +64,6 @@ export default function ConfiguracionPage() {
   const [loadingUsuarios, setLoadingUsuarios] = useState(false)
   const [bitacora, setBitacora] = useState<EntradaBitacora[]>([])
   const [loadingBitacora, setLoadingBitacora] = useState(false)
-  const [editingRole,     setEditingRole]     = useState<{ id: string; role: string } | null>(null)
-  const [savingRole,      setSavingRole]      = useState(false)
 
   // Estado para solicitudes de proveedores
   const [solicitudes,        setSolicitudes]        = useState<Solicitud[]>([])
@@ -176,22 +174,6 @@ export default function ConfiguracionPage() {
     setLoadingUsuarios(false)
   }
 
-  async function saveRole() {
-    if (!editingRole) return
-    setSavingRole(true)
-    const anterior = usuarios.find(u => u.id === editingRole.id)?.role ?? null
-    await supabase.from('user_roles').update({ role: editingRole.role }).eq('id', editingRole.id)
-    if (anterior !== editingRole.role) {
-      registrarAuditoria(supabase, {
-        usuarioId: user?.id, accion: 'cambio_rol', tabla: 'user_roles', registroId: editingRole.id,
-        valorAnterior: anterior, valorNuevo: editingRole.role,
-      })
-    }
-    setSavingRole(false)
-    setEditingRole(null)
-    fetchUsuarios()
-    fetchBitacora(supabase).then(setBitacora)
-  }
 
   async function fetchSolicitudes() {
     setLoadingSolicitudes(true)
@@ -596,7 +578,7 @@ export default function ConfiguracionPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    {['Nombre', 'Rol actual', 'Cambiar rol', ''].map(h => (
+                    {['Nombre', 'Rol actual', ''].map(h => (
                       <th key={h} style={{ textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', padding: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                     ))}
                   </tr>
@@ -612,28 +594,6 @@ export default function ConfiguracionPage() {
                         <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20, background: ROLE_BADGE[u.role]?.bg, color: ROLE_BADGE[u.role]?.color }}>
                           {ROLE_LABEL[u.role] ?? u.role}
                         </span>
-                      </td>
-                      <td style={{ padding: '12px 0' }}>
-                        {editingRole?.id === u.id ? (
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <select value={editingRole.role} onChange={e => setEditingRole({ ...editingRole, role: e.target.value })}
-                              style={{ padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, fontSize: 12 }}>
-                              {['admin', 'vendedor', 'bodega'].map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                            </select>
-                            <button onClick={saveRole} disabled={savingRole}
-                              style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                              {savingRole ? '...' : 'OK'}
-                            </button>
-                            <button onClick={() => setEditingRole(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#9ca3af' }}>×</button>
-                          </div>
-                        ) : (
-                          u.user_id !== user?.id && (
-                            <button onClick={() => setEditingRole({ id: u.id, role: u.role })}
-                              style={{ background: 'none', border: '1px solid #e5e7eb', padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', color: '#374151' }}>
-                              Editar
-                            </button>
-                          )
-                        )}
                       </td>
                       <td style={{ padding: '12px 0', textAlign: 'right' }}>
                         {u.user_id !== user?.id && (

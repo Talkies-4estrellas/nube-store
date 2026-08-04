@@ -13,6 +13,8 @@ import ChatPanel from '@/components/ChatPanel'
 import type { Conversacion } from '@/lib/mensajeria'
 import { fetchTransferenciasPendientes, aceptarTransferencia, rechazarTransferencia, type Transferencia } from '@/lib/transferencias'
 import { fetchPaquetesPorVentaItems, guardarPaquete } from '@/lib/paquetes'
+import SolicitudProductoModal, { type SolicitudProductoForm } from '@/components/SolicitudProductoModal'
+import SolicitudCategoriaModal from '@/components/SolicitudCategoriaModal'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -191,6 +193,14 @@ type MiSolicitud = {
   estado: string
   created_at: string
   imagen_url: string | null
+  producto_id: string | null
+}
+
+type HistorialItem = {
+  id: string; producto_nombre: string; producto_sku: string; producto_precio: number; producto_stock: number
+  producto_descripcion: string | null; imagen_url: string | null; categoria_id: number | null
+  tipo: 'nuevo' | 'actualizacion'; producto_id: string | null
+  estado: string; created_at: string; motivo_rechazo: string | null
 }
 
 type SeguimientoFila = {
@@ -326,9 +336,12 @@ export default function ProveedoresPage() {
   const [prodError, setProdError] = useState('')
 
   // Mis solicitudes (historial)
-  const [historialItems, setHistorialItems] = useState<{ id: string; producto_nombre: string; producto_sku: string; estado: string; created_at: string; motivo_rechazo: string | null }[] | null>(null)
+  const [historialItems, setHistorialItems] = useState<HistorialItem[] | null>(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [reenviandoId, setReenviandoId] = useState<string | null>(null)
+
+  // Editar una solicitud todavía pendiente (Mis solicitudes)
+  const [editandoSolicitud, setEditandoSolicitud] = useState<HistorialItem | null>(null)
 
   // Panel "Mis productos enviados" en tab registro
   const [showMisProductos, setShowMisProductos] = useState(false)
@@ -336,6 +349,18 @@ export default function ProveedoresPage() {
   const [inventarioTotal, setInventarioTotal] = useState<number | null>(null)
   const [loadingMisProductos, setLoadingMisProductos] = useState(false)
   const [misProductosVista, setMisProductosVista] = useState<'grid' | 'list'>('list')
+
+  // "Solicitar actualización" desde Mis productos: primero se elige cuál, luego se edita
+  const [pickerActualizarAbierto, setPickerActualizarAbierto] = useState(false)
+  const [buscarActualizar, setBuscarActualizar] = useState('')
+  const [productoAActualizar, setProductoAActualizar] = useState<{
+    id: string; nombre: string; sku: string; precio: string; stock: string; descripcion: string
+    imagen_url: string | null; categoria_id: number | null
+  } | null>(null)
+  const [cargandoProductoActualizar, setCargandoProductoActualizar] = useState(false)
+
+  // "Solicitar categoría" — pide una categoría/subcategoría nueva, el admin la aprueba
+  const [mostrarSolicitudCategoria, setMostrarSolicitudCategoria] = useState(false)
 
   // Tab Ajustes — perfil guardado del proveedor (localStorage, para autollenar el formulario)
   const [perfil, setPerfil] = useState({ nombre: '', empresa: '', email: '', telefono: '' })
@@ -553,7 +578,7 @@ export default function ProveedoresPage() {
     setLoadingMisProductos(true)
     const { data } = await supabase
       .from('solicitudes_productos')
-      .select('id, producto_nombre, producto_sku, producto_precio, estado, created_at, imagen_url')
+      .select('id, producto_nombre, producto_sku, producto_precio, estado, created_at, imagen_url, producto_id')
       .eq('proveedor_email', email)
       .eq('estado', 'aprobado')
       .order('created_at', { ascending: false })
@@ -566,7 +591,7 @@ export default function ProveedoresPage() {
     setLoadingHistorial(true)
     const { data } = await supabase
       .from('solicitudes_productos')
-      .select('id, producto_nombre, producto_sku, estado, created_at, motivo_rechazo')
+      .select('id, producto_nombre, producto_sku, producto_precio, producto_stock, producto_descripcion, imagen_url, categoria_id, tipo, producto_id, estado, created_at, motivo_rechazo')
       .eq('proveedor_email', email)
       .neq('estado', 'aprobado')
       .order('created_at', { ascending: false })
@@ -581,6 +606,101 @@ export default function ProveedoresPage() {
       .eq('id', id)
     setReenviandoId(null)
     if (!error && savedEmail) cargarHistorial(savedEmail)
+  }
+
+  /** Guarda los cambios de una solicitud (pendiente o rechazada) — actualiza
+   * la misma fila, no crea una nueva. Si estaba rechazada, corregirla la
+   * reenvía a revisión de una vez (limpia el motivo y la pone pendiente). */
+  async function guardarEdicionSolicitud(form: SolicitudProductoForm): Promise<string | void> {
+    if (!editandoSolicitud) return 'No se encontró la solicitud'
+    let imagen_url = editandoSolicitud.imagen_url
+    if (form.imagenFile) {
+      try {
+        const path = `solicitudes/${Date.now()}-${form.sku}.webp`
+        imagen_url = await uploadToSupabase(form.imagenFile, supabase, 'productos', path)
+      } catch (e) {
+        return 'No se pudo subir la imagen: ' + (e instanceof Error ? e.message : 'error desconocido')
+      }
+    }
+    const eraRechazada = editandoSolicitud.estado === 'rechazado'
+    const { error } = await supabase.from('solicitudes_productos').update({
+      producto_nombre: form.nombre.trim(),
+      producto_precio: Number(form.precio),
+      producto_stock: Number(form.stock) || 0,
+      producto_descripcion: form.descripcion.trim() || null,
+      imagen_url,
+      ...(eraRechazada ? { estado: 'pendiente', motivo_rechazo: null } : {}),
+    }).eq('id', editandoSolicitud.id)
+    if (error) return 'No se pudo guardar: ' + error.message
+  }
+
+  /** Trae los datos actuales (en vivo) del producto elegido para pedir su
+   * actualización — usa producto_id si ya está ligado, o el SKU como respaldo
+   * para productos aprobados antes de que existiera ese enlace. */
+  async function elegirProductoParaActualizar(item: MiSolicitud) {
+    setCargandoProductoActualizar(true)
+    setPickerActualizarAbierto(false)
+    const query = supabase.from('productos').select('id, nombre, sku, precio, stock, descripcion, imagen_url, categoria_id')
+    const { data } = item.producto_id
+      ? await query.eq('id', item.producto_id).maybeSingle()
+      : await query.eq('sku', item.producto_sku).maybeSingle()
+    setCargandoProductoActualizar(false)
+    if (!data) { alert('No se pudo encontrar el producto publicado.'); return }
+    setProductoAActualizar({
+      id: data.id, nombre: data.nombre, sku: data.sku,
+      precio: String(data.precio ?? ''), stock: String(data.stock ?? 0),
+      descripcion: data.descripcion ?? '', imagen_url: data.imagen_url, categoria_id: data.categoria_id,
+    })
+  }
+
+  /** Envía la solicitud de actualización — no toca el producto publicado,
+   * solo queda pendiente hasta que el admin la apruebe. */
+  async function guardarSolicitudActualizacion(form: SolicitudProductoForm): Promise<string | void> {
+    if (!productoAActualizar) return 'No se encontró el producto'
+    let imagen_url = productoAActualizar.imagen_url
+    if (form.imagenFile) {
+      try {
+        const path = `solicitudes/${Date.now()}-${form.sku}.webp`
+        imagen_url = await uploadToSupabase(form.imagenFile, supabase, 'productos', path)
+      } catch (e) {
+        return 'No se pudo subir la imagen: ' + (e instanceof Error ? e.message : 'error desconocido')
+      }
+    }
+    const nombreProveedor = perfil.nombre || proveedor.nombre || user?.email?.split('@')[0] || 'Proveedor'
+    const emailProveedor = perfil.email || proveedor.email || user?.email || savedEmail
+    const { error } = await supabase.from('solicitudes_productos').insert({
+      proveedor_nombre: nombreProveedor,
+      proveedor_empresa: perfil.empresa || proveedor.empresa || null,
+      proveedor_email: emailProveedor,
+      proveedor_telefono: perfil.telefono || proveedor.telefono || null,
+      producto_nombre: form.nombre.trim(),
+      producto_sku: form.sku,
+      producto_precio: Number(form.precio),
+      producto_stock: Number(form.stock) || 0,
+      producto_descripcion: form.descripcion.trim() || null,
+      categoria_id: productoAActualizar.categoria_id,
+      imagen_url,
+      estado: 'pendiente',
+      tipo: 'actualizacion',
+      producto_id: productoAActualizar.id,
+    })
+    if (error) return 'No se pudo enviar la solicitud: ' + error.message
+  }
+
+  /** Pide una categoría o subcategoría que todavía no existe — no se crea
+   * sola, queda pendiente hasta que el admin la apruebe. */
+  async function enviarSolicitudCategoria(data: { nombre: string; parentId: number | null }): Promise<string | void> {
+    const nombreProveedor = perfil.nombre || proveedor.nombre || user?.email?.split('@')[0] || 'Proveedor'
+    const emailProveedor = perfil.email || proveedor.email || user?.email || savedEmail
+    const { error } = await supabase.from('solicitudes_categorias').insert({
+      proveedor_nombre: nombreProveedor,
+      proveedor_empresa: perfil.empresa || proveedor.empresa || null,
+      proveedor_email: emailProveedor,
+      nombre: data.nombre,
+      parent_id: data.parentId,
+      estado: 'pendiente',
+    })
+    if (error) return 'No se pudo enviar la solicitud: ' + error.message
   }
 
   const [proveedor, setProveedor] = useState({
@@ -1977,8 +2097,20 @@ export default function ProveedoresPage() {
           }
           return (
           <div>
-            {misProductos.length > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {misProductos.length > 0 && (
+                  <button type="button" onClick={() => { setBuscarActualizar(''); setPickerActualizarAbierto(true) }}
+                    style={{ background: '#eff6ff', color: '#0049ff', border: 'none', padding: '9px 16px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                    🔄 Solicitar actualización
+                  </button>
+                )}
+                <button type="button" onClick={() => setMostrarSolicitudCategoria(true)}
+                  style={{ background: '#fdf2f6', color: PINK, border: 'none', padding: '9px 16px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                  🏷️ Solicitar categoría
+                </button>
+              </div>
+              {misProductos.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, background: '#f1f2f6', padding: 4, borderRadius: 10 }}>
                   {(['grid', 'list'] as const).map(v => (
                     <button key={v} onClick={() => setMisProductosVista(v)} style={{
@@ -1989,8 +2121,8 @@ export default function ProveedoresPage() {
                     }}>{v === 'grid' ? '⊞' : '☰'}</button>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             <div style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 2px 16px rgba(37,40,85,0.08)' }}>
 
             {loadingMisProductos ? (
@@ -2091,6 +2223,75 @@ export default function ProveedoresPage() {
           </div>
           )
         })()}
+
+        {/* Picker: elegir cuál producto publicado se quiere actualizar */}
+        {pickerActualizarAbierto && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}
+            onClick={e => e.target === e.currentTarget && setPickerActualizarAbierto(false)}>
+            <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>¿Qué producto quieres actualizar?</h2>
+                <button onClick={() => setPickerActualizarAbierto(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af' }}>×</button>
+              </div>
+              <div style={{ padding: '14px 24px 0' }}>
+                <input value={buscarActualizar} onChange={e => setBuscarActualizar(e.target.value)}
+                  placeholder="Buscar por nombre o SKU..." style={{ ...inputStyle, marginBottom: 8 }} autoFocus />
+              </div>
+              <div style={{ overflowY: 'auto', padding: '4px 12px 16px' }}>
+                {misProductos
+                  .filter(p => p.producto_nombre.toLowerCase().includes(buscarActualizar.toLowerCase()) || p.producto_sku.toLowerCase().includes(buscarActualizar.toLowerCase()))
+                  .map(p => (
+                    <button key={p.id} type="button" onClick={() => elegirProductoParaActualizar(p)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: '10px 12px', border: 'none', background: 'none', cursor: 'pointer', borderRadius: 10 }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f9fafb' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {p.imagen_url ? <img src={p.imagen_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '📦'}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.producto_nombre}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{p.producto_sku}</p>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {cargandoProductoActualizar && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+            <p style={{ background: '#fff', padding: '14px 24px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#374151' }}>Cargando producto...</p>
+          </div>
+        )}
+
+        {productoAActualizar && (
+          <SolicitudProductoModal
+            titulo="Solicitar actualización"
+            hint="Los cambios no se aplican de inmediato — quedan pendientes hasta que el admin los apruebe."
+            inicial={{
+              nombre: productoAActualizar.nombre, sku: productoAActualizar.sku,
+              precio: productoAActualizar.precio, stock: productoAActualizar.stock,
+              descripcion: productoAActualizar.descripcion,
+              imagenFile: null, imagenPreview: productoAActualizar.imagen_url,
+            }}
+            onClose={() => setProductoAActualizar(null)}
+            onGuardar={guardarSolicitudActualizacion}
+            onSuccess={() => {
+              setProductoAActualizar(null)
+              if (savedEmail) cargarHistorial(savedEmail)
+              setTab('historial')
+            }}
+          />
+        )}
+
+        {mostrarSolicitudCategoria && (
+          <SolicitudCategoriaModal
+            arbol={arbolCategorias}
+            onClose={() => setMostrarSolicitudCategoria(false)}
+            onEnviar={enviarSolicitudCategoria}
+          />
+        )}
 
         {/* ---- Tab: Seguimiento y pagos (Dashboard del proveedor) ---- */}
         {tab === 'seguimiento' && (() => {
@@ -2697,7 +2898,12 @@ export default function ProveedoresPage() {
                       }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center' }}>
                           <div style={{ minWidth: 0 }}>
-                            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.producto_nombre}</p>
+                              {item.tipo === 'actualizacion' && (
+                                <span style={{ fontSize: 10, fontWeight: 800, color: '#0049ff', background: '#eff6ff', padding: '2px 8px', borderRadius: 20, flexShrink: 0 }}>🔄 Actualización</span>
+                              )}
+                            </div>
                             <div style={{ display: 'flex', gap: 10, marginTop: 3, alignItems: 'center' }}>
                               <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{item.producto_sku}</span>
                               <span style={{ fontSize: 11, color: '#d1d5db' }}>·</span>
@@ -2706,9 +2912,17 @@ export default function ProveedoresPage() {
                               </span>
                             </div>
                           </div>
-                          <span style={{ display: 'inline-flex', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '5px 14px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {st.label}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            {(item.estado === 'pendiente' || item.estado === 'rechazado') && (
+                              <button type="button" onClick={() => setEditandoSolicitud(item)}
+                                style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#374151', fontSize: 11, fontWeight: 700, padding: '5px 12px', borderRadius: 20, cursor: 'pointer' }}>
+                                Editar
+                              </button>
+                            )}
+                            <span style={{ display: 'inline-flex', background: st.bg, color: st.text, fontSize: 11, fontWeight: 800, padding: '5px 14px', borderRadius: 20, whiteSpace: 'nowrap' }}>
+                              {st.label}
+                            </span>
+                          </div>
                         </div>
                         {item.estado === 'rechazado' && (
                           <div style={{ marginTop: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px' }}>
@@ -2737,6 +2951,27 @@ export default function ProveedoresPage() {
             )
           })()}
         </div>
+        )}
+
+        {editandoSolicitud && (
+          <SolicitudProductoModal
+            titulo="Editar solicitud"
+            hint={editandoSolicitud.estado === 'rechazado'
+              ? 'Corrige lo que haya marcado el admin — al guardar, se reenvía a revisión automáticamente.'
+              : 'Todavía está pendiente de revisión — puedes corregir los datos antes de que el admin la vea.'}
+            inicial={{
+              nombre: editandoSolicitud.producto_nombre, sku: editandoSolicitud.producto_sku,
+              precio: String(editandoSolicitud.producto_precio ?? ''), stock: String(editandoSolicitud.producto_stock ?? 0),
+              descripcion: editandoSolicitud.producto_descripcion ?? '',
+              imagenFile: null, imagenPreview: editandoSolicitud.imagen_url,
+            }}
+            onClose={() => setEditandoSolicitud(null)}
+            onGuardar={guardarEdicionSolicitud}
+            onSuccess={() => {
+              setEditandoSolicitud(null)
+              if (savedEmail) cargarHistorial(savedEmail)
+            }}
+          />
         )}
         </div>
         </main>

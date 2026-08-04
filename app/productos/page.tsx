@@ -40,10 +40,13 @@ type Solicitud = {
   producto_sku: string
   producto_precio: number
   producto_stock: number
+  producto_descripcion?: string | null
   categoria_id: number | null
   imagen_url: string | null
   created_at: string
   detalles?: DetallesSolicitud | null
+  tipo?: 'nuevo' | 'actualizacion'
+  producto_id?: string | null
 }
 
 type Product = {
@@ -225,7 +228,7 @@ export default function ProductosPage() {
     setLoadingSol(true)
     const { data } = await supabase
       .from('solicitudes_productos')
-      .select('id, proveedor_nombre, proveedor_email, proveedor_empresa, producto_nombre, producto_sku, producto_precio, producto_stock, categoria_id, imagen_url, created_at, detalles')
+      .select('id, proveedor_nombre, proveedor_email, proveedor_empresa, producto_nombre, producto_sku, producto_precio, producto_stock, producto_descripcion, categoria_id, imagen_url, created_at, detalles, tipo, producto_id')
       .eq('estado', 'pendiente')
       .order('created_at', { ascending: false })
     setSolicitudes(data ?? [])
@@ -246,7 +249,7 @@ export default function ProductosPage() {
     }
     setSolicitudes(prev => prev.filter(s => s.id !== id))
     setProcesando(null)
-    setToast({ msg: 'Producto aprobado y publicado', color: '#059669' })
+    setToast({ msg: sol?.tipo === 'actualizacion' ? 'Producto actualizado' : 'Producto aprobado y publicado', color: '#059669' })
     setTimeout(() => setToast(null), 3000)
     fetchProducts()
   }
@@ -312,6 +315,21 @@ export default function ProductosPage() {
   useEffect(() => {
     fetchCategorias()
     fetchProducts()
+    fetchSolicitudes()
+  }, [])
+
+  // Realtime: cuando un proveedor manda o edita una solicitud → refrescar
+  // la lista y el contador ("Solicitudes N") sin que el admin tenga que
+  // recargar la página o abrir/cerrar el panel.
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-solicitudes-productos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_productos' }, () => {
+        fetchSolicitudes()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleSave(form: {
@@ -519,6 +537,9 @@ export default function ProductosPage() {
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111' }}>{sol.producto_nombre}</p>
+                      {sol.tipo === 'actualizacion' && (
+                        <span style={{ fontSize: 10, fontWeight: 800, color: '#0049ff', background: '#eff6ff', padding: '2px 8px', borderRadius: 20 }}>🔄 Actualización</span>
+                      )}
                       <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace' }}>{sol.producto_sku}</span>
                       <span style={{ fontSize: 13, fontWeight: 800, color: '#059669' }}>${Number(sol.producto_precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
                       {sol.producto_stock > 0 && <span style={{ fontSize: 11, color: '#6b7280' }}>{sol.producto_stock} uds</span>}
@@ -538,7 +559,7 @@ export default function ProductosPage() {
                     </button>
                     <button onClick={() => aprobar(sol.id)} disabled={procesando === sol.id}
                       style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: procesando === sol.id ? '#9ca3af' : '#059669', color: '#fff', fontSize: 13, fontWeight: 700, cursor: procesando === sol.id ? 'default' : 'pointer' }}>
-                      {procesando === sol.id ? '...' : 'Aprobar y publicar'}
+                      {procesando === sol.id ? '...' : sol.tipo === 'actualizacion' ? 'Aprobar cambios' : 'Aprobar y publicar'}
                     </button>
                   </div>
                 </div>

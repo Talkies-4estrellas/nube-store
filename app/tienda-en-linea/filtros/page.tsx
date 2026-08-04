@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { construirArbolCategorias, type CamposExtraConfig, type GrupoContextual } from '@/lib/categorias'
+import { useAuth } from '@/lib/auth-context'
+import { aprobarSolicitudCategoria, rechazarSolicitudCategoria, type SolicitudCategoria } from '@/lib/solicitudesCategorias'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -175,6 +177,7 @@ const VISTAS_DISPONIBLES = [
 ]
 
 export default function FiltrosPage() {
+  const { user } = useAuth()
   const [f, setF] = useState<Fields>(DEFAULTS)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -198,6 +201,10 @@ export default function FiltrosPage() {
   const [savingConfig, setSavingConfig] = useState(false)
   const [savedConfig, setSavedConfig] = useState(false)
 
+  const [solicitudesCategorias, setSolicitudesCategorias] = useState<SolicitudCategoria[]>([])
+  const [cargandoSolicitudesCat, setCargandoSolicitudesCat] = useState(true)
+  const [procesandoSolCat, setProcesandoSolCat] = useState<string | null>(null)
+
   const arbolCategorias = useMemo(() => construirArbolCategorias(categorias), [categorias])
 
   // Lista ordenada: cada padre seguido de sus hijos, para paginar sin romper la jerarquía visual.
@@ -219,7 +226,44 @@ export default function FiltrosPage() {
         if (data?.filtros_extra) setBotones(data.filtros_extra)
       })
     cargarCategorias()
+    cargarSolicitudesCategorias()
   }, [])
+
+  // Tiempo real: cuando un proveedor pide una categoría nueva, se refresca sola
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-solicitudes-categorias')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_categorias' }, () => {
+        cargarSolicitudesCategorias()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  function cargarSolicitudesCategorias() {
+    setCargandoSolicitudesCat(true)
+    supabase.from('solicitudes_categorias').select('*').eq('estado', 'pendiente').order('created_at', { ascending: false })
+      .then(({ data }) => { setSolicitudesCategorias(data ?? []); setCargandoSolicitudesCat(false) })
+  }
+
+  async function aprobarSolCat(sol: SolicitudCategoria) {
+    setProcesandoSolCat(sol.id)
+    const { error } = await aprobarSolicitudCategoria(supabase, sol, user?.id)
+    setProcesandoSolCat(null)
+    if (error) { alert('No se pudo aprobar: ' + error.message); return }
+    setSolicitudesCategorias(prev => prev.filter(s => s.id !== sol.id))
+    cargarCategorias()
+  }
+
+  async function rechazarSolCat(sol: SolicitudCategoria) {
+    const motivo = prompt('¿Por qué se rechaza? (opcional)')
+    if (motivo === null) return
+    setProcesandoSolCat(sol.id)
+    const { error } = await rechazarSolicitudCategoria(supabase, sol.id, motivo.trim() || null, user?.id)
+    setProcesandoSolCat(null)
+    if (error) { alert('No se pudo rechazar: ' + error.message); return }
+    setSolicitudesCategorias(prev => prev.filter(s => s.id !== sol.id))
+  }
 
   function agregarBoton() {
     setBotones(prev => [...prev, { id: crypto.randomUUID(), label: '', view: 'catalogo', activo: true }])
@@ -453,6 +497,44 @@ export default function FiltrosPage() {
             {saving ? 'Guardando...' : saved ? '¡Guardado!' : 'Guardar cambios'}
           </button>
         </div>
+
+        {/* Solicitudes de categorías (pedidas por proveedores) */}
+        {!cargandoSolicitudesCat && solicitudesCategorias.length > 0 && (
+          <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+            <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+              Solicitudes de categorías <span style={{ color: PINK }}>({solicitudesCategorias.length})</span>
+            </p>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+              Categorías y subcategorías que pidieron los proveedores — no existen todavía en el catálogo hasta que las apruebes.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {solicitudesCategorias.map(sol => {
+                const padre = sol.parent_id ? categorias.find(c => c.id === sol.parent_id) : null
+                return (
+                  <div key={sol.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111' }}>
+                        {sol.parent_id ? `↳ ${sol.nombre}` : sol.nombre}
+                        {padre && <span style={{ fontSize: 12, fontWeight: 400, color: '#9ca3af' }}> — subcategoría de {padre.nombre}</span>}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                        {sol.proveedor_nombre}{sol.proveedor_empresa ? ` · ${sol.proveedor_empresa}` : ''} · {new Date(sol.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => rechazarSolCat(sol)} disabled={procesandoSolCat === sol.id}
+                      style={{ background: '#fff', color: '#dc2626', border: '1.5px solid #fca5a5', padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: procesandoSolCat === sol.id ? 'default' : 'pointer', opacity: procesandoSolCat === sol.id ? 0.6 : 1 }}>
+                      Rechazar
+                    </button>
+                    <button type="button" onClick={() => aprobarSolCat(sol)} disabled={procesandoSolCat === sol.id}
+                      style={{ background: procesandoSolCat === sol.id ? '#9ca3af' : '#059669', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: procesandoSolCat === sol.id ? 'default' : 'pointer' }}>
+                      {procesandoSolCat === sol.id ? '...' : 'Aprobar'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Categorías */}
         <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
