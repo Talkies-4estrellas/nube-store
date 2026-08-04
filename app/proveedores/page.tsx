@@ -601,6 +601,7 @@ export default function ProveedoresPage() {
   const [colorInput, setColorInput] = useState('')
   const [mostrarColores, setMostrarColores] = useState(false)
   const [abiertoVariantes, setAbiertoVariantes] = useState(false)
+  const [mostrarVariantes, setMostrarVariantes] = useState(false)
   const [abiertoEnvio, setAbiertoEnvio] = useState(false)
   const [abiertoContextual, setAbiertoContextual] = useState(false)
   const [mostrarPadreExtra, setMostrarPadreExtra] = useState(false)
@@ -824,7 +825,7 @@ export default function ProveedoresPage() {
       setPesoUnidad(pesoUi.unidad)
     }
     if (pr.colores?.length) setMostrarColores(true)
-    if (pr.colores?.length || pr.tallas?.length) setAbiertoVariantes(true)
+    if (pr.colores?.length || pr.tallas?.length) { setAbiertoVariantes(true); setMostrarVariantes(true) }
     if (pr.peso || pr.largo || pr.ancho || pr.alto) setAbiertoEnvio(true)
     setDraftBanner(false)
   }
@@ -1165,7 +1166,7 @@ export default function ProveedoresPage() {
         {/* Nav */}
         <nav style={{ flex: 1, minHeight: 0, background: '#f1f2f6', borderRadius: 22, padding: '12px 10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 11, fontWeight: 800, color: '#9aa0b4', letterSpacing: '0.08em', padding: '12px 14px 6px', display: 'block' }}>PORTAL</span>
-          {navItem('seguimiento', 'Administración', '🚚')}
+          {navItem('seguimiento', 'Tablero', '🚚')}
           {navItem('registro',  'Registrar producto', '📦')}
           {navItem('historial', 'Mis solicitudes',    '🔍')}
           {navItem('misEnviados', 'Mis productos', '📋')}
@@ -1183,7 +1184,9 @@ export default function ProveedoresPage() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: NAVY, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</p>
-              <span style={{ fontSize: 10, fontWeight: 700, background: '#d1fae5', color: '#065f46', padding: '1px 7px', borderRadius: 20 }}>{user.role === 'admin' ? 'Admin' : 'Proveedor'}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#d1fae5', color: '#065f46', padding: '1px 7px', borderRadius: 20 }}>
+                {user.role === 'admin' ? 'Admin' : `Hola ${(user.nombre || '').trim() || user.email.split('@')[0]}`}
+              </span>
             </div>
           </div>
           <button type="button" onClick={signOut}
@@ -1212,7 +1215,7 @@ export default function ProveedoresPage() {
               style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 32, width: 'auto' }} />
           )}
           <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? 'Administración' : tab === 'mensajes' ? 'Mensajes' : tab === 'transferencias' ? 'Transferencias' : 'Ajustes'}
+            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? `Hola ${(user.nombre || '').trim() || user.email.split('@')[0]}` : tab === 'mensajes' ? 'Mensajes' : tab === 'transferencias' ? 'Transferencias' : 'Ajustes'}
           </h1>
           {tab === 'registro' && formState !== 'success' && (
             <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1674,7 +1677,48 @@ export default function ProveedoresPage() {
                       onFocus={focus} onBlur={blur} />
                   </ProvCard>
 
+                  {camposContextualesPadre && (
+                    mostrarPadreExtra ? (
+                      <ProvCollapsible icon={camposContextualesPadre.icon}
+                        title={camposContextualesPadre.titulo || `Detalles de ${catSeleccionada?.padreNombre}`}
+                        hint={`De la categoría ${catSeleccionada?.padreNombre}`}
+                        abierto={abiertoPadreExtra} onToggle={() => setAbiertoPadreExtra(v => !v)}
+                        badges={(() => {
+                          const total = prod.tallas.length + camposContextualesPadre.grupos.reduce((acc, g) => acc + (prod.camposExtra[g.label]?.length ?? 0), 0)
+                          return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
+                        })()}>
+                        <ProvContextualFieldsBody config={camposContextualesPadre}
+                          tallasSeleccionadas={prod.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
+                          camposExtra={prod.camposExtra} onToggleExtra={toggleContextual} />
+                      </ProvCollapsible>
+                    ) : (
+                      <button type="button" onClick={() => setMostrarPadreExtra(true)}
+                        style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {camposContextualesPadre.icon} Agregar {(camposContextualesPadre.titulo || `detalles de ${catSeleccionada?.padreNombre}`).toLowerCase()}
+                      </button>
+                    )
+                  )}
+
+                  {camposContextuales && (
+                    <ProvCollapsible icon={camposContextuales.icon} title={camposContextuales.titulo} hint={camposContextuales.hint}
+                      abierto={abiertoContextual} onToggle={() => setAbiertoContextual(v => !v)}
+                      badges={(() => {
+                        const total = prod.tallas.length + camposContextuales.grupos.reduce((acc, g) => acc + (prod.camposExtra[g.label]?.length ?? 0), 0)
+                        return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
+                      })()}>
+                      <ProvContextualFieldsBody config={camposContextuales}
+                        tallasSeleccionadas={prod.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
+                        camposExtra={prod.camposExtra} onToggleExtra={toggleContextual} />
+                    </ProvCollapsible>
+                  )}
+
                   {/* Variantes */}
+                  {!mostrarVariantes ? (
+                    <button type="button" onClick={() => setMostrarVariantes(true)}
+                      style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      🎨 Agregar variantes
+                    </button>
+                  ) : (
                   <ProvCollapsible icon="🎨" title="Variantes" hint="Colores y stock por combinación"
                     abierto={abiertoVariantes} onToggle={() => setAbiertoVariantes(v => !v)}
                     badges={[
@@ -1769,6 +1813,7 @@ export default function ProveedoresPage() {
                       )}
                     </div>
                   </ProvCollapsible>
+                  )}
 
                   {/* Información de envío */}
                   <ProvCollapsible icon="🚚" title="Información de envío" hint="Peso y dimensiones — solo si ya los conoces"
@@ -1804,41 +1849,6 @@ export default function ProveedoresPage() {
                       </div>
                     </div>
                   </ProvCollapsible>
-
-                  {camposContextuales && (
-                    <ProvCollapsible icon={camposContextuales.icon} title={camposContextuales.titulo} hint={camposContextuales.hint}
-                      abierto={abiertoContextual} onToggle={() => setAbiertoContextual(v => !v)}
-                      badges={(() => {
-                        const total = prod.tallas.length + camposContextuales.grupos.reduce((acc, g) => acc + (prod.camposExtra[g.label]?.length ?? 0), 0)
-                        return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
-                      })()}>
-                      <ProvContextualFieldsBody config={camposContextuales}
-                        tallasSeleccionadas={prod.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
-                        camposExtra={prod.camposExtra} onToggleExtra={toggleContextual} />
-                    </ProvCollapsible>
-                  )}
-
-                  {camposContextualesPadre && (
-                    mostrarPadreExtra ? (
-                      <ProvCollapsible icon={camposContextualesPadre.icon}
-                        title={camposContextualesPadre.titulo || `Detalles de ${catSeleccionada?.padreNombre}`}
-                        hint={`De la categoría ${catSeleccionada?.padreNombre}`}
-                        abierto={abiertoPadreExtra} onToggle={() => setAbiertoPadreExtra(v => !v)}
-                        badges={(() => {
-                          const total = prod.tallas.length + camposContextualesPadre.grupos.reduce((acc, g) => acc + (prod.camposExtra[g.label]?.length ?? 0), 0)
-                          return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
-                        })()}>
-                        <ProvContextualFieldsBody config={camposContextualesPadre}
-                          tallasSeleccionadas={prod.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
-                          camposExtra={prod.camposExtra} onToggleExtra={toggleContextual} />
-                      </ProvCollapsible>
-                    ) : (
-                      <button type="button" onClick={() => setMostrarPadreExtra(true)}
-                        style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {camposContextualesPadre.icon} Agregar {(camposContextualesPadre.titulo || `detalles de ${catSeleccionada?.padreNombre}`).toLowerCase()}
-                      </button>
-                    )
-                  )}
 
                 </div>
 

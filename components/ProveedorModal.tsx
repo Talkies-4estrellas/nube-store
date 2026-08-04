@@ -1,52 +1,39 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { PASSWORD_CUENTA_DEFAULT } from '@/lib/cuentas'
 
-type ClienteForm = {
+type ProveedorForm = {
   nombre: string
-  email: string
+  empresa: string
   telefono: string
-  ciudad: string
-  direccion: string
-  codigo_postal: string
-  estado_region: string
-  pais: string
-  tag: 'Nuevo' | 'Regular' | 'VIP'
+  email: string
 }
 
 type Props = {
-  inicial?: ClienteForm & { id?: string }
   onClose: () => void
   onSave: () => void
 }
 
-const empty: ClienteForm = {
-  nombre: '', email: '', telefono: '', ciudad: '',
-  direccion: '', codigo_postal: '', estado_region: '', pais: 'México',
-  tag: 'Nuevo',
-}
+const empty: ProveedorForm = { nombre: '', empresa: '', telefono: '', email: '' }
 
-export default function ClienteModal({ inicial, onClose, onSave }: Props) {
-  const [form, setForm] = useState<ClienteForm>(inicial ?? empty)
-  const [errors, setErrors] = useState<Partial<ClienteForm>>({})
+export default function ProveedorModal({ onClose, onSave }: Props) {
+  const [form, setForm] = useState<ProveedorForm>(empty)
+  const [errors, setErrors] = useState<Partial<ProveedorForm>>({})
   const [saving, setSaving] = useState(false)
   const [serverError, setServerError] = useState('')
   const [creado, setCreado] = useState<{ email: string } | null>(null)
   const [copiado, setCopiado] = useState(false)
-  const esEdicion = !!inicial?.id
 
-  useEffect(() => { setForm(inicial ?? empty) }, [inicial])
-
-  function set(key: keyof ClienteForm, value: string) {
+  function set(key: keyof ProveedorForm, value: string) {
     setForm(f => ({ ...f, [key]: value }))
     setErrors(e => ({ ...e, [key]: '' }))
     setServerError('')
   }
 
   function validate() {
-    const errs: Partial<ClienteForm> = {}
+    const errs: Partial<ProveedorForm> = {}
     if (!form.nombre.trim()) errs.nombre = 'Requerido'
     if (!form.email.trim()) errs.email = 'Requerido'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Email inválido'
@@ -59,46 +46,21 @@ export default function ClienteModal({ inicial, onClose, onSave }: Props) {
     setSaving(true)
     setServerError('')
 
-    if (esEdicion) {
-      const payload = {
-        nombre:        form.nombre.trim(),
-        email:         form.email.trim(),
-        telefono:      form.telefono.trim()      || null,
-        ciudad:        form.ciudad.trim()        || null,
-        direccion:     form.direccion.trim()     || null,
-        codigo_postal: form.codigo_postal.trim() || null,
-        estado_region: form.estado_region.trim() || null,
-        pais:          form.pais.trim()          || 'México',
-        tag:           form.tag,
-      }
-      const { error } = await supabase.from('clientes').update(payload).eq('id', inicial!.id!)
-      setSaving(false)
-      if (error) { setServerError('Error: ' + error.message); return }
-      onSave()
-      onClose()
-      return
-    }
-
     const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch('/api/admin/crear-cliente', {
+    const res = await fetch('/api/admin/crear-proveedor', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
       body: JSON.stringify({
         nombre: form.nombre.trim(),
         email: form.email.trim(),
+        empresa: form.empresa.trim() || null,
         telefono: form.telefono.trim() || null,
-        ciudad: form.ciudad.trim() || null,
-        direccion: form.direccion.trim() || null,
-        codigo_postal: form.codigo_postal.trim() || null,
-        estado_region: form.estado_region.trim() || null,
-        pais: form.pais.trim() || 'México',
-        tag: form.tag,
       }),
     })
     const data = await res.json().catch(() => ({}))
     setSaving(false)
 
-    if (!res.ok) { setServerError(data.error || 'No se pudo crear el cliente'); return }
+    if (!res.ok) { setServerError(data.error || 'No se pudo crear el proveedor'); return }
     setCreado({ email: form.email.trim() })
     onSave()
   }
@@ -121,7 +83,7 @@ export default function ClienteModal({ inicial, onClose, onSave }: Props) {
             <div style={{ width: 56, height: 56, background: '#d1fae5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
             </div>
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111', marginBottom: 6 }}>Cliente creado con éxito</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111', marginBottom: 6 }}>Proveedor creado con éxito</h2>
             <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
               Comparte estos datos con la persona que va a usar la cuenta.
             </p>
@@ -146,7 +108,7 @@ export default function ClienteModal({ inicial, onClose, onSave }: Props) {
         ) : (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid #f3f4f6', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700 }}>{esEdicion ? 'Editar cliente' : 'Agregar cliente'}</h2>
+              <h2 style={{ fontSize: 18, fontWeight: 700 }}>Agregar proveedor</h2>
               <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af' }}>×</button>
             </div>
 
@@ -158,66 +120,35 @@ export default function ClienteModal({ inicial, onClose, onSave }: Props) {
               )}
 
               <Field label="Nombre completo *" error={errors.nombre}>
-                <input value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Ana García" style={input(!!errors.nombre)} />
+                <input value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: Carlos Ramírez" style={input(!!errors.nombre)} />
               </Field>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <Field label="Empresa">
+                  <input value={form.empresa} onChange={e => set('empresa', e.target.value)} placeholder="Nombre comercial" style={input(false)} />
+                </Field>
+                <Field label="Teléfono">
+                  <input value={form.telefono} onChange={e => set('telefono', e.target.value)} placeholder="+52 55 0000 0000" style={input(false)} />
+                </Field>
+              </div>
 
               <Field label="Email *" error={errors.email}>
                 <input value={form.email} onChange={e => set('email', e.target.value)} placeholder="correo@ejemplo.com" type="email" style={input(!!errors.email)} />
               </Field>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <Field label="Teléfono">
-                  <input value={form.telefono} onChange={e => set('telefono', e.target.value)} placeholder="+52 55 0000 0000" style={input(false)} />
-                </Field>
-                <Field label="Ciudad">
-                  <input value={form.ciudad} onChange={e => set('ciudad', e.target.value)} placeholder="CDMX" style={input(false)} />
-                </Field>
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 16 }}>🔑</span>
+                <p style={{ fontSize: 12, color: '#1e40af', margin: 0, fontWeight: 600 }}>
+                  No se pide contraseña — la cuenta se crea con la contraseña predeterminada <strong style={{ fontFamily: 'monospace' }}>{PASSWORD_CUENTA_DEFAULT}</strong>. Al guardar podrás copiarla para pasársela al proveedor.
+                </p>
               </div>
-
-              <Field label="Dirección">
-                <input value={form.direccion} onChange={e => set('direccion', e.target.value)} placeholder="Calle, número, colonia" style={input(false)} />
-              </Field>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                <Field label="C.P.">
-                  <input value={form.codigo_postal} onChange={e => set('codigo_postal', e.target.value)} placeholder="06600" style={input(false)} />
-                </Field>
-                <Field label="Estado / Región">
-                  <input value={form.estado_region} onChange={e => set('estado_region', e.target.value)} placeholder="CDMX" style={input(false)} />
-                </Field>
-                <Field label="País">
-                  <input value={form.pais} onChange={e => set('pais', e.target.value)} placeholder="México" style={input(false)} />
-                </Field>
-              </div>
-
-              <Field label="Tipo de cliente">
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {(['Nuevo', 'Regular', 'VIP'] as const).map(t => (
-                    <button key={t} onClick={() => set('tag', t)} style={{
-                      flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '2px solid',
-                      borderColor: form.tag === t ? '#0049ff' : '#e5e7eb',
-                      background: form.tag === t ? '#eff6ff' : '#fff',
-                      color: form.tag === t ? '#0049ff' : '#374151',
-                    }}>{t}</button>
-                  ))}
-                </div>
-              </Field>
-
-              {!esEdicion && (
-                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 16 }}>🔑</span>
-                  <p style={{ fontSize: 12, color: '#1e40af', margin: 0, fontWeight: 600 }}>
-                    No se pide contraseña — la cuenta se crea con la contraseña predeterminada <strong style={{ fontFamily: 'monospace' }}>{PASSWORD_CUENTA_DEFAULT}</strong>. Al guardar podrás copiarla para pasársela al cliente.
-                  </p>
-                </div>
-              )}
 
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 8 }}>
                 <button onClick={onClose} style={{ background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
                   Cancelar
                 </button>
                 <button onClick={handleSubmit} disabled={saving} style={{ background: saving ? '#93c5fd' : '#0049ff', color: '#fff', border: 'none', padding: '10px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                  {saving ? 'Guardando...' : esEdicion ? 'Actualizar' : 'Guardar cliente'}
+                  {saving ? 'Creando...' : 'Guardar proveedor'}
                 </button>
               </div>
             </div>

@@ -352,6 +352,7 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Correr en Supabase `Doc/database/migration_fix_actualizar_mi_perfil.sql`** (03/08) — error real reproducido en vivo al guardar el nombre desde Ajustes ("Could not choose the best candidate function..."): quedaron dos versiones de `actualizar_mi_perfil` (con y sin `nuevo_avatar_url`) y Postgres no sabe cuál usar cuando se llama solo con `nuevo_nombre`; esta migración las reemplaza por una sola
 - [ ] **Correr en Supabase `Doc/database/migration_categorias_campos_extra.sql`** (01/08) — agrega la columna `campos_extra` (jsonb) a `categorias` y siembra la config de "Ropa"; sin ella, el panel "Tienda en línea > Filtros > Campos contextuales por categoría" y las tarjetas contextuales de `ProductoModal.tsx`/`app/proveedores/page.tsx` fallan al leer/guardar
 - [ ] **Correr en Supabase `Doc/database/migration_nav_movil.sql`** (30/07) — bloquea el guardado en `/tienda-en-linea/navegacion-movil` (columna `nav_movil` en `config_storefront`)
 - [ ] El botón "Reenviar a revisión" se probó en vivo el 31/07 sobre el producto real "Prueba" (SKU `323565`) — quedó otra vez en estado "pendiente"; volver a rechazarlo desde el panel admin si se quiere esa fila de prueba como estaba

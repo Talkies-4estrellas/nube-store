@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import ClienteModal from '@/components/ClienteModal'
+import ProveedorModal from '@/components/ProveedorModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import Icon from '@/components/Icon'
 import { SkeletonTableBody } from '@/components/Skeleton'
@@ -74,6 +75,7 @@ export default function ClientesPage() {
   const [tagFilter, setTagFilter] = useState('Todos')
   const [selected, setSelected] = useState<Cliente | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [showProveedorModal, setShowProveedorModal] = useState(false)
   const [editando, setEditando] = useState<(Cliente & { id: string }) | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Cliente | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -198,9 +200,13 @@ export default function ClientesPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111' }}>Clientes</h1>
-        {seccion === 'clientes' && (
+        {seccion === 'clientes' ? (
           <button onClick={() => { setEditando(null); setShowModal(true) }} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
             + Agregar cliente
+          </button>
+        ) : (
+          <button onClick={() => setShowProveedorModal(true)} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            + Agregar proveedor
           </button>
         )}
       </div>
@@ -516,7 +522,14 @@ export default function ClientesPage() {
             tag: editando.tag as 'Nuevo' | 'Regular' | 'VIP',
           } : undefined}
           onClose={() => { setShowModal(false); setEditando(null) }}
-          onSave={() => { setShowModal(false); setEditando(null); fetchClientes() }}
+          onSave={fetchClientes}
+        />
+      )}
+
+      {showProveedorModal && (
+        <ProveedorModal
+          onClose={() => setShowProveedorModal(false)}
+          onSave={fetchProveedores}
         />
       )}
     </div>

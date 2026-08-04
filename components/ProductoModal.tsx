@@ -204,6 +204,7 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
   const [draftMsg, setDraftMsg] = useState('')
 
   const [abiertoVariantes, setAbiertoVariantes] = useState(!!(inicial?.colores?.length || inicial?.tallas?.length))
+  const [mostrarVariantes, setMostrarVariantes] = useState(!!(inicial?.colores?.length || inicial?.tallas?.length))
   const [abiertoEnvio, setAbiertoEnvio] = useState(!!(inicial?.peso || inicial?.largo || inicial?.ancho || inicial?.alto))
   const [abiertoContextual, setAbiertoContextual] = useState(!!(inicial?.tallas?.length || Object.values(inicial?.camposExtra ?? {}).some(arr => arr?.length)))
   const [mostrarPadreExtra, setMostrarPadreExtra] = useState(false)
@@ -347,7 +348,7 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
       const data = JSON.parse(raw) as DraftGuardable
       setForm(f => ({ ...f, ...data }))
       if (data.peso) { const p = pesoAUnidadMasClara(Number(data.peso)); setPesoValor(p.valor); setPesoUnidad(p.unidad) }
-      if (data.colores?.length || data.tallas?.length) setAbiertoVariantes(true)
+      if (data.colores?.length || data.tallas?.length) { setAbiertoVariantes(true); setMostrarVariantes(true) }
       if (data.colores?.length) setMostrarColores(true)
       if (data.tallas?.length || Object.values(data.camposExtra ?? {}).some(arr => arr?.length)) setAbiertoContextual(true)
       if (data.peso || data.largo || data.ancho || data.alto) setAbiertoEnvio(true)
@@ -585,7 +586,53 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                 </div>
               </Card>
 
+              {/* Campos contextuales del padre de una subcategoría — van primero, arriba de los
+                  propios de la subcategoría, para reflejar la jerarquía. No se aplican solos,
+                  hay que activarlos si hacen falta. */}
+              {camposContextualesPadre && (
+                mostrarPadreExtra ? (
+                  <CollapsibleCard icon={camposContextualesPadre.icon}
+                    title={camposContextualesPadre.titulo || `Detalles de ${catSeleccionada?.padreNombre}`}
+                    hint={`De la categoría ${catSeleccionada?.padreNombre}`}
+                    abierto={abiertoPadreExtra} onToggle={() => setAbiertoPadreExtra(v => !v)}
+                    badges={(() => {
+                      const total = form.tallas.length + camposContextualesPadre.grupos.reduce((acc, g) => acc + (form.camposExtra[g.label]?.length ?? 0), 0)
+                      return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
+                    })()}>
+                    <ContextualFieldsBody config={camposContextualesPadre}
+                      tallasSeleccionadas={form.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
+                      camposExtra={form.camposExtra} onToggleExtra={toggleContextual} />
+                  </CollapsibleCard>
+                ) : (
+                  <button type="button" onClick={() => setMostrarPadreExtra(true)}
+                    style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {camposContextualesPadre.icon} Agregar {(camposContextualesPadre.titulo || `detalles de ${catSeleccionada?.padreNombre}`).toLowerCase()}
+                  </button>
+                )
+              )}
+
+              {/* Campos contextuales propios de la categoría/subcategoría elegida — configurables
+                  en Tienda en línea > Filtros. Si no tiene tallas ni apartados propios, no se muestra nada. */}
+              {camposContextuales && (
+                <CollapsibleCard icon={camposContextuales.icon} title={camposContextuales.titulo} hint={camposContextuales.hint}
+                  abierto={abiertoContextual} onToggle={() => setAbiertoContextual(v => !v)}
+                  badges={(() => {
+                    const total = form.tallas.length + camposContextuales.grupos.reduce((acc, g) => acc + (form.camposExtra[g.label]?.length ?? 0), 0)
+                    return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
+                  })()}>
+                  <ContextualFieldsBody config={camposContextuales}
+                    tallasSeleccionadas={form.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
+                    camposExtra={form.camposExtra} onToggleExtra={toggleContextual} />
+                </CollapsibleCard>
+              )}
+
               {/* 🎨 Variantes */}
+              {!mostrarVariantes ? (
+                <button type="button" onClick={() => setMostrarVariantes(true)}
+                  style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🎨 Agregar variantes
+                </button>
+              ) : (
               <CollapsibleCard icon="🎨" title="Variantes" hint="Colores y stock por combinación"
                 abierto={abiertoVariantes} onToggle={() => setAbiertoVariantes(v => !v)}
                 badges={[
@@ -679,6 +726,7 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                   )}
                 </div>
               </CollapsibleCard>
+              )}
 
               {/* 🚚 Envío */}
               <CollapsibleCard icon="🚚" title="Envío" hint="Peso y dimensiones para calcular el costo de envío"
@@ -715,45 +763,6 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                   </div>
                 </div>
               </CollapsibleCard>
-
-              {/* Campos contextuales de la categoría elegida — configurables en Tienda en línea > Filtros.
-                  Si no tiene tallas ni apartados propios, no se muestra nada. */}
-              {camposContextuales && (
-                <CollapsibleCard icon={camposContextuales.icon} title={camposContextuales.titulo} hint={camposContextuales.hint}
-                  abierto={abiertoContextual} onToggle={() => setAbiertoContextual(v => !v)}
-                  badges={(() => {
-                    const total = form.tallas.length + camposContextuales.grupos.reduce((acc, g) => acc + (form.camposExtra[g.label]?.length ?? 0), 0)
-                    return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
-                  })()}>
-                  <ContextualFieldsBody config={camposContextuales}
-                    tallasSeleccionadas={form.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
-                    camposExtra={form.camposExtra} onToggleExtra={toggleContextual} />
-                </CollapsibleCard>
-              )}
-
-              {/* Campos contextuales del padre de una subcategoría — no se aplican solos,
-                  hay que activarlos si hacen falta. */}
-              {camposContextualesPadre && (
-                mostrarPadreExtra ? (
-                  <CollapsibleCard icon={camposContextualesPadre.icon}
-                    title={camposContextualesPadre.titulo || `Detalles de ${catSeleccionada?.padreNombre}`}
-                    hint={`De la categoría ${catSeleccionada?.padreNombre}`}
-                    abierto={abiertoPadreExtra} onToggle={() => setAbiertoPadreExtra(v => !v)}
-                    badges={(() => {
-                      const total = form.tallas.length + camposContextualesPadre.grupos.reduce((acc, g) => acc + (form.camposExtra[g.label]?.length ?? 0), 0)
-                      return total > 0 ? [`${total} detalle${total > 1 ? 's' : ''}`] : []
-                    })()}>
-                    <ContextualFieldsBody config={camposContextualesPadre}
-                      tallasSeleccionadas={form.tallas} onAddTalla={addTalla} onRemoveTalla={removeTalla}
-                      camposExtra={form.camposExtra} onToggleExtra={toggleContextual} />
-                  </CollapsibleCard>
-                ) : (
-                  <button type="button" onClick={() => setMostrarPadreExtra(true)}
-                    style={{ background: '#f9fafb', border: '1.5px dashed #d1d5db', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {camposContextualesPadre.icon} Agregar {(camposContextualesPadre.titulo || `detalles de ${catSeleccionada?.padreNombre}`).toLowerCase()}
-                  </button>
-                )
-              )}
 
             </div>
 
