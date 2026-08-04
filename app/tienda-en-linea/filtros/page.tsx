@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { construirArbolCategorias, type CamposExtraConfig, type GrupoContextual } from '@/lib/categorias'
 import { useAuth } from '@/lib/auth-context'
 import { aprobarSolicitudCategoria, rechazarSolicitudCategoria, type SolicitudCategoria } from '@/lib/solicitudesCategorias'
+import { fetchEmailsProveedoresPausados } from '@/lib/proveedoresPausados'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -240,10 +241,14 @@ export default function FiltrosPage() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  function cargarSolicitudesCategorias() {
+  async function cargarSolicitudesCategorias() {
     setCargandoSolicitudesCat(true)
-    supabase.from('solicitudes_categorias').select('*').eq('estado', 'pendiente').order('created_at', { ascending: false })
-      .then(({ data }) => { setSolicitudesCategorias(data ?? []); setCargandoSolicitudesCat(false) })
+    const [{ data }, pausados] = await Promise.all([
+      supabase.from('solicitudes_categorias').select('*').eq('estado', 'pendiente').order('created_at', { ascending: false }),
+      fetchEmailsProveedoresPausados(supabase),
+    ])
+    setSolicitudesCategorias((data ?? []).filter(s => !pausados.has(s.proveedor_email)))
+    setCargandoSolicitudesCat(false)
   }
 
   async function aprobarSolCat(sol: SolicitudCategoria) {

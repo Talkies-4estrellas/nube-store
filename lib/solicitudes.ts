@@ -52,6 +52,7 @@ export async function aprobarSolicitud(supabase: SupabaseClient, sol: SolicitudP
       descripcion: sol.producto_descripcion ?? null,
       imagen_url: sol.imagen_url ?? sol.producto_imagen_url ?? undefined,
       detalles,
+      proveedor_email: sol.proveedor_email,
     }).eq('id', sol.producto_id)
     if (errUpdate) return { error: errUpdate }
   } else {
@@ -66,6 +67,7 @@ export async function aprobarSolicitud(supabase: SupabaseClient, sol: SolicitudP
       activo: true,
       origen: 'proveedor',
       proveedor_nombre: sol.proveedor_empresa || sol.proveedor_nombre,
+      proveedor_email: sol.proveedor_email,
       detalles,
     }).select('id').single()
     if (errInsert) return { error: errInsert }

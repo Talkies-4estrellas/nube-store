@@ -13,6 +13,10 @@ export type AuthUser = {
   role: Role
   avatar_url: string | null
   estado: 'activo' | 'suspendido'
+  /** Pausa que el propio proveedor activó (distinta de una suspensión del
+   * admin) — mientras está en true, puede seguir entrando a su portal para
+   * reactivarse él mismo. */
+  pausadoPorTitular: boolean
 }
 
 // Rutas que cada rol puede ver
@@ -60,16 +64,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single()
 
     if (data) {
-      // `estado` se consulta aparte y con fallback silencioso: si la migración
-      // migration_estado_proveedores.sql todavía no corrió en esta base, la
-      // columna no existe — no debe tumbar el login de nadie por eso.
+      // `estado`/`pausado_por_titular` se consultan aparte y con fallback
+      // silencioso: si las migraciones todavía no corrieron en esta base,
+      // esas columnas no existen — no debe tumbar el login de nadie por eso.
       let estado: 'activo' | 'suspendido' = 'activo'
+      let pausadoPorTitular = false
       try {
         const { data: estadoRow } = await supabase
-          .from('user_roles').select('estado').eq('user_id', session.user.id).single()
+          .from('user_roles').select('estado, pausado_por_titular').eq('user_id', session.user.id).single()
         if (estadoRow?.estado === 'suspendido') estado = 'suspendido'
-      } catch { /* columna aún no existe — se asume activo */ }
-      setUser({ id: session.user.id, email: session.user.email ?? '', nombre: data.nombre, role: data.role as Role, avatar_url: data.avatar_url ?? null, estado })
+        if (estadoRow?.pausado_por_titular) pausadoPorTitular = true
+      } catch { /* columnas aún no existen — se asume activo y sin pausa */ }
+      setUser({ id: session.user.id, email: session.user.email ?? '', nombre: data.nombre, role: data.role as Role, avatar_url: data.avatar_url ?? null, estado, pausadoPorTitular })
     } else {
       // Autenticado pero sin rol asignado — logout automático
       await supabase.auth.signOut()

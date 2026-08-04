@@ -14,6 +14,7 @@ import { SkeletonCard, SkeletonTableBody } from '@/components/Skeleton'
 import { useAuth } from '@/lib/auth-context'
 import { crearTransferencias } from '@/lib/transferencias'
 import { aprobarSolicitud, rechazarSolicitud } from '@/lib/solicitudes'
+import { fetchEmailsProveedoresPausados } from '@/lib/proveedoresPausados'
 import MotivoRechazoDialog from '@/components/MotivoRechazoDialog'
 
 const PAGE_SIZE = 12
@@ -226,12 +227,15 @@ export default function ProductosPage() {
 
   async function fetchSolicitudes() {
     setLoadingSol(true)
-    const { data } = await supabase
-      .from('solicitudes_productos')
-      .select('id, proveedor_nombre, proveedor_email, proveedor_empresa, producto_nombre, producto_sku, producto_precio, producto_stock, producto_descripcion, categoria_id, imagen_url, created_at, detalles, tipo, producto_id')
-      .eq('estado', 'pendiente')
-      .order('created_at', { ascending: false })
-    setSolicitudes(data ?? [])
+    const [{ data }, pausados] = await Promise.all([
+      supabase
+        .from('solicitudes_productos')
+        .select('id, proveedor_nombre, proveedor_email, proveedor_empresa, producto_nombre, producto_sku, producto_precio, producto_stock, producto_descripcion, categoria_id, imagen_url, created_at, detalles, tipo, producto_id')
+        .eq('estado', 'pendiente')
+        .order('created_at', { ascending: false }),
+      fetchEmailsProveedoresPausados(supabase),
+    ])
+    setSolicitudes((data ?? []).filter(s => !pausados.has(s.proveedor_email)))
     setLoadingSol(false)
   }
 
@@ -308,7 +312,10 @@ export default function ProductosPage() {
       if (data.length < LOTE) break
       desde += LOTE
     }
-    setProducts(all)
+    // Los productos de un proveedor en pausa (propia o suspensión del admin)
+    // se ocultan también del catálogo del admin, no solo de la tienda —
+    // el trigger de la base ya les apaga `activo`, aquí solo hay que filtrarlos.
+    setProducts(all.filter(p => !(p as unknown as { pausado_por_proveedor?: boolean }).pausado_por_proveedor))
     setLoading(false)
   }
 

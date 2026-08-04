@@ -362,6 +362,17 @@ export default function ProveedoresPage() {
   // "Solicitar categoría" — pide una categoría/subcategoría nueva, el admin la aprueba
   const [mostrarSolicitudCategoria, setMostrarSolicitudCategoria] = useState(false)
 
+  // Pausar/reactivar la propia cuenta de proveedor
+  const [cambiandoPausa, setCambiandoPausa] = useState(false)
+
+  // Ver detalle de un producto publicado (clic en la tarjeta, en Mis productos)
+  const [productoDetalle, setProductoDetalle] = useState<{
+    id: string; nombre: string; sku: string; precio: number; stock: number
+    descripcion: string | null; imagen_url: string | null; categoria_id: number | null
+    estado: string
+  } | null>(null)
+  const [cargandoDetalle, setCargandoDetalle] = useState(false)
+
   // Tab Ajustes — perfil guardado del proveedor (localStorage, para autollenar el formulario)
   const [perfil, setPerfil] = useState({ nombre: '', empresa: '', email: '', telefono: '' })
   const [perfilGuardado, setPerfilGuardado] = useState(false)
@@ -653,6 +664,25 @@ export default function ProveedoresPage() {
     })
   }
 
+  /** Muestra el detalle de un producto ya publicado — mismo respaldo por
+   * SKU que "Solicitar actualización" para productos aprobados antes de que
+   * existiera el enlace producto_id. */
+  async function verDetalleProducto(item: MiSolicitud) {
+    setCargandoDetalle(true)
+    const query = supabase.from('productos').select('id, nombre, sku, precio, stock, descripcion, imagen_url, categoria_id')
+    const { data } = item.producto_id
+      ? await query.eq('id', item.producto_id).maybeSingle()
+      : await query.eq('sku', item.producto_sku).maybeSingle()
+    setCargandoDetalle(false)
+    if (!data) { alert('No se pudo encontrar el producto publicado.'); return }
+    setProductoDetalle({
+      id: data.id, nombre: data.nombre, sku: data.sku,
+      precio: Number(data.precio) || 0, stock: Number(data.stock) || 0,
+      descripcion: data.descripcion, imagen_url: data.imagen_url, categoria_id: data.categoria_id,
+      estado: item.estado,
+    })
+  }
+
   /** Envía la solicitud de actualización — no toca el producto publicado,
    * solo queda pendiente hasta que el admin la apruebe. */
   async function guardarSolicitudActualizacion(form: SolicitudProductoForm): Promise<string | void> {
@@ -701,6 +731,28 @@ export default function ProveedoresPage() {
       estado: 'pendiente',
     })
     if (error) return 'No se pudo enviar la solicitud: ' + error.message
+  }
+
+  async function pausarCuenta() {
+    if (!user) return
+    const ok = confirm('¿Pausar tu cuenta? Tus productos, solicitudes y demás dejarán de aparecer en la tienda y en el panel del admin hasta que la reactives tú mismo.')
+    if (!ok) return
+    setCambiandoPausa(true)
+    const { error } = await supabase.from('user_roles').update({ pausado_por_titular: true }).eq('user_id', user.id)
+    setCambiandoPausa(false)
+    if (error) { alert('No se pudo pausar la cuenta: ' + error.message); return }
+    window.location.reload()
+  }
+
+  async function reactivarCuenta() {
+    if (!user) return
+    const ok = confirm('¿Reactivar tu cuenta? Tus productos, solicitudes y demás volverán a aparecer como estaban.')
+    if (!ok) return
+    setCambiandoPausa(true)
+    const { error } = await supabase.from('user_roles').update({ pausado_por_titular: false }).eq('user_id', user.id)
+    setCambiandoPausa(false)
+    if (error) { alert('No se pudo reactivar la cuenta: ' + error.message); return }
+    window.location.reload()
   }
 
   const [proveedor, setProveedor] = useState({
@@ -1354,6 +1406,15 @@ export default function ProveedoresPage() {
           )}
         </header>
 
+        {user.pausadoPorTitular && (
+          <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '10px 32px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#92400e', fontWeight: 700 }}>⏸️ Tu cuenta está en pausa — tus productos y solicitudes están ocultos.</p>
+            <button type="button" onClick={reactivarCuenta} disabled={cambiandoPausa}
+              style={{ background: '#92400e', color: '#fff', border: 'none', padding: '5px 14px', borderRadius: 20, fontWeight: 700, fontSize: 11, cursor: cambiandoPausa ? 'default' : 'pointer' }}>
+              {cambiandoPausa ? 'Reactivando...' : 'Reactivar ahora'}
+            </button>
+          </div>
+        )}
 
         {/* Contenido */}
         <main style={{ flex: 1, padding: isMobile ? '16px' : '28px 32px 48px' }}>
@@ -2141,7 +2202,8 @@ export default function ProveedoresPage() {
                   {misProductos.map(item => {
                     const st = estadoMap[item.estado] ?? estadoMap.pendiente
                     return (
-                      <div key={item.id} style={{ border: '1px solid #f3f4f6', borderRadius: 12, overflow: 'hidden' }}>
+                      <div key={item.id} onClick={() => verDetalleProducto(item)}
+                        style={{ border: '1px solid #f3f4f6', borderRadius: 12, overflow: 'hidden', cursor: 'pointer' }}>
                         <div style={{ height: 120, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                           {item.imagen_url
                             ? <img src={item.imagen_url} alt={item.producto_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -2178,11 +2240,12 @@ export default function ProveedoresPage() {
                   {misProductos.map((item, i) => {
                     const st = estadoMap[item.estado] ?? estadoMap.pendiente
                     return (
-                      <div key={item.id} style={{
+                      <div key={item.id} onClick={() => verDetalleProducto(item)} style={{
                         display: 'grid', gridTemplateColumns: '56px 1fr auto',
                         gap: 16, alignItems: 'center', padding: '14px 28px',
                         borderBottom: i < misProductos.length - 1 ? '1px solid #f3f4f6' : 'none',
                         background: i % 2 === 0 ? '#fff' : '#fafafa',
+                        cursor: 'pointer',
                       }}>
                         <div style={{ width: 56, height: 56, borderRadius: 12, background: '#f3f4f6', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, border: '1px solid #e5e7eb', flexShrink: 0 }}>
                           {item.imagen_url
@@ -2291,6 +2354,91 @@ export default function ProveedoresPage() {
             onClose={() => setMostrarSolicitudCategoria(false)}
             onEnviar={enviarSolicitudCategoria}
           />
+        )}
+
+        {cargandoDetalle && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+            <p style={{ background: '#fff', padding: '14px 24px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#374151' }}>Cargando producto...</p>
+          </div>
+        )}
+
+        {productoDetalle && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}
+            onClick={e => e.target === e.currentTarget && setProductoDetalle(null)}>
+            <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'sticky', top: 0, background: '#fff' }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Detalle del producto</h2>
+                <button onClick={() => setProductoDetalle(null)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#9ca3af' }}>×</button>
+              </div>
+
+              <div style={{ width: '100%', height: 220, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {productoDetalle.imagen_url
+                  ? <img src={productoDetalle.imagen_url} alt={productoDetalle.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <span style={{ fontSize: 40 }}>📦</span>}
+              </div>
+
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, color: NAVY, margin: 0 }}>{productoDetalle.nombre}</h3>
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
+                      background: productoDetalle.estado === 'aprobado' ? '#d1fae5' : productoDetalle.estado === 'rechazado' ? '#fee2e2' : '#fef3c7',
+                      color: productoDetalle.estado === 'aprobado' ? '#065f46' : productoDetalle.estado === 'rechazado' ? '#991b1b' : '#92400e',
+                    }}>
+                      {productoDetalle.estado === 'aprobado' ? '✅ Aprobado' : productoDetalle.estado === 'rechazado' ? '❌ Rechazado' : '⏳ Pendiente'}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'monospace', margin: 0 }}>{productoDetalle.sku}</p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px' }}>
+                    <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Precio</p>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#059669' }}>${productoDetalle.precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px' }}>
+                    <p style={{ margin: '0 0 2px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Stock</p>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#374151' }}>{productoDetalle.stock} uds</p>
+                  </div>
+                </div>
+
+                {productoDetalle.categoria_id && (
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Categoría</p>
+                    <span style={{ fontSize: 12, fontWeight: 700, background: `${NAVY}10`, color: NAVY, padding: '4px 12px', borderRadius: 20 }}>
+                      {catNombre(String(productoDetalle.categoria_id))}
+                    </span>
+                  </div>
+                )}
+
+                {productoDetalle.descripcion && (
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Descripción</p>
+                    <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.5 }}>{productoDetalle.descripcion}</p>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10, paddingTop: 8 }}>
+                  <button type="button" onClick={() => setProductoDetalle(null)}
+                    style={{ flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                    Cerrar
+                  </button>
+                  <button type="button" onClick={() => {
+                    setProductoAActualizar({
+                      id: productoDetalle.id, nombre: productoDetalle.nombre, sku: productoDetalle.sku,
+                      precio: String(productoDetalle.precio), stock: String(productoDetalle.stock),
+                      descripcion: productoDetalle.descripcion ?? '', imagen_url: productoDetalle.imagen_url, categoria_id: productoDetalle.categoria_id,
+                    })
+                    setProductoDetalle(null)
+                  }}
+                    style={{ flex: 1, background: '#eff6ff', color: '#0049ff', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                    🔄 Solicitar actualización
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ---- Tab: Seguimiento y pagos (Dashboard del proveedor) ---- */}
@@ -2825,6 +2973,40 @@ export default function ProveedoresPage() {
             <p style={{ fontSize: 11, color: '#d1d5db', textAlign: 'center', marginTop: 16 }}>
               💾 Los datos se almacenan solo en este navegador
             </p>
+          </div>
+
+          {/* Pausar/reactivar cuenta */}
+          <div style={{ background: '#fff', borderRadius: 20, padding: '32px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', maxWidth: 640 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 40, height: 40, background: user.pausadoPorTitular ? '#fef3c7' : `${NAVY}12`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                {user.pausadoPorTitular ? '⏸️' : '🟢'}
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: NAVY, margin: 0 }}>Cuenta {user.pausadoPorTitular ? 'en pausa' : 'activa'}</h2>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>
+                  {user.pausadoPorTitular
+                    ? 'Tus productos, solicitudes y demás están ocultos mientras esté en pausa.'
+                    : 'Pausa temporalmente tu cuenta si necesitas dejar de vender por un tiempo.'}
+                </p>
+              </div>
+            </div>
+
+            {user.pausadoPorTitular ? (
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '14px 16px' }}>
+                <p style={{ fontSize: 13, color: '#92400e', margin: '0 0 12px', lineHeight: 1.5 }}>
+                  Mientras tu cuenta esté en pausa, tus productos no aparecen en la tienda ni en el catálogo del admin, y tus solicitudes pendientes quedan ocultas. Todo vuelve a aparecer tal como estaba en cuanto reactives.
+                </p>
+                <button type="button" onClick={reactivarCuenta} disabled={cambiandoPausa}
+                  style={{ background: '#059669', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: cambiandoPausa ? 'default' : 'pointer', opacity: cambiandoPausa ? 0.6 : 1 }}>
+                  {cambiandoPausa ? 'Reactivando...' : '▶️ Reactivar mi cuenta'}
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={pausarCuenta} disabled={cambiandoPausa}
+                style={{ background: '#fff', color: '#dc2626', border: '1.5px solid #fca5a5', padding: '10px 20px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: cambiandoPausa ? 'default' : 'pointer', opacity: cambiandoPausa ? 0.6 : 1 }}>
+                {cambiandoPausa ? 'Pausando...' : '⏸️ Pausar mi cuenta'}
+              </button>
+            )}
           </div>
 
           </div>
