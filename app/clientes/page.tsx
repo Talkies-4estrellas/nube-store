@@ -5,11 +5,14 @@ import { supabase } from '@/lib/supabase'
 import ClienteModal from '@/components/ClienteModal'
 import ProveedorModal from '@/components/ProveedorModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import MotivoRechazoDialog from '@/components/MotivoRechazoDialog'
 import Icon from '@/components/Icon'
 import { SkeletonTableBody } from '@/components/Skeleton'
 import { paginasVisibles } from '@/lib/pagination'
 import { useAuth } from '@/lib/auth-context'
 import { registrarAuditoria } from '@/lib/bitacora'
+import { aprobarRegistroProveedor, rechazarRegistroProveedor } from '@/lib/registroProveedores'
+import { PASSWORD_CUENTA_DEFAULT } from '@/lib/cuentas'
 
 const PAGE_SIZE = 15
 
@@ -49,6 +52,20 @@ type Proveedor = {
   estado?: 'activo' | 'suspendido'
 }
 
+type SolicitudRegistroProveedor = {
+  id: string
+  nombre_contacto: string
+  email: string
+  telefono: string | null
+  nombre_negocio: string | null
+  descripcion: string | null
+  categoria_interes: string | null
+  sitio_o_redes: string | null
+  estado: 'pendiente' | 'aprobado' | 'rechazado'
+  motivo_rechazo: string | null
+  created_at: string
+}
+
 const AVATAR_COLORS = ['#0049ff','#7c3aed','#db2777','#059669','#d97706','#dc2626','#0891b2','#374151']
 function avatarColor(nombre: string) {
   let h = 0
@@ -68,6 +85,21 @@ export default function ClientesPage() {
   const [searchProv, setSearchProv] = useState('')
   const [filtroEstadoProv, setFiltroEstadoProv] = useState<'todos' | 'activo' | 'suspendido'>('todos')
   const [confirmSuspender, setConfirmSuspender] = useState<Proveedor | null>(null)
+
+  // Solicitudes de REGISTRO de nuevos proveedores (cuestionario público /registro-proveedor)
+  const [showSolicitudesRegistro, setShowSolicitudesRegistro] = useState(false)
+  const [formularioActivo,      setFormularioActivo]      = useState(false)
+  const [guardandoFormulario,   setGuardandoFormulario]   = useState(false)
+  const [solicitudesRegistro,   setSolicitudesRegistro]   = useState<SolicitudRegistroProveedor[]>([])
+  const [loadingSolReg,         setLoadingSolReg]         = useState(false)
+  const [filtroEstadoReg,       setFiltroEstadoReg]       = useState<'todas' | 'pendiente' | 'aprobado' | 'rechazado'>('pendiente')
+  const [updatingRegId,         setUpdatingRegId]         = useState<string | null>(null)
+  const [rechazandoRegId,       setRechazandoRegId]       = useState<string | null>(null)
+  const [expandedRegId,         setExpandedRegId]         = useState<string | null>(null)
+  const [linkCopiado,           setLinkCopiado]           = useState(false)
+  const [cuentaCreada,          setCuentaCreada]          = useState<{ email: string; nombre: string } | null>(null)
+  const [errorRegId,            setErrorRegId]            = useState<{ id: string; mensaje: string } | null>(null)
+  const [copiadoCredenciales,   setCopiadoCredenciales]   = useState(false)
 
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -156,6 +188,58 @@ export default function ClientesPage() {
 
   useEffect(() => { if (seccion === 'proveedores' && proveedores.length === 0) fetchProveedores() }, [seccion]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function fetchFormularioActivo() {
+    const { data } = await supabase.from('config_storefront').select('registro_proveedor_activo').eq('id', 1).single()
+    setFormularioActivo(!!data?.registro_proveedor_activo)
+  }
+
+  async function toggleFormularioActivo(v: boolean) {
+    setGuardandoFormulario(true)
+    setFormularioActivo(v)
+    await supabase.from('config_storefront').update({ registro_proveedor_activo: v }).eq('id', 1)
+    setGuardandoFormulario(false)
+  }
+
+  async function fetchSolicitudesRegistro() {
+    setLoadingSolReg(true)
+    const { data } = await supabase.from('solicitudes_registro_proveedor').select('*').order('created_at', { ascending: false })
+    setSolicitudesRegistro((data ?? []) as SolicitudRegistroProveedor[])
+    setLoadingSolReg(false)
+  }
+
+  // Se carga en cuanto se entra a "Proveedores" (no solo al abrir el panel) para
+  // que el badge de pendientes ya se vea sin tener que abrir nada.
+  useEffect(() => {
+    if (seccion === 'proveedores') { fetchSolicitudesRegistro() }
+  }, [seccion])
+
+  useEffect(() => {
+    if (showSolicitudesRegistro) fetchFormularioActivo()
+  }, [showSolicitudesRegistro])
+
+  async function aprobarRegistro(sol: SolicitudRegistroProveedor) {
+    setUpdatingRegId(sol.id)
+    setErrorRegId(null)
+    const { error } = await aprobarRegistroProveedor(supabase, sol, authUser?.id)
+    setUpdatingRegId(null)
+    if (error) { setErrorRegId({ id: sol.id, mensaje: error }); return }
+    setSolicitudesRegistro(prev => prev.map(s => s.id === sol.id ? { ...s, estado: 'aprobado', motivo_rechazo: null } : s))
+    setCuentaCreada({ email: sol.email, nombre: sol.nombre_contacto })
+    fetchProveedores()
+  }
+
+  async function confirmarRechazoRegistro(motivo: string) {
+    if (!rechazandoRegId) return
+    const sol = solicitudesRegistro.find(s => s.id === rechazandoRegId)
+    if (!sol) return
+    setUpdatingRegId(rechazandoRegId)
+    await rechazarRegistroProveedor(supabase, sol, motivo)
+    // No se conserva el registro tras rechazarlo — se le notifica y se borra.
+    setSolicitudesRegistro(prev => prev.filter(s => s.id !== rechazandoRegId))
+    setUpdatingRegId(null)
+    setRechazandoRegId(null)
+  }
+
   const filteredProveedores = proveedores.filter(p =>
     (filtroEstadoProv === 'todos' || (p.estado ?? 'activo') === filtroEstadoProv) &&
     (p.nombre.toLowerCase().includes(searchProv.toLowerCase()) ||
@@ -205,9 +289,22 @@ export default function ClientesPage() {
             + Agregar cliente
           </button>
         ) : (
-          <button onClick={() => setShowProveedorModal(true)} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-            + Agregar proveedor
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => setShowSolicitudesRegistro(v => !v)} style={{
+              position: 'relative', background: showSolicitudesRegistro ? '#252855' : '#f3f4f6', color: showSolicitudesRegistro ? '#fff' : '#374151',
+              border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer',
+            }}>
+              🆕 Nuevos proveedores
+              {solicitudesRegistro.filter(s => s.estado === 'pendiente').length > 0 && (
+                <span style={{ position: 'absolute', top: -6, right: -6, background: '#e7226d', color: '#fff', fontSize: 10, fontWeight: 800, minWidth: 18, height: 18, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                  {solicitudesRegistro.filter(s => s.estado === 'pendiente').length}
+                </span>
+              )}
+            </button>
+            <button onClick={() => setShowProveedorModal(true)} style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+              + Agregar proveedor
+            </button>
+          </div>
         )}
       </div>
 
@@ -222,6 +319,165 @@ export default function ClientesPage() {
           background: seccion === 'proveedores' ? '#0049ff' : '#f3f4f6', color: seccion === 'proveedores' ? '#fff' : '#374151', border: 'none',
         }}>📦 Proveedores{proveedores.length > 0 ? ` (${proveedores.length})` : ''}</button>
       </div>
+
+      {seccion === 'proveedores' && showSolicitudesRegistro && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
+          {/* Interruptor de la campaña */}
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 2 }}>Formulario de registro de proveedores</p>
+                <p style={{ fontSize: 12, color: '#9ca3af' }}>Mientras esté activado, cualquiera con el link puede llenar el cuestionario para postularse como proveedor.</p>
+              </div>
+              <button onClick={() => toggleFormularioActivo(!formularioActivo)} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: formularioActivo ? '#0049ff' : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                <span style={{ position: 'absolute', top: 2, left: formularioActivo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+              </button>
+            </div>
+            {guardandoFormulario && <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>Guardando...</p>}
+
+            {formularioActivo && (
+              <div style={{ marginTop: 16, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, color: '#374151', fontWeight: 600, wordBreak: 'break-all' }}>
+                  {typeof window !== 'undefined' ? `${window.location.origin}/registro-proveedor` : '/registro-proveedor'}
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/registro-proveedor`)
+                    setLinkCopiado(true)
+                    setTimeout(() => setLinkCopiado(false), 2000)
+                  }}
+                  style={{ marginLeft: 'auto', background: linkCopiado ? '#dcfce7' : '#eff6ff', color: linkCopiado ? '#166534' : '#0049ff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                  {linkCopiado ? '✓ Copiado' : 'Copiar link'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Lista de solicitudes de registro */}
+          <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111', margin: 0 }}>Solicitudes de registro</h2>
+              <button onClick={fetchSolicitudesRegistro} style={{ background: 'none', border: '1px solid #e5e7eb', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#374151' }}>
+                ↻ Actualizar
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              {(['todas', 'pendiente', 'aprobado', 'rechazado'] as const).map(f => (
+                <button key={f} onClick={() => setFiltroEstadoReg(f)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                    background: filtroEstadoReg === f ? '#252855' : '#f3f4f6',
+                    color: filtroEstadoReg === f ? '#fff' : '#374151',
+                  }}>
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                  {f !== 'todas' && (
+                    <span style={{ marginLeft: 6, background: filtroEstadoReg === f ? '#ffffff30' : '#e5e7eb', padding: '1px 6px', borderRadius: 10, fontSize: 10 }}>
+                      {solicitudesRegistro.filter(s => s.estado === f).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {loadingSolReg ? (
+              <p style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0' }}>Cargando solicitudes...</p>
+            ) : (() => {
+              const lista = filtroEstadoReg === 'todas' ? solicitudesRegistro : solicitudesRegistro.filter(s => s.estado === filtroEstadoReg)
+              if (lista.length === 0) return (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>📭</div>
+                  <p style={{ fontSize: 14, color: '#9ca3af' }}>No hay solicitudes {filtroEstadoReg !== 'todas' ? `con estado "${filtroEstadoReg}"` : ''}</p>
+                </div>
+              )
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {lista.map(s => {
+                    const isExpanded = expandedRegId === s.id
+                    const estadoColor = { pendiente: { bg: '#fef3c7', color: '#92400e' }, aprobado: { bg: '#dcfce7', color: '#166534' }, rechazado: { bg: '#fee2e2', color: '#991b1b' } }[s.estado]
+                    return (
+                      <div key={s.id} style={{ border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', cursor: 'pointer', background: isExpanded ? '#f9fafb' : '#fff' }}
+                          onClick={() => setExpandedRegId(isExpanded ? null : s.id)}>
+                          <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#252855', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
+                            {s.nombre_contacto.charAt(0).toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.nombre_contacto}</p>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: estadoColor.bg, color: estadoColor.color, flexShrink: 0 }}>
+                                {s.estado.toUpperCase()}
+                              </span>
+                            </div>
+                            <p style={{ margin: 0, fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {s.email}
+                              {s.nombre_negocio && ` · ${s.nombre_negocio}`}
+                              {s.categoria_interes && ` · ${s.categoria_interes}`}
+                            </p>
+                          </div>
+                          <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{new Date(s.created_at).toLocaleDateString('es-MX')}</span>
+                          <span style={{ fontSize: 16, color: '#9ca3af', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
+                        </div>
+
+                        {isExpanded && (
+                          <div style={{ borderTop: '1px solid #f3f4f6', padding: '16px 20px', background: '#fafafa' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                              <div>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 8px' }}>Contacto</p>
+                                <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}><strong>{s.nombre_contacto}</strong></p>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 4px' }}>
+                                  <a href={`mailto:${s.email}`} style={{ fontSize: 13, color: '#0049ff', fontWeight: 600 }}>📧 {s.email}</a>
+                                  <button onClick={() => navigator.clipboard.writeText(s.email)}
+                                    style={{ fontSize: 10, background: '#f3f4f6', border: 'none', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', color: '#6b7280', fontWeight: 600 }}>
+                                    Copiar
+                                  </button>
+                                </div>
+                                {s.telefono && <p style={{ margin: 0, fontSize: 13, color: '#374151' }}>📞 {s.telefono}</p>}
+                              </div>
+                              <div>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', margin: '0 0 8px' }}>Negocio</p>
+                                {s.nombre_negocio && <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}><strong>{s.nombre_negocio}</strong></p>}
+                                {s.categoria_interes && <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>Productos: {s.categoria_interes}</p>}
+                                {s.sitio_o_redes && <p style={{ margin: '0 0 4px', fontSize: 13, color: '#374151' }}>🔗 {s.sitio_o_redes}</p>}
+                                {s.descripcion && <p style={{ margin: 0, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{s.descripcion}</p>}
+                              </div>
+                            </div>
+
+                            {errorRegId?.id === s.id && (
+                              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+                                <p style={{ margin: 0, fontSize: 13, color: '#991b1b', fontWeight: 600 }}>{errorRegId.mensaje}</p>
+                              </div>
+                            )}
+
+                            {s.estado === 'pendiente' && (
+                              <div style={{ display: 'flex', gap: 10, paddingTop: 12, borderTop: '1px solid #e5e7eb', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <button onClick={() => aprobarRegistro(s)} disabled={updatingRegId === s.id}
+                                  style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingRegId === s.id ? 0.6 : 1 }}>
+                                  {updatingRegId === s.id ? 'Creando cuenta...' : '✓ Aprobar y crear cuenta'}
+                                </button>
+                                <button onClick={() => setRechazandoRegId(s.id)} disabled={updatingRegId === s.id}
+                                  style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updatingRegId === s.id ? 0.6 : 1 }}>
+                                  ✕ Rechazar
+                                </button>
+                                <span style={{ fontSize: 11, color: '#9ca3af' }}>Al aprobar se crea su cuenta y se le notifica por correo. Al rechazar, se le notifica el motivo y no se guarda su información.</span>
+                              </div>
+                            )}
+                            {s.estado === 'aprobado' && (
+                              <div style={{ paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+                                <p style={{ margin: 0, fontSize: 12, color: '#166534', fontWeight: 600 }}>✓ Cuenta creada y proveedor notificado por correo.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
 
       {seccion === 'proveedores' ? (
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
@@ -531,6 +787,50 @@ export default function ClientesPage() {
           onClose={() => setShowProveedorModal(false)}
           onSave={fetchProveedores}
         />
+      )}
+
+      {rechazandoRegId && (
+        <MotivoRechazoDialog
+          enviando={updatingRegId === rechazandoRegId}
+          onCancel={() => setRechazandoRegId(null)}
+          onConfirm={confirmarRechazoRegistro}
+        />
+      )}
+
+      {cuentaCreada && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 20 }}
+          onClick={e => e.target === e.currentTarget && setCuentaCreada(null)}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 420, padding: '32px 28px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ width: 56, height: 56, background: '#d1fae5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: '#111', marginBottom: 6 }}>Proveedor aprobado</h2>
+            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
+              Se creó la cuenta de <strong>{cuentaCreada.nombre}</strong> y ya se le envió por correo su acceso con recordatorio de cambiar la contraseña.
+            </p>
+
+            <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '16px 18px', textAlign: 'left', marginBottom: 16 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>Email</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: '0 0 14px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{cuentaCreada.email}</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px' }}>Contraseña</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: '#111', margin: 0, fontFamily: 'monospace' }}>{PASSWORD_CUENTA_DEFAULT}</p>
+            </div>
+
+            <button type="button" onClick={() => {
+              navigator.clipboard.writeText(`Email: ${cuentaCreada.email}\nContraseña: ${PASSWORD_CUENTA_DEFAULT}`)
+              setCopiadoCredenciales(true)
+              setTimeout(() => setCopiadoCredenciales(false), 2000)
+            }}
+              style={{ width: '100%', background: copiadoCredenciales ? '#d1fae5' : '#eff6ff', color: copiadoCredenciales ? '#065f46' : '#0049ff', border: 'none', padding: '10px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
+              {copiadoCredenciales ? '✓ Copiado' : '📋 Copiar email y contraseña'}
+            </button>
+
+            <button type="button" onClick={() => setCuentaCreada(null)}
+              style={{ width: '100%', background: '#0049ff', color: '#fff', border: 'none', padding: '11px 0', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+              Listo
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

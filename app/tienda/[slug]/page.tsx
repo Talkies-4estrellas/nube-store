@@ -54,7 +54,7 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
   const [errorContacto, setErrorContacto] = useState('')
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [added, setAdded] = useState(false)
+  const [cartQty, setCartQty] = useState(0)
   const [cartCount, setCartCount] = useState(0)
   const [imgActiva, setImgActiva] = useState(0)
   const [buscarValor, setBuscarValor] = useState('')
@@ -103,16 +103,26 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
       })
   }, [sku])
 
+  function leerCarrito(): { product: [string, string, string, string, string]; quantity: number }[] {
+    try { return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') } catch { return [] }
+  }
+
   useEffect(() => {
-    try {
-      const cart = JSON.parse(localStorage.getItem(CART_KEY) ?? '[]')
-      setCartCount(cart.reduce((t: number, i: { quantity: number }) => t + i.quantity, 0))
-    } catch {}
+    const cart = leerCarrito()
+    setCartCount(cart.reduce((t, i) => t + i.quantity, 0))
   }, [])
+
+  // El botón/recordatorio reflejan si ESTE producto sigue en el carrito —
+  // se mantienen "activos" mientras no se complete o vacíe la compra, no solo unos segundos.
+  useEffect(() => {
+    if (!producto) return
+    const cart = leerCarrito()
+    setCartQty(cart.find(i => i.product[0] === producto.nombre)?.quantity ?? 0)
+  }, [producto])
 
   function addToCart() {
     try {
-      const cart: { product: [string, string, string, string, string]; quantity: number }[] = JSON.parse(localStorage.getItem(CART_KEY) ?? '[]')
+      const cart = leerCarrito()
       const p = producto!
       const priceStr = `$${Number(p.precio).toLocaleString('es-MX')}`
       const img = p.imagen_url ?? FALLBACK
@@ -122,8 +132,7 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
       if (existing) { existing.quantity += 1 } else { cart.push({ product: [p.nombre, desc, priceStr, img, cat], quantity: 1 }) }
       localStorage.setItem(CART_KEY, JSON.stringify(cart))
       setCartCount(cart.reduce((t, i) => t + i.quantity, 0))
-      setAdded(true)
-      setTimeout(() => setAdded(false), 2000)
+      setCartQty(cart.find(i => i.product[0] === p.nombre)?.quantity ?? 0)
     } catch {}
   }
 
@@ -418,15 +427,22 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
                   )
                 })}
 
+                {cartQty > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', fontSize: 13, fontWeight: 700, padding: '10px 14px', borderRadius: 10, marginBottom: 4 }}>
+                    <span>✓</span>
+                    <span>Ya tienes {cartQty} {cartQty === 1 ? 'unidad' : 'unidades'} de este producto en tu carrito</span>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20, marginTop: 8 }}>
                   <button onClick={addToCart} disabled={producto.stock === 0} style={{
-                    background: added ? '#059669' : producto.stock === 0 ? '#e5e7eb' : PINK,
+                    background: cartQty > 0 ? '#059669' : producto.stock === 0 ? '#e5e7eb' : PINK,
                     color: producto.stock === 0 ? '#9ca3af' : '#fff', border: 'none',
                     padding: '14px 0', borderRadius: 12, fontWeight: 800, fontSize: 16,
                     cursor: producto.stock === 0 ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
-                    boxShadow: producto.stock > 0 ? `0 4px 16px ${PINK}40` : 'none',
+                    boxShadow: producto.stock > 0 ? `0 4px 16px ${cartQty > 0 ? '#059669' : PINK}40` : 'none',
                   }}>
-                    {added ? '✓ Agregado al carrito' : '🛒 Agregar al carrito'}
+                    {cartQty > 0 ? `✓ En tu carrito (${cartQty})` : '🛒 Agregar al carrito'}
                   </button>
                   <Link href="/" style={{ display: 'block', textAlign: 'center', background: `${NAVY}10`, color: NAVY, border: `1.5px solid ${NAVY}20`, padding: '13px 0', borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
                     Ver más productos

@@ -145,6 +145,12 @@ body {
   .prov-title {
     flex: 1 1 auto;
     min-width: 0;
+    /* El logo va centrado sobre TODO el header (absolute, left:50%) y no se
+       puede mover. Sin este tope el título (ej. "Registrar producto", o
+       "Hola {nombre}" con un nombre largo) crece hasta chocar con él, porque
+       flex-grow por sí solo no sabe que ahí hay algo encima. Frenarlo antes
+       del centro (50vw) garantiza que nunca se monten, sea cual sea el texto. */
+    max-width: calc(50vw - 84px);
     text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;

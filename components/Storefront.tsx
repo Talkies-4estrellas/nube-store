@@ -341,6 +341,7 @@ export default function Storefront() {
   const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const cartCount = cart.reduce((t, i) => t + i.quantity, 0)
+  const cartQtyByTitle = cart.reduce<Record<string, number>>((m, i) => { m[i.product[0]] = i.quantity; return m }, {})
 
   // Config de la tienda desde Supabase
   const [storeConfig, setStoreConfig] = useState({
@@ -553,19 +554,32 @@ export default function Storefront() {
     }
   }, [view])
 
+  const [cartToast, setCartToast] = useState<{ text: string; key: number } | null>(null)
+  const cartToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [cartBumpKey, setCartBumpKey] = useState(0)
+
   const addToCart = (title: string) => {
     const product = findProduct(title)
     if (!product) return
     const maxStock = productStockMap[title] ?? 0
+    let added = false
     setCart((prev) => {
       const current = prev.find((i) => i.product[0] === title)
       if (current) {
         if (current.quantity >= maxStock) return prev
+        added = true
         return prev.map((i) => (i.product[0] === title ? { ...i, quantity: i.quantity + 1 } : i))
       }
       if (maxStock < 1) return prev
+      added = true
       return [...prev, { product, quantity: 1 }]
     })
+    if (added) {
+      if (cartToastTimer.current) clearTimeout(cartToastTimer.current)
+      setCartToast({ text: title, key: Date.now() })
+      cartToastTimer.current = setTimeout(() => setCartToast(null), 2200)
+      setCartBumpKey((k) => k + 1)
+    }
   }
 
   const openDetail = (title: string) => {
@@ -878,16 +892,21 @@ export default function Storefront() {
   })()
 
   /* ---- Botón agregar reutilizable ---- */
-  const AddButton = ({ title, dark, icon = 'plus', label = 'Agregar producto' }: { title: string; dark?: boolean; icon?: string; label?: string }) => (
-    <button
-      className={`round-button${dark ? ' dark' : ''}`}
-      type="button"
-      aria-label={label}
-      onClick={(e) => { addToCart(title); bump(e.currentTarget) }}
-    >
-      <Ic n={icon} />
-    </button>
-  )
+  const AddButton = ({ title, dark, icon = 'plus', label = 'Agregar producto' }: { title: string; dark?: boolean; icon?: string; label?: string }) => {
+    const qty = cartQtyByTitle[title] ?? 0
+    return (
+      <button
+        className={`round-button${dark ? ' dark' : ''}${qty > 0 ? ' in-cart' : ''}`}
+        type="button"
+        aria-label={qty > 0 ? `${label} — ya en el carrito (${qty})` : label}
+        title={qty > 0 ? `Ya tienes ${qty} en tu carrito` : undefined}
+        onClick={(e) => { addToCart(title); bump(e.currentTarget) }}
+      >
+        <Ic n={qty > 0 ? 'check' : icon} />
+        {qty > 0 && <span className="round-button-qty">{qty}</span>}
+      </button>
+    )
+  }
 
   const ProductCard = ([title, text, price, image, category]: Product) => {
     const guardado = favoritos.includes(title)
@@ -1008,8 +1027,9 @@ export default function Storefront() {
         <aside className="filter-panel">
           <h3>Filtros</h3>
 
-          {/* Select rápido de categoría */}
-          <div style={{ position: 'relative' }}>
+          {/* Select rápido de categoría — solo móvil/tablet; en PC ya está
+              la lista completa de abajo, tenerlos los dos es redundante. */}
+          <div className="filter-cat-select" style={{ position: 'relative' }}>
             <select
               value={activeCat}
               onChange={e => setActiveCat(e.target.value)}
@@ -1185,7 +1205,9 @@ export default function Storefront() {
               <img src={image} alt={title} />
               <h3>{title}</h3>
               <p><s>{formatPrice(original)}</s> <strong>{price}</strong></p>
-              <button className="period-button active" type="button" onClick={(e) => { addToCart(title); bump(e.currentTarget) }}>Agregar oferta</button>
+              <button className={`period-button active${(cartQtyByTitle[title] ?? 0) > 0 ? ' in-cart' : ''}`} type="button" onClick={(e) => { addToCart(title); bump(e.currentTarget) }}>
+                {(cartQtyByTitle[title] ?? 0) > 0 ? `✓ En tu carrito (${cartQtyByTitle[title]})` : 'Agregar oferta'}
+              </button>
             </article>
           )
         })}
@@ -1401,9 +1423,16 @@ export default function Storefront() {
           <strong className="detail-price">{price}</strong>
 
           <div className="detail-actions">
-            <button className="period-button active" type="button" onClick={(e) => { addToCart(title); bump(e.currentTarget) }}>Agregar al carrito</button>
+            <button className={`period-button active${(cartQtyByTitle[title] ?? 0) > 0 ? ' in-cart' : ''}`} type="button" onClick={(e) => { addToCart(title); bump(e.currentTarget) }}>
+              {(cartQtyByTitle[title] ?? 0) > 0 ? `✓ En tu carrito (${cartQtyByTitle[title]})` : 'Agregar al carrito'}
+            </button>
             <button className="period-button" type="button" onClick={() => buyNow(title)}>Comprar ahora</button>
           </div>
+          {(cartQtyByTitle[title] ?? 0) > 0 && (
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#059669', margin: '2px 0 0' }}>
+              Ya tienes {cartQtyByTitle[title]} {cartQtyByTitle[title] === 1 ? 'unidad' : 'unidades'} de este producto en tu carrito
+            </p>
+          )}
 
           <div className="product-specs">
             {['Disponible', 'Garantia incluida', 'Envio rapido', 'Compra segura'].map((spec) => (
@@ -1542,7 +1571,7 @@ export default function Storefront() {
 
           <button type="button" className="head-action head-cart" aria-label="Carrito" onClick={openCart}>
             <Ic n="shopping-cart" />
-            {cartCount > 0 && <span className="head-cart-badge">{cartCount}</span>}
+            {cartCount > 0 && <span key={cartBumpKey} className="head-cart-badge oe-cart-bump">{cartCount}</span>}
           </button>
 
           {/* Buscador desplegado: ocupa toda la barra */}
@@ -1691,7 +1720,7 @@ export default function Storefront() {
                   </div>
                 )}
               </div>
-              <button className="icon-button dark" type="button" aria-label="Carrito" onClick={openCart}><Ic n="shopping-cart" /><span>{cartCount}</span></button>
+              <button className="icon-button dark" type="button" aria-label="Carrito" onClick={openCart}><Ic n="shopping-cart" /><span key={cartBumpKey} className="oe-cart-bump">{cartCount}</span></button>
             </div>
           </header>
 
@@ -2051,6 +2080,14 @@ export default function Storefront() {
         </nav>
         )
       })()}
+
+      {/* Toast "Agregado al carrito" */}
+      {cartToast && (
+        <div key={cartToast.key} className="oe-cart-toast" role="status" aria-live="polite">
+          <span className="oe-cart-toast-check">✓</span>
+          <span className="oe-cart-toast-text">Agregado al carrito — {cartToast.text}</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -20,6 +20,7 @@ export default function ChatPanel({ supabase, conversacionId, remitenteTipo, rem
   const [cargando, setCargando] = useState(true)
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [errorEnvio, setErrorEnvio] = useState('')
   const finRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -53,10 +54,12 @@ export default function ChatPanel({ supabase, conversacionId, remitenteTipo, rem
     e.preventDefault()
     const limpio = texto.trim()
     if (!limpio || enviando) return
+    setErrorEnvio('')
     setEnviando(true)
-    const ok = await enviarMensaje(supabase, { conversacionId, remitenteTipo, remitenteEmail, remitenteNombre, texto: limpio })
+    const { ok, error } = await enviarMensaje(supabase, { conversacionId, remitenteTipo, remitenteEmail, remitenteNombre, texto: limpio })
     setEnviando(false)
     if (ok) setTexto('')
+    else if (error) setErrorEnvio(error)
   }
 
   return (
@@ -69,10 +72,14 @@ export default function ChatPanel({ supabase, conversacionId, remitenteTipo, rem
         ) : (
           mensajes.map(m => {
             const esPropio = m.remitente_tipo === remitenteTipo
+            // El proveedor nunca ve el nombre/correo real del cliente — solo sabe de qué
+            // producto se le habla, para proteger la identidad de quien compra.
+            const ocultarIdentidad = !esPropio && remitenteTipo === 'proveedor' && m.remitente_tipo === 'cliente'
+            const nombreMostrado = ocultarIdentidad ? 'Cliente' : (m.remitente_nombre || m.remitente_email)
             return (
               <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: esPropio ? 'flex-end' : 'flex-start' }}>
                 {!esPropio && (
-                  <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 700, margin: '0 4px 3px' }}>{m.remitente_nombre || m.remitente_email}</span>
+                  <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 700, margin: '0 4px 3px' }}>{nombreMostrado}</span>
                 )}
                 <div style={{
                   maxWidth: '78%', padding: '9px 13px', borderRadius: 14,
@@ -92,10 +99,15 @@ export default function ChatPanel({ supabase, conversacionId, remitenteTipo, rem
         <div ref={finRef} />
       </div>
 
+      {errorEnvio && (
+        <p style={{ margin: 0, padding: '8px 14px 0', fontSize: 12, color: '#dc2626', fontWeight: 600, background: '#fff' }}>
+          🔒 {errorEnvio}
+        </p>
+      )}
       <form onSubmit={handleEnviar} style={{ display: 'flex', gap: 8, padding: 10, borderTop: '1px solid #e5e7eb', background: '#fff' }}>
         <input
           value={texto}
-          onChange={e => setTexto(e.target.value)}
+          onChange={e => { setTexto(e.target.value); if (errorEnvio) setErrorEnvio('') }}
           placeholder="Escribe un mensaje..."
           disabled={enviando}
           style={{ flex: 1, padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 999, fontSize: 13, outline: 'none' }}

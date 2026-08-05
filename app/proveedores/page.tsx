@@ -284,6 +284,8 @@ export default function ProveedoresPage() {
   const [tab, setTab] = useState<'registro' | 'historial' | 'misEnviados' | 'seguimiento' | 'mensajes' | 'transferencias' | 'ajustes'>('registro')
   const { isMobile } = useSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
 
   // Mensajería con clientes
   const [conversaciones, setConversaciones] = useState<Conversacion[]>([])
@@ -310,6 +312,16 @@ export default function ProveedoresPage() {
   }
 
   useEffect(() => { if (user?.email) cargarTransferencias() }, [user?.email]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cierra el centro de notificaciones al hacer clic fuera de él
+  useEffect(() => {
+    if (!notifOpen) return
+    function onClickFuera(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false)
+    }
+    document.addEventListener('mousedown', onClickFuera)
+    return () => document.removeEventListener('mousedown', onClickFuera)
+  }, [notifOpen])
 
   async function responderTransferencia(t: Transferencia, aceptar: boolean) {
     setRespondiendo(t.id)
@@ -1306,6 +1318,32 @@ export default function ProveedoresPage() {
     )
   }
 
+  // Centro de notificaciones: junta en un solo lugar todo lo pendiente que el
+  // proveedor debería revisar, sin importar en qué pestaña esté parado.
+  const notifPendientesProductos = (historialItems ?? []).filter(h => h.estado === 'pendiente').length
+  const notifRechazados = (historialItems ?? []).filter(h => h.estado === 'rechazado').length
+  const notifTransferencias = transferencias.length
+  type NotifItem = { id: string; icon: string; texto: string; destino: typeof tab }
+  const notificaciones: NotifItem[] = ([
+    notifPendientesProductos > 0 && {
+      id: 'pendientes', icon: '⏳', destino: 'historial',
+      texto: `${notifPendientesProductos} producto${notifPendientesProductos !== 1 ? 's' : ''} en revisión`,
+    },
+    notifRechazados > 0 && {
+      id: 'rechazados', icon: '❌', destino: 'historial',
+      texto: `${notifRechazados} producto${notifRechazados !== 1 ? 's' : ''} rechazado${notifRechazados !== 1 ? 's' : ''}`,
+    },
+    notifTransferencias > 0 && {
+      id: 'transferencias', icon: '🔁', destino: 'transferencias',
+      texto: `${notifTransferencias} transferencia${notifTransferencias !== 1 ? 's' : ''} pendiente${notifTransferencias !== 1 ? 's' : ''}`,
+    },
+    user.pausadoPorTitular && {
+      id: 'pausado', icon: '⏸️', destino: 'ajustes',
+      texto: 'Tu cuenta está en pausa',
+    },
+  ] as (NotifItem | false)[]).filter((n): n is NotifItem => !!n)
+  const totalNotificaciones = notificaciones.length
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f2f8', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
@@ -1386,22 +1424,90 @@ export default function ProveedoresPage() {
             <img src="/storefront/monograma.svg" alt="OrderExpress"
               style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', height: 32, width: 'auto' }} />
           )}
-          <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
-            {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? `Hola ${(user.nombre || '').trim() || user.email.split('@')[0]}` : tab === 'mensajes' ? 'Mensajes' : tab === 'transferencias' ? 'Transferencias' : 'Ajustes'}
-          </h1>
-          {tab === 'registro' && formState !== 'success' && (
-            <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              {[
-                { n: '1', label: 'Llena el formulario' },
-                { n: '2', label: 'Revisamos' },
-                { n: '3', label: 'Publicamos' },
-              ].map((step, i) => (
-                <div key={step.n} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: PINK, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 11, flexShrink: 0 }}>{step.n}</div>
-                  <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, whiteSpace: 'nowrap' }}>{step.label}</span>
-                  {i < 2 && <span style={{ color: '#d1d5db', marginLeft: 4 }}>→</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24, minWidth: 0 }}>
+            <h1 className="prov-title" style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, color: NAVY, margin: 0, letterSpacing: '-0.01em' }}>
+              {tab === 'registro' ? 'Registrar producto' : tab === 'historial' ? 'Mis solicitudes' : tab === 'misEnviados' ? 'Mis productos' : tab === 'seguimiento' ? `Hola ${(user.nombre || '').trim() || user.email.split('@')[0]}` : tab === 'mensajes' ? 'Mensajes' : tab === 'transferencias' ? 'Transferencias' : 'Ajustes'}
+            </h1>
+            {tab === 'registro' && formState !== 'success' && (
+              <div className="prov-steps" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                {[
+                  { n: '1', label: 'Llena el formulario' },
+                  { n: '2', label: 'Revisamos' },
+                  { n: '3', label: 'Publicamos' },
+                ].map((step, i) => (
+                  <div key={step.n} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: PINK, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 11, flexShrink: 0 }}>{step.n}</div>
+                    <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, whiteSpace: 'nowrap' }}>{step.label}</span>
+                    {i < 2 && <span style={{ color: '#d1d5db', marginLeft: 4 }}>→</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Centro de notificaciones — visible en todas las pestañas menos Ajustes.
+              marginLeft:auto lo manda al extremo derecho sin pelearse con el
+              justify-content:space-between (desktop) ni con el flex-start que
+              impone el CSS de mobile. */}
+          {tab !== 'ajustes' && (
+            <div ref={notifRef} style={{ position: 'relative', marginLeft: 'auto', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setNotifOpen(o => !o)}
+                aria-label="Notificaciones"
+                aria-expanded={notifOpen}
+                style={{
+                  position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 36, height: 36, borderRadius: 10, border: 'none', flexShrink: 0,
+                  background: notifOpen ? '#f1f2f6' : 'transparent', cursor: 'pointer', fontSize: 17,
+                }}
+              >
+                🔔
+                {totalNotificaciones > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 1, right: 1, minWidth: 15, height: 15, padding: '0 4px',
+                    borderRadius: 8, background: PINK, color: '#fff', fontSize: 9, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff',
+                    lineHeight: 1,
+                  }}>
+                    {totalNotificaciones > 9 ? '9+' : totalNotificaciones}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 300,
+                  maxWidth: 'calc(100vw - 32px)', background: '#fff', borderRadius: 14,
+                  boxShadow: '0 12px 40px rgba(37,40,85,0.18)', border: '1px solid #f3f4f6',
+                  zIndex: 250, overflow: 'hidden',
+                }}>
+                  <div style={{ padding: '13px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: NAVY }}>Notificaciones</p>
+                  </div>
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {notificaciones.length === 0 ? (
+                      <p style={{ margin: 0, padding: '24px 16px', textAlign: 'center', fontSize: 12, color: '#9ca3af' }}>
+                        Sin pendientes por ahora ✓
+                      </p>
+                    ) : notificaciones.map(n => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => { setTab(n.destino); setNotifOpen(false) }}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
+                          border: 'none', borderBottom: '1px solid #f9fafb', background: 'none', cursor: 'pointer', textAlign: 'left',
+                        }}
+                      >
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>{n.icon}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{n.texto}</span>
+                        <span style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: 13, flexShrink: 0 }}>→</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </header>
@@ -2676,8 +2782,8 @@ export default function ProveedoresPage() {
                   return (
                     <button key={c.id} type="button" onClick={() => setConversacionActiva(c.id)}
                       style={{ width: '100%', display: 'block', padding: '12px 18px', background: activa ? '#f1f5ff' : 'none', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', textAlign: 'left' }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente_nombre || c.cliente_email}</p>
-                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>💬 {c.producto_nombre || 'Producto'}</p>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.producto_nombre || 'Producto'}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>💬 Cliente interesado</p>
                     </button>
                   )
                 })
@@ -2690,7 +2796,7 @@ export default function ProveedoresPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {c && (
                     <div style={{ background: '#fff', borderRadius: 12, padding: '10px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>{c.cliente_nombre || c.cliente_email}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>Cliente</span>
                       <span style={{ fontSize: 12, color: '#9ca3af' }}>· pregunta por</span>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.producto_nombre || 'Producto'}</span>
                     </div>

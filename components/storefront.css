@@ -165,6 +165,70 @@
   justify-content: center;
 }
 
+/* Animación al agregar al carrito: badge/contador "rebota" */
+.oe-cart-bump {
+  animation: oe-cart-bump 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes oe-cart-bump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.55); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+/* Toast "Agregado al carrito" */
+.oe-cart-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1f2937;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 999px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 9500;
+  max-width: calc(100vw - 32px);
+  animation: oe-cart-toast-in 0.32s ease-out, oe-cart-toast-out 0.32s ease-in 1.85s forwards;
+}
+.oe-cart-toast-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 50%;
+  background: #22c55e;
+  font-size: 12px;
+  animation: oe-cart-toast-check 0.4s ease-out 0.05s both;
+}
+.oe-cart-toast-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes oe-cart-toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes oe-cart-toast-out {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to { opacity: 0; transform: translate(-50%, 12px); }
+}
+@keyframes oe-cart-toast-check {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+@media (max-width: 640px) {
+  .oe-cart-toast { bottom: 84px; font-size: 12px; padding: 10px 16px; }
+}
+
 /* Buscador desplegado sobre la barra */
 .oe-store .head-search-bar {
   display: none;
@@ -1006,6 +1070,36 @@
   padding: 0 10px;
   font-size: 12px;
   gap: 8px;
+}
+
+/* Solo PC (>1180px, mismo corte que ya usa .category-buttons para mostrarse):
+   el <select> de arriba es la versión para móvil/tablet — en PC ya está la
+   lista completa debajo, así que aquí sobra y se oculta. */
+@media (min-width: 1181px) {
+  .oe-store .filter-cat-select {
+    display: none;
+  }
+
+  /* Ancho fijo al 100% + columnas de conteo/flecha con tamaño fijo (en vez de
+     "auto", que se ajusta al contenido de CADA botón por separado): así los
+     números quedan alineados entre sí sin importar si el nombre de la
+     categoría es corto o largo, y el bloque deja de verse apretado. */
+  .oe-store .filter-panel .category.cat-sm {
+    width: 100%;
+    grid-template-columns: 24px minmax(0, 1fr) 26px 16px;
+  }
+
+  .oe-store .filter-panel .category-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .oe-store .filter-panel .category-buttons > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 }
 
 .oe-store .category.cat-sm svg {
@@ -1902,6 +1996,33 @@
   stroke-width: 3;
 }
 
+/* Estado persistente: el producto sigue en el carrito */
+.oe-store .round-button.in-cart {
+  position: relative;
+  background: #22c55e;
+  color: #fff;
+}
+.oe-store .round-button-qty {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.oe-store .period-button.in-cart {
+  background: #22c55e !important;
+  border-color: #22c55e !important;
+}
+
 .oe-store .panel-card {
   padding: 30px;
   color: #fff;
@@ -2344,7 +2465,6 @@
   .oe-store .product-card.wide,
   .oe-store .product-card.compact,
   .oe-store .content-grid,
-  .oe-store .store-grid,
   .oe-store .drop-layout,
   .oe-store .deals-layout,
   .oe-store .support-layout,
@@ -2354,6 +2474,19 @@
   .oe-store .deal-hero,
   .oe-store .drop-feature {
     grid-template-columns: 1fr;
+  }
+
+  /* .store-grid queda fuera de la regla de arriba a propósito: forzarlo a
+     1 columna en tablet (641-840px) dejaba tarjetas con max-width:280px
+     nadando en una franja gris vacía a la derecha. Aquí conserva el mismo
+     grid automático de varias columnas que ya usa en escritorio
+     (repeat(auto-fill, minmax(200px, 1fr))), que sí llena el ancho real. */
+
+  /* Y aquí se suelta ese max-width:280px fijo: a ciertos anchos de tablet
+     auto-fill arma columnas de ~300px, y con el tope puesto quedaba un
+     sobrante angosto pero visible al final de cada fila. */
+  .oe-store .store-product {
+    max-width: none;
   }
 
   .oe-store .deal-hero,
@@ -2478,6 +2611,76 @@
   .oe-store .wishlist-item img {
     width: 100%;
     height: 170px;
+  }
+}
+
+/* Catálogo en móvil: grid de 2 columnas compacto en vez de 1 columna con
+   tarjetas gigantes y huecos vacíos (el max-width:280px de escritorio dejaba
+   una franja gris a la derecha, y el h3 de 2 líneas reservaba espacio de
+   sobra cuando el título cabía en una). Solo aplica en móvil — a partir de
+   641px sigue el layout de escritorio/tablet de siempre. */
+@media (max-width: 640px) {
+  .oe-store .store-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .oe-store .store-product {
+    max-width: none;
+    width: 100%;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .oe-store .store-product-media img {
+    aspect-ratio: 1 / 1;
+  }
+
+  .oe-store .store-product > span {
+    font-size: 10px;
+  }
+
+  .oe-store .store-product h3 {
+    font-size: 13px;
+    line-height: 1.25;
+    min-height: calc(13px * 1.25 * 2);
+    margin-bottom: 0;
+  }
+
+  /* La descripción larga no cabe en una tarjeta angosta de 2 columnas —
+     se prioriza título + precio, que es lo que el usuario de verdad usa
+     para decidir si entra al producto. */
+  .oe-store .store-product > p:not(.store-product-stock) {
+    display: none;
+  }
+
+  .oe-store .store-product-stock {
+    font-size: 10px;
+  }
+
+  .oe-store .store-product .price-row {
+    margin-top: 4px;
+  }
+
+  .oe-store .store-product .price-row strong {
+    font-size: 16px;
+  }
+
+  .oe-store .store-product .round-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .oe-store .store-product .round-button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .oe-store .store-product-media .icon-button {
+    width: 32px;
+    height: 32px;
+    top: 6px;
+    right: 6px;
   }
 }
 

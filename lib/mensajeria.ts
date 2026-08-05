@@ -168,18 +168,48 @@ export async function obtenerOcrearConversacionAdmin(
   return nueva.id
 }
 
+/**
+ * Detecta datos de contacto (teléfonos, correos, redes, links externos) que
+ * permitirían saltarse el chat interno y contactar fuera de la plataforma.
+ * Se aplica antes de insertar el mensaje — protección de datos entre cliente
+ * y proveedor pedida explícitamente: el chat es el único canal permitido.
+ */
+export function detectarDatoDeContacto(texto: string): string | null {
+  // Teléfonos: 7+ dígitos seguidos, tolerando espacios/guiones/paréntesis/puntos entre ellos
+  if (/(?:\d[\s\-.()]*){7,}/.test(texto)) {
+    return 'No se permite compartir números de teléfono u otros datos numéricos de contacto en el chat.'
+  }
+  // Correos electrónicos
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(texto)) {
+    return 'No se permite compartir correos electrónicos en el chat.'
+  }
+  // Redes sociales / apps de mensajería / links externos
+  if (/(wa\.me|whatsapp|t\.me|telegram|instagram|facebook\.com|fb\.com|twitter\.com|x\.com|tiktok|@[a-z0-9_.]{3,}|https?:\/\/|www\.)/i.test(texto)) {
+    return 'No se permite compartir redes sociales ni enlaces externos en el chat.'
+  }
+  return null
+}
+
 export async function enviarMensaje(
   supabase: SupabaseClient,
   params: { conversacionId: string; remitenteTipo: TipoRemitente; remitenteEmail: string; remitenteNombre: string; texto: string },
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
+  const texto = params.texto.trim()
+  const motivoBloqueo = detectarDatoDeContacto(texto)
+  if (motivoBloqueo) return { ok: false, error: motivoBloqueo }
+
   const { error } = await supabase.from('mensajes').insert({
     conversacion_id: params.conversacionId,
     remitente_tipo: params.remitenteTipo,
     remitente_email: params.remitenteEmail,
     remitente_nombre: params.remitenteNombre,
-    texto: params.texto.trim(),
+    texto,
   })
-  return !error
+  if (!error) return { ok: true }
+  // El trigger de la base de datos (respaldo del filtro de arriba) lanza el
+  // mismo texto de motivo vía RAISE EXCEPTION — se lo mostramos tal cual al usuario.
+  const esBloqueoDeDatos = error.message?.includes('No se permite compartir')
+  return { ok: false, error: esBloqueoDeDatos ? error.message : 'No se pudo enviar el mensaje.' }
 }
 
 export async function marcarLeidos(
