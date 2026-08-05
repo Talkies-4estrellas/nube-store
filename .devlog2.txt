@@ -1,0 +1,16 @@
+
+> nube@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.6:3000
+- Environments: .env.local
+✓ Ready in 2.6s
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+ GET / 200 in 2.4s (next.js: 837ms, proxy.ts: 425ms, application-code: 1116ms)
+ GET /login?redirect=%2Fproductos 404 in 740ms (next.js: 245ms, proxy.ts: 13ms, application-code: 481ms)
+ GET /login?redirect=%2Fproductos 404 in 412ms (next.js: 81ms, proxy.ts: 23ms, application-code: 308ms)
+ GET /login 404 in 415ms (next.js: 79ms, proxy.ts: 25ms, application-code: 312ms)
+ GET /login 404 in 153ms (next.js: 28ms, proxy.ts: 14ms, application-code: 110ms)

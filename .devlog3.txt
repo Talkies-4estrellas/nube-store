@@ -1,0 +1,15 @@
+
+> nube@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.6:3000
+- Environments: .env.local
+✓ Ready in 2.7s
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+○ Compiling /login ...
+ GET /login 200 in 191ms (next.js: 39ms, proxy.ts: 26ms, application-code: 125ms)
+ GET /login 200 in 7.8s (next.js: 6.5s, proxy.ts: 292ms, application-code: 1052ms)
+ GET /login 200 in 167ms (next.js: 16ms, proxy.ts: 28ms, application-code: 123ms)
