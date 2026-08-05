@@ -100,6 +100,7 @@ export default function ClientesPage() {
   const [cuentaCreada,          setCuentaCreada]          = useState<{ email: string; nombre: string } | null>(null)
   const [errorRegId,            setErrorRegId]            = useState<{ id: string; mensaje: string } | null>(null)
   const [copiadoCredenciales,   setCopiadoCredenciales]   = useState(false)
+  const [confirmActivarFormulario, setConfirmActivarFormulario] = useState(false)
 
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -329,7 +330,7 @@ export default function ClientesPage() {
                 <p style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 2 }}>Formulario de registro de proveedores</p>
                 <p style={{ fontSize: 12, color: '#9ca3af' }}>Mientras esté activado, cualquiera con el link puede llenar el cuestionario para postularse como proveedor.</p>
               </div>
-              <button onClick={() => toggleFormularioActivo(!formularioActivo)} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: formularioActivo ? '#0049ff' : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+              <button onClick={() => formularioActivo ? toggleFormularioActivo(false) : setConfirmActivarFormulario(true)} style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: formularioActivo ? '#0049ff' : '#d1d5db', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
                 <span style={{ position: 'absolute', top: 2, left: formularioActivo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
               </button>
             </div>
@@ -786,6 +787,17 @@ export default function ClientesPage() {
         <ProveedorModal
           onClose={() => setShowProveedorModal(false)}
           onSave={fetchProveedores}
+        />
+      )}
+
+      {confirmActivarFormulario && (
+        <ConfirmDialog
+          danger={false}
+          title="¿Activar el formulario de registro?"
+          message="Cualquiera con el link va a poder postularse como proveedor mientras esté activado. Podrás apagarlo cuando quieras."
+          confirmLabel="Sí, activar"
+          onConfirm={() => { toggleFormularioActivo(true); setConfirmActivarFormulario(false) }}
+          onCancel={() => setConfirmActivarFormulario(false)}
         />
       )}
 

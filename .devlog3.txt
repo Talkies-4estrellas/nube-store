@@ -690,3 +690,4 @@
  GET /configuracion 200 in 885ms (next.js: 47ms, proxy.ts: 605ms, application-code: 233ms)
  GET /clientes 200 in 456ms (next.js: 16ms, proxy.ts: 379ms, application-code: 60ms)
  GET /productos 200 in 724ms (next.js: 49ms, proxy.ts: 599ms, application-code: 76ms)
+ GET /registro-proveedor 200 in 1005ms (next.js: 7ms, proxy.ts: 930ms, application-code: 68ms)
