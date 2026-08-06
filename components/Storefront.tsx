@@ -377,6 +377,7 @@ export default function Storefront() {
     filtros_extra: [] as { id: string; label: string; view: string; activo: boolean }[],
     destacados: null as { imagen: string; kicker?: string; titulo: string; texto: string; cta: string }[] | null,
     nav_movil: null as NavMovilConfig | null,
+    inicio_resumen_activo: true,
   })
   const [configLoaded, setConfigLoaded] = useState(false)
   const [mostrarGarantias, setMostrarGarantias] = useState(false)
@@ -1724,16 +1725,23 @@ export default function Storefront() {
             </div>
           </header>
 
-          <section className="view-preview" aria-live="polite">
-            <div>
-              <span className="preview-kicker">{preview.kicker}</span>
-              <h2>{preview.title}</h2>
-              <p>{preview.text}</p>
-            </div>
-            <div className="preview-chips">
-              {preview.chips.map((chip) => <span key={chip}>{chip}</span>)}
-            </div>
-          </section>
+          {/* En Inicio este cuadro es puramente decorativo ("Selección curada
+              para tu setup.") y se puede apagar desde Páginas → Banner
+              principal. En el resto de las vistas es el encabezado funcional
+              (nombre del producto, resumen del carrito, etc.) y siempre se
+              muestra. */}
+          {(view !== 'inicio' || storeConfig.inicio_resumen_activo) && (
+            <section className="view-preview" aria-live="polite">
+              <div>
+                <span className="preview-kicker">{preview.kicker}</span>
+                <h2>{preview.title}</h2>
+                <p>{preview.text}</p>
+              </div>
+              <div className="preview-chips">
+                {preview.chips.map((chip) => <span key={chip}>{chip}</span>)}
+              </div>
+            </section>
+          )}
 
           <section className="photo-carousel" aria-label="Carrusel de productos destacados">
             <div className="carousel-track">

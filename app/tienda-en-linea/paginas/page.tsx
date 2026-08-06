@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { uploadToSupabase } from '@/lib/uploadWebp'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 const NAVY = '#252855'
 const inp: React.CSSProperties = {
@@ -49,21 +50,41 @@ export default function PaginasPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // Interruptor del cuadro "Selección curada para tu setup." — se guarda
+  // aparte (no espera al botón "Guardar cambios") y pide confirmación tanto
+  // para prenderlo como para apagarlo, para que no se toque por accidente.
+  const [resumenActivo, setResumenActivo] = useState(true)
+  const [guardandoResumen, setGuardandoResumen] = useState(false)
+  const [confirmResumen, setConfirmResumen] = useState<'activar' | 'desactivar' | null>(null)
+
   const [destacados, setDestacados] = useState<Destacado[]>(DEFAULT_DESTACADOS)
   const [uploadingDest, setUploadingDest] = useState<number | null>(null)
   const destFileRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
   useEffect(() => {
     supabase.from('config_storefront')
-      .select('hero_titulo,hero_subtitulo,hero_cta,hero_tag1,hero_tag2,hero_tag3,meta_titulo,meta_descripcion,og_imagen,destacados')
+      .select('hero_titulo,hero_subtitulo,hero_cta,hero_tag1,hero_tag2,hero_tag3,meta_titulo,meta_descripcion,og_imagen,destacados,inicio_resumen_activo')
       .eq('id', 1).single()
       .then(({ data }) => {
         if (data) setF(conDefaults(DEFAULTS, data))
         if (data?.destacados && data.destacados.length > 0) setDestacados(data.destacados)
+        if (data && data.inicio_resumen_activo !== null && data.inicio_resumen_activo !== undefined) {
+          setResumenActivo(!!data.inicio_resumen_activo)
+        }
       })
   }, [])
 
   function set(key: keyof Fields, val: string) { setF(p => ({ ...p, [key]: val })) }
+
+  async function confirmarToggleResumen() {
+    if (!confirmResumen) return
+    const nuevoValor = confirmResumen === 'activar'
+    setGuardandoResumen(true)
+    await supabase.from('config_storefront').update({ inicio_resumen_activo: nuevoValor, updated_at: new Date().toISOString() }).eq('id', 1)
+    setResumenActivo(nuevoValor)
+    setGuardandoResumen(false)
+    setConfirmResumen(null)
+  }
 
   function setDestacado(i: number, field: keyof Destacado, val: string) {
     setDestacados(prev => { const d = [...prev]; d[i] = { ...d[i], [field]: val }; return d })
@@ -123,6 +144,22 @@ export default function PaginasPage() {
               <label style={lbl}>Texto del botón CTA</label>
               <input style={inp} value={f.hero_cta} onChange={e => set('hero_cta', e.target.value)} placeholder="Ver productos" />
             </div>
+          </div>
+        </div>
+
+        {/* Cuadro "Selección curada" */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 2 }}>Cuadro "Selección curada para tu setup."</p>
+              <p style={{ fontSize: 12, color: '#9ca3af' }}>El recuadro con el subtítulo y los 3 badges que aparece debajo del menú, solo en Inicio.</p>
+            </div>
+            <button
+              onClick={() => setConfirmResumen(resumenActivo ? 'desactivar' : 'activar')}
+              disabled={guardandoResumen}
+              style={{ width: 44, height: 24, borderRadius: 12, border: 'none', background: resumenActivo ? '#0049ff' : '#d1d5db', cursor: guardandoResumen ? 'default' : 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0, opacity: guardandoResumen ? 0.6 : 1 }}>
+              <span style={{ position: 'absolute', top: 2, left: resumenActivo ? 22 : 2, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+            </button>
           </div>
         </div>
 
@@ -251,6 +288,19 @@ export default function PaginasPage() {
           Abrir tienda ↗
         </a>
       </div>
+
+      {confirmResumen && (
+        <ConfirmDialog
+          danger={confirmResumen === 'desactivar'}
+          title={confirmResumen === 'activar' ? '¿Mostrar el cuadro "Selección curada"?' : '¿Ocultar el cuadro "Selección curada"?'}
+          message={confirmResumen === 'activar'
+            ? 'Va a volver a aparecer debajo del menú en la vista de Inicio de la tienda.'
+            : 'Va a dejar de mostrarse debajo del menú en la vista de Inicio de la tienda. Podrás volver a activarlo cuando quieras.'}
+          confirmLabel={guardandoResumen ? 'Guardando...' : (confirmResumen === 'activar' ? 'Sí, mostrar' : 'Sí, ocultar')}
+          onConfirm={confirmarToggleResumen}
+          onCancel={() => setConfirmResumen(null)}
+        />
+      )}
     </div>
   )
 }

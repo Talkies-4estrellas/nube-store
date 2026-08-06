@@ -52,12 +52,17 @@ export async function resolverProveedorDeVentaItem(
     .maybeSingle()
   if (!producto?.sku) return null
 
-  const { data: solicitud } = await supabase
+  // Puede haber más de una solicitud aprobada para el mismo SKU (reenvíos,
+  // pruebas, etc.) — .maybeSingle() truena si hay más de una fila, así que
+  // se pide la más reciente en vez de asumir que el SKU es único aquí.
+  const { data: solicitudes } = await supabase
     .from('solicitudes_productos')
     .select('proveedor_email, proveedor_nombre')
     .eq('producto_sku', producto.sku)
     .eq('estado', 'aprobado')
-    .maybeSingle()
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const solicitud = solicitudes?.[0]
   if (!solicitud?.proveedor_email) return null
 
   return { email: solicitud.proveedor_email, nombre: solicitud.proveedor_nombre ?? solicitud.proveedor_email }
@@ -104,12 +109,17 @@ export async function resolverProveedorDeProducto(
   supabase: SupabaseClient,
   sku: string,
 ): Promise<{ email: string; nombre: string } | null> {
-  const { data: solicitud } = await supabase
+  // Mismo caso: puede haber más de una solicitud aprobada para el mismo SKU
+  // (reenvíos, pruebas, etc.) — se toma la más reciente en vez de asumir
+  // que el SKU es único, para no tronar con .maybeSingle().
+  const { data: solicitudes } = await supabase
     .from('solicitudes_productos')
     .select('proveedor_email, proveedor_nombre')
     .eq('producto_sku', sku)
     .eq('estado', 'aprobado')
-    .maybeSingle()
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const solicitud = solicitudes?.[0]
   if (!solicitud?.proveedor_email) return null
   return { email: solicitud.proveedor_email, nombre: solicitud.proveedor_nombre ?? solicitud.proveedor_email }
 }
