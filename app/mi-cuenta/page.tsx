@@ -565,8 +565,8 @@ export default function MiCuentaPage() {
                   return (
                     <button key={c.id} type="button" onClick={() => setConversacionActiva(c.id)}
                       style={{ width: '100%', display: 'block', padding: '12px 18px', background: activa ? '#f1f5ff' : 'none', border: 'none', borderBottom: '1px solid #f3f4f6', cursor: 'pointer', textAlign: 'left' }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.producto_nombre || c.proveedor_email || 'Proveedor'}</p>
-                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>{`Proveedor · ${c.proveedor_email}`}</p>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: NAVY, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.producto_nombre || 'Producto'}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9ca3af' }}>Proveedor</p>
                     </button>
                   )
                 })
@@ -579,7 +579,9 @@ export default function MiCuentaPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {c && (
                     <div style={{ background: '#fff', borderRadius: 12, padding: '10px 16px', boxShadow: '0 2px 16px rgba(37,40,85,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>{c.tipo === 'cliente_admin' ? 'Soporte Order Express' : (c.proveedor_email || 'Proveedor')}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: NAVY }}>
+                        {c.tipo === 'cliente_admin' ? 'Soporte Order Express' : 'Proveedor'}
+                      </span>
                       {c.tipo === 'cliente_proveedor' && (
                         <>
                           <span style={{ fontSize: 12, color: '#9ca3af' }}>· sobre</span>

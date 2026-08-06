@@ -72,10 +72,16 @@ export default function ChatPanel({ supabase, conversacionId, remitenteTipo, rem
         ) : (
           mensajes.map(m => {
             const esPropio = m.remitente_tipo === remitenteTipo
-            // El proveedor nunca ve el nombre/correo real del cliente — solo sabe de qué
-            // producto se le habla, para proteger la identidad de quien compra.
-            const ocultarIdentidad = !esPropio && remitenteTipo === 'proveedor' && m.remitente_tipo === 'cliente'
-            const nombreMostrado = ocultarIdentidad ? 'Cliente' : (m.remitente_nombre || m.remitente_email)
+            // Ninguna de las dos partes ve el nombre/correo real de la otra en
+            // un chat cliente↔proveedor — solo de qué producto se habla. El
+            // chat con soporte (admin) sí muestra su nombre normal.
+            const ocultarIdentidad = !esPropio && (
+              (remitenteTipo === 'proveedor' && m.remitente_tipo === 'cliente') ||
+              (remitenteTipo === 'cliente' && m.remitente_tipo === 'proveedor')
+            )
+            const nombreMostrado = ocultarIdentidad
+              ? (m.remitente_tipo === 'cliente' ? 'Cliente' : 'Proveedor')
+              : (m.remitente_nombre || m.remitente_email)
             return (
               <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: esPropio ? 'flex-end' : 'flex-start' }}>
                 {!esPropio && (

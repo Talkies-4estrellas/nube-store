@@ -179,27 +179,31 @@ export async function obtenerOcrearConversacionAdmin(
 }
 
 /**
- * Detecta datos de contacto (teléfonos, correos, redes, links externos) que
- * permitirían saltarse el chat interno y contactar fuera de la plataforma.
- * Se aplica antes de insertar el mensaje — protección de datos entre cliente
- * y proveedor pedida explícitamente: el chat es el único canal permitido.
+ * Censura números de teléfono / códigos numéricos en vez de bloquear todo
+ * el mensaje — así el resto de lo que la persona escribió sí llega, y el
+ * número nunca queda visible en el chat. Dos pasadas:
+ *  1. Rachas de 6+ dígitos, tolerando también el punto como separador
+ *     (para números tipo "44.71.72.21.46").
+ *  2. Rachas de 4-5 dígitos, SIN tolerar el punto — así no se come los
+ *     centavos de un precio como "$1,400.00" (que solo llega a agrupar
+ *     5 dígitos con la primera pasada, nunca 6).
+ */
+export function censurarNumeros(texto: string): string {
+  const OCULTO = '[número oculto]'
+  let resultado = texto.replace(/\d(?:[\s\-.()/]*\d){5,}/g, OCULTO)
+  resultado = resultado.replace(/\d(?:[\s\-()/]*\d){3,}/g, OCULTO)
+  return resultado
+}
+
+/**
+ * Detecta correos y links/redes que permitirían saltarse el chat interno y
+ * contactar fuera de la plataforma — estos sí se bloquean por completo (a
+ * diferencia de los números, no tiene sentido "censurar" un link a medias).
  */
 export function detectarDatoDeContacto(texto: string): string | null {
-  // Teléfonos / códigos numéricos: se quitan los separadores que alguien
-  // podría meter para partir un número y colarlo (espacios, guiones, puntos,
-  // paréntesis, diagonales) y se busca una racha de 6+ dígitos seguidos.
-  // Antes solo toleraba esos separadores DENTRO del conteo de repeticiones,
-  // así que "3211/212" (con "/") o cualquier número de 6 dígitos exacto
-  // se colaban — ya no.
-  const soloNumeros = texto.replace(/[\s\-.()/]/g, '')
-  if (/\d{6,}/.test(soloNumeros)) {
-    return 'No se permite compartir números de teléfono u otros datos numéricos de contacto en el chat.'
-  }
-  // Correos electrónicos
   if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(texto)) {
     return 'No se permite compartir correos electrónicos en el chat.'
   }
-  // Redes sociales / apps de mensajería / links externos
   if (/(wa\.me|whatsapp|t\.me|telegram|instagram|facebook\.com|fb\.com|twitter\.com|x\.com|tiktok|@[a-z0-9_.]{3,}|https?:\/\/|www\.)/i.test(texto)) {
     return 'No se permite compartir redes sociales ni enlaces externos en el chat.'
   }
@@ -210,9 +214,10 @@ export async function enviarMensaje(
   supabase: SupabaseClient,
   params: { conversacionId: string; remitenteTipo: TipoRemitente; remitenteEmail: string; remitenteNombre: string; texto: string },
 ): Promise<{ ok: boolean; error?: string }> {
-  const texto = params.texto.trim()
-  const motivoBloqueo = detectarDatoDeContacto(texto)
+  const original = params.texto.trim()
+  const motivoBloqueo = detectarDatoDeContacto(original)
   if (motivoBloqueo) return { ok: false, error: motivoBloqueo }
+  const texto = censurarNumeros(original)
 
   const { error } = await supabase.from('mensajes').insert({
     conversacion_id: params.conversacionId,
