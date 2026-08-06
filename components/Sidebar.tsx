@@ -22,6 +22,7 @@ const ALL_SECTIONS: NavSection[] = [
       { href: '/ventas',     label: 'Ventas',    icon: 'cart'  },
       { href: '/productos',  label: 'Productos', icon: 'box'   },
       { href: '/clientes',   label: 'Clientes',  icon: 'users' },
+      { href: '/mensajes',   label: 'Mensajes',  icon: 'clipboard' },
       { href: '/envio-nube', label: 'Envíos',    icon: 'truck' },
     ],
   },

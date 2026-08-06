@@ -156,22 +156,37 @@ export async function obtenerOcrearConversacionProveedorProducto(
   return nueva.id
 }
 
-/** Hilo único cliente↔admin: lo busca o lo crea si es la primera vez que el cliente escribe. */
+/**
+ * Hilo cliente↔admin: lo busca o lo crea si es la primera vez.
+ * Sin `productoId` es el hilo GENERAL de soporte/técnico/empresa (uno solo
+ * por cliente, se ve en Configuración → Comentarios). Con `productoId` es
+ * un hilo aparte sobre ESE producto puntual (uno por cliente+producto, se
+ * ve en el panel de Mensajes de Clientes) — se usa cuando un producto no
+ * tiene proveedor real vinculado y el cliente da clic en "Contactar a soporte"
+ * desde la ficha del producto.
+ */
 export async function obtenerOcrearConversacionAdmin(
   supabase: SupabaseClient,
-  params: { clienteEmail: string; clienteNombre: string },
+  params: { clienteEmail: string; clienteNombre: string; productoId?: string; productoNombre?: string },
 ): Promise<string | null> {
-  const { data: existente } = await supabase
+  let query = supabase
     .from('conversaciones')
     .select('id')
     .eq('tipo', 'cliente_admin')
     .eq('cliente_email', params.clienteEmail)
-    .maybeSingle()
+  query = params.productoId ? query.eq('producto_id', params.productoId) : query.is('producto_id', null)
+  const { data: existente } = await query.maybeSingle()
   if (existente) return existente.id
 
   const { data: nueva, error } = await supabase
     .from('conversaciones')
-    .insert({ tipo: 'cliente_admin', cliente_email: params.clienteEmail, cliente_nombre: params.clienteNombre })
+    .insert({
+      tipo: 'cliente_admin',
+      cliente_email: params.clienteEmail,
+      cliente_nombre: params.clienteNombre,
+      producto_id: params.productoId ?? null,
+      producto_nombre: params.productoNombre ?? null,
+    })
     .select('id')
     .single()
   if (error) return null

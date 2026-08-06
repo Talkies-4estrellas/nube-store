@@ -21,7 +21,7 @@ export type AuthUser = {
 
 // Rutas que cada rol puede ver
 export const ROLE_ROUTES: Record<Role, string[]> = {
-  admin:     ['/dashboard', '/ventas', '/productos', '/clientes', '/envio-nube', '/tienda-en-linea', '/punto-de-venta', '/configuracion'],
+  admin:     ['/dashboard', '/ventas', '/productos', '/clientes', '/mensajes', '/envio-nube', '/tienda-en-linea', '/punto-de-venta', '/configuracion'],
   vendedor:  ['/dashboard', '/ventas', '/clientes'],
   bodega:    ['/productos', '/envio-nube'],
   proveedor: ['/proveedores'],

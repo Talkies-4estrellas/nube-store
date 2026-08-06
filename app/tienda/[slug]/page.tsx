@@ -173,7 +173,10 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
     }
     setErrorContacto('')
     setContactando(true)
-    const convId = await obtenerOcrearConversacionAdmin(supabase, { clienteEmail: user.email, clienteNombre: user.nombre })
+    const convId = await obtenerOcrearConversacionAdmin(supabase, {
+      clienteEmail: user.email, clienteNombre: user.nombre,
+      productoId: producto.id, productoNombre: producto.nombre,
+    })
     setContactando(false)
     if (!convId) { setErrorContacto('No se pudo iniciar la conversación.'); return }
     setConversacionId(convId)

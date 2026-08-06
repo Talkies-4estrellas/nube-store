@@ -154,7 +154,9 @@ export default function ConfiguracionPage() {
 
   async function fetchComentarios() {
     setCargandoComentarios(true)
-    const { data } = await supabase.from('conversaciones').select('*').eq('tipo', 'cliente_admin').order('updated_at', { ascending: false })
+    // Solo soporte general/técnico/empresa — lo que sea sobre un producto
+    // puntual vive aparte, en Clientes → Mensajes.
+    const { data } = await supabase.from('conversaciones').select('*').eq('tipo', 'cliente_admin').is('producto_id', null).order('updated_at', { ascending: false })
     setComentarios(data ?? [])
     setCargandoComentarios(false)
   }
