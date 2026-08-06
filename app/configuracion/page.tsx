@@ -13,6 +13,29 @@ type Section = 'perfil' | 'negocio' | 'contacto' | 'pagos' | 'notificaciones' | 
 
 type UserRow = { id: string; user_id: string; nombre: string; role: string; created_at: string; email?: string }
 
+type PagosSecretos = {
+  openpay_merchant_id: string; openpay_private_key: string; openpay_mode: 'sandbox' | 'live'
+  paypal_client_id: string; paypal_client_secret: string; paypal_mode: 'sandbox' | 'live'
+  mp_access_token: string
+}
+const PAGOS_SECRETOS_DEFAULTS: PagosSecretos = {
+  openpay_merchant_id: '', openpay_private_key: '', openpay_mode: 'sandbox',
+  paypal_client_id: '', paypal_client_secret: '', paypal_mode: 'sandbox',
+  mp_access_token: '',
+}
+
+/** Fusiona con los valores por defecto sin dejar pasar `null` — las columnas
+ * opcionales que nunca se llenaron vienen `null` desde Supabase, y un
+ * `<input>` controlado no acepta `value={null}` (React se queja en consola). */
+function conDefaults<T extends object>(defaults: T, data: Partial<Record<keyof T, unknown>>): T {
+  const resultado = { ...defaults }
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const val = data[key]
+    if (val !== null && val !== undefined) resultado[key] = val as T[keyof T]
+  }
+  return resultado
+}
+
 const ALL_NAV: { id: Section; label: string; icon: string; adminOnly?: boolean }[] = [
   { id: 'perfil',         label: 'Editar perfil',        icon: 'users'      },
   { id: 'negocio',        label: 'Datos del negocio',    icon: 'store'      },
@@ -163,6 +186,22 @@ export default function ConfiguracionPage() {
   const [heroSubtitulo, setHeroSubtitulo] = useState('')
   const [heroCta, setHeroCta] = useState('')
 
+  // Claves de las pasarelas de pago (antes vivían en Tienda en línea → Legal)
+  const [pagosSecretos,       setPagosSecretos]       = useState<PagosSecretos>(PAGOS_SECRETOS_DEFAULTS)
+  const [savingPagosSecretos, setSavingPagosSecretos] = useState(false)
+  const [savedPagosSecretos,  setSavedPagosSecretos]  = useState(false)
+  const [errorPagosSecretos,  setErrorPagosSecretos]  = useState('')
+  function setPagoSecreto<K extends keyof PagosSecretos>(key: K, val: PagosSecretos[K]) { setPagosSecretos(p => ({ ...p, [key]: val })) }
+
+  // Campos verdaderamente secretos (no IDs/merchant públicos): nunca se cargan
+  // con su valor real en el navegador — solo se sabe que "ya hay una guardada"
+  // y el campo permite escribir una nueva para reemplazarla. Así, aunque
+  // alguien vea la pantalla o intercepte una respuesta, no se lleva la clave.
+  const CAMPOS_SECRETOS = ['openpay_private_key', 'paypal_client_secret', 'mp_access_token'] as const
+  const [clavesGuardadas, setClavesGuardadas] = useState<Record<typeof CAMPOS_SECRETOS[number], boolean>>({
+    openpay_private_key: false, paypal_client_secret: false, mp_access_token: false,
+  })
+
   useEffect(() => {
     // Cargar config_storefront
     supabase.from('config_storefront').select('*').eq('id', 1).single()
@@ -189,7 +228,63 @@ export default function ConfiguracionPage() {
           setNotif({ stock_bajo: data.stock_bajo, nueva_venta: data.nueva_venta, email_resumen: data.email_resumen })
         })
     })
+    // Cargar claves de las pasarelas de pago — los campos secretos NUNCA se
+    // cargan con su valor real, solo se marca que "ya hay una guardada".
+    supabase.from('config_pagos_secretos').select('*').eq('id', 1).maybeSingle()
+      .then(({ data, error }) => {
+        if (error) { setErrorPagosSecretos('No se pudieron cargar las llaves: ' + error.message); return }
+        if (!data) return
+        const conValores = conDefaults(PAGOS_SECRETOS_DEFAULTS, data)
+        setClavesGuardadas({
+          openpay_private_key: !!data.openpay_private_key,
+          paypal_client_secret: !!data.paypal_client_secret,
+          mp_access_token: !!data.mp_access_token,
+        })
+        setPagosSecretos({ ...conValores, openpay_private_key: '', paypal_client_secret: '', mp_access_token: '' })
+      })
   }, [])
+
+  async function guardarPagosSecretos() {
+    setSavingPagosSecretos(true)
+    setErrorPagosSecretos('')
+
+    // Los campos secretos solo se mandan si el admin escribió un valor nuevo —
+    // si se dejan vacíos, NO se sobreescribe lo que ya había guardado.
+    const payload: Record<string, unknown> = {
+      id: 1,
+      openpay_merchant_id: pagosSecretos.openpay_merchant_id,
+      openpay_mode: pagosSecretos.openpay_mode,
+      paypal_client_id: pagosSecretos.paypal_client_id,
+      paypal_mode: pagosSecretos.paypal_mode,
+      updated_at: new Date().toISOString(),
+    }
+    const camposModificados: string[] = []
+    for (const campo of CAMPOS_SECRETOS) {
+      if (pagosSecretos[campo]) { payload[campo] = pagosSecretos[campo]; camposModificados.push(campo) }
+    }
+
+    const { error } = await supabase.from('config_pagos_secretos').upsert(payload)
+    setSavingPagosSecretos(false)
+    if (error) { setErrorPagosSecretos('No se pudo guardar: ' + error.message); return }
+
+    if (camposModificados.length > 0) {
+      setClavesGuardadas(prev => {
+        const next = { ...prev }
+        for (const campo of camposModificados) next[campo as typeof CAMPOS_SECRETOS[number]] = true
+        return next
+      })
+      // Se re-vacían de inmediato — no dejamos la clave recién escrita
+      // sentada en el campo una vez que ya se guardó.
+      setPagosSecretos(prev => ({ ...prev, openpay_private_key: '', paypal_client_secret: '', mp_access_token: '' }))
+      registrarAuditoria(supabase, {
+        usuarioId: user?.id, accion: 'editar_claves_pago', tabla: 'config_pagos_secretos', registroId: '1',
+        valorNuevo: camposModificados.join(', '),
+      })
+    }
+
+    setSavedPagosSecretos(true)
+    setTimeout(() => setSavedPagosSecretos(false), 2500)
+  }
 
   async function handleSave() {
     await Promise.all([
@@ -355,6 +450,84 @@ export default function ConfiguracionPage() {
           </Card>
         )}
 
+        {section === 'pagos' && (
+          <div style={{ background: '#fff', borderRadius: 12, padding: '24px 28px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <span style={{ fontSize: 20 }}>🔑</span>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111' }}>Claves de pago</p>
+            </div>
+            <p style={{ margin: '0 0 20px', fontSize: 11, color: '#9ca3af' }}>
+              Credenciales de las pasarelas. Solo las puede ver y editar un administrador — no se exponen en la tienda pública.
+            </p>
+
+            {/* BBVA / OpenPay */}
+            <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>BBVA (OpenPay)</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Merchant ID</label>
+                <input style={inputStyle} value={pagosSecretos.openpay_merchant_id} onChange={e => setPagoSecreto('openpay_merchant_id', e.target.value)} placeholder="mxxxxxxxxxxxx" />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Llave privada</label>
+                <input type="password" style={inputStyle} value={pagosSecretos.openpay_private_key} onChange={e => setPagoSecreto('openpay_private_key', e.target.value)}
+                  placeholder={clavesGuardadas.openpay_private_key ? '•••••••• (ya configurada — escribe para reemplazar)' : 'sk_xxxxxxxxxxxx'} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Modo</label>
+                <select style={{ ...inputStyle, cursor: 'pointer' }} value={pagosSecretos.openpay_mode} onChange={e => setPagoSecreto('openpay_mode', e.target.value as 'sandbox' | 'live')}>
+                  <option value="sandbox">Pruebas (sandbox)</option>
+                  <option value="live">Producción (live)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* PayPal */}
+            <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>PayPal</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Client ID</label>
+                <input style={inputStyle} value={pagosSecretos.paypal_client_id} onChange={e => setPagoSecreto('paypal_client_id', e.target.value)} placeholder="AeXXXXXXXXXXXXXXXXXXXXXX" />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Client Secret</label>
+                <input type="password" style={inputStyle} value={pagosSecretos.paypal_client_secret} onChange={e => setPagoSecreto('paypal_client_secret', e.target.value)}
+                  placeholder={clavesGuardadas.paypal_client_secret ? '•••••••• (ya configurada — escribe para reemplazar)' : 'EXXXXXXXXXXXXXXXXXXXXXXX'} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Modo</label>
+                <select style={{ ...inputStyle, cursor: 'pointer' }} value={pagosSecretos.paypal_mode} onChange={e => setPagoSecreto('paypal_mode', e.target.value as 'sandbox' | 'live')}>
+                  <option value="sandbox">Pruebas (sandbox)</option>
+                  <option value="live">Producción (live)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Mercado Pago */}
+            <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>Mercado Pago</p>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Access Token</label>
+              <input type="password" style={inputStyle} value={pagosSecretos.mp_access_token} onChange={e => setPagoSecreto('mp_access_token', e.target.value)}
+                placeholder={clavesGuardadas.mp_access_token ? '•••••••• (ya configurada — escribe para reemplazar)' : 'APP_USR-xxxx o TEST-xxxx'} />
+              <p style={{ fontSize: 11, color: '#9ca3af', margin: '4px 0 0' }}>Usa el token que empieza con TEST- para pruebas, o APP_USR- para producción.</p>
+            </div>
+
+            {errorPagosSecretos && (
+              <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 16 }}>
+                {errorPagosSecretos}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={guardarPagosSecretos} disabled={savingPagosSecretos} style={{
+                background: savedPagosSecretos ? '#059669' : '#0049ff', color: '#fff', border: 'none',
+                padding: '11px 28px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'background 0.2s',
+              }}>
+                {savingPagosSecretos ? 'Guardando...' : savedPagosSecretos ? '¡Guardado!' : 'Guardar claves'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {section === 'notificaciones' && (
           <Card title="Notificaciones">
             <Toggle label="Alerta de stock bajo" desc="Notificación cuando un producto tiene 3 unidades o menos" value={notif.stock_bajo} onChange={v => setNotif(p => ({ ...p, stock_bajo: v }))} />
@@ -423,13 +596,15 @@ export default function ConfiguracionPage() {
                   const accionLabel: Record<string, string> = {
                     cambio_rol: 'cambió el rol', eliminar_acceso: 'quitó el acceso',
                     suspender_proveedor: 'suspendió a un proveedor', reactivar_proveedor: 'reactivó a un proveedor',
+                    editar_claves_pago: 'editó las claves de pago',
                   }
                   return (
                     <div key={b.id} style={{ fontSize: 12, color: '#374151', paddingLeft: 12, borderLeft: '2px solid #e5e7eb' }}>
                       <p style={{ margin: 0 }}>
                         <strong>{usuarioNombre}</strong> {accionLabel[b.accion] ?? b.accion}
-                        {b.valor_anterior && b.valor_nuevo && ` de "${ROLE_LABEL[b.valor_anterior] ?? b.valor_anterior}" a "${ROLE_LABEL[b.valor_nuevo] ?? b.valor_nuevo}"`}
-                        {b.valor_anterior && !b.valor_nuevo && ` (tenía rol "${ROLE_LABEL[b.valor_anterior] ?? b.valor_anterior}")`}
+                        {b.accion === 'cambio_rol' && b.valor_anterior && b.valor_nuevo && ` de "${ROLE_LABEL[b.valor_anterior] ?? b.valor_anterior}" a "${ROLE_LABEL[b.valor_nuevo] ?? b.valor_nuevo}"`}
+                        {b.accion === 'cambio_rol' && b.valor_anterior && !b.valor_nuevo && ` (tenía rol "${ROLE_LABEL[b.valor_anterior] ?? b.valor_anterior}")`}
+                        {b.accion === 'editar_claves_pago' && b.valor_nuevo && ` (${b.valor_nuevo})`}
                       </p>
                       <p style={{ margin: '2px 0 0', color: '#9ca3af' }}>
                         {new Date(b.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
