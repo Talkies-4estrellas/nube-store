@@ -185,8 +185,14 @@ export async function obtenerOcrearConversacionAdmin(
  * y proveedor pedida explícitamente: el chat es el único canal permitido.
  */
 export function detectarDatoDeContacto(texto: string): string | null {
-  // Teléfonos: 7+ dígitos seguidos, tolerando espacios/guiones/paréntesis/puntos entre ellos
-  if (/(?:\d[\s\-.()]*){7,}/.test(texto)) {
+  // Teléfonos / códigos numéricos: se quitan los separadores que alguien
+  // podría meter para partir un número y colarlo (espacios, guiones, puntos,
+  // paréntesis, diagonales) y se busca una racha de 6+ dígitos seguidos.
+  // Antes solo toleraba esos separadores DENTRO del conteo de repeticiones,
+  // así que "3211/212" (con "/") o cualquier número de 6 dígitos exacto
+  // se colaban — ya no.
+  const soloNumeros = texto.replace(/[\s\-.()/]/g, '')
+  if (/\d{6,}/.test(soloNumeros)) {
     return 'No se permite compartir números de teléfono u otros datos numéricos de contacto en el chat.'
   }
   // Correos electrónicos

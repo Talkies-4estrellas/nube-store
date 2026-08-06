@@ -7,7 +7,7 @@ import { use } from 'react'
 import { ArrowLeft, Search, ShoppingCart } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import ChatPanel from '@/components/ChatPanel'
-import { resolverProveedorDeProducto, obtenerOcrearConversacionProveedorProducto } from '@/lib/mensajeria'
+import { resolverProveedorDeProducto, obtenerOcrearConversacionProveedorProducto, obtenerOcrearConversacionAdmin } from '@/lib/mensajeria'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -34,6 +34,8 @@ type Producto = {
   imagen_url: string | null
   categorias: { nombre: string } | null
   detalles: Detalles | null
+  origen: string | null
+  proveedor_email: string | null
 }
 
 function SkeletonBox({ w, h, r = 8 }: { w: string; h: number; r?: number }) {
@@ -93,7 +95,7 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
   useEffect(() => {
     supabase
       .from('productos')
-      .select('id, nombre, sku, precio, stock, descripcion, imagen_url, detalles, categorias(nombre)')
+      .select('id, nombre, sku, precio, stock, descripcion, imagen_url, detalles, origen, proveedor_email, categorias(nombre)')
       .eq('sku', sku)
       .eq('activo', true)
       .maybeSingle()
@@ -154,6 +156,24 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
       clienteEmail: user.email, clienteNombre: user.nombre,
       proveedorEmail: proveedor.email, productoId: producto.id, productoNombre: producto.nombre,
     })
+    setContactando(false)
+    if (!convId) { setErrorContacto('No se pudo iniciar la conversación.'); return }
+    setConversacionId(convId)
+    setChatAbierto(true)
+  }
+
+  // Para productos subidos directo por el admin (sin proveedor real
+  // vinculado) no tiene caso ofrecer "Contactar al proveedor" — no existe
+  // a quién contactar. En su lugar se abre un chat con soporte.
+  async function contactarSoporte() {
+    if (!producto) return
+    if (!user?.email) {
+      window.location.href = `/login?redirect=${encodeURIComponent(`/tienda/${sku}`)}`
+      return
+    }
+    setErrorContacto('')
+    setContactando(true)
+    const convId = await obtenerOcrearConversacionAdmin(supabase, { clienteEmail: user.email, clienteNombre: user.nombre })
     setContactando(false)
     if (!convId) { setErrorContacto('No se pudo iniciar la conversación.'); return }
     setConversacionId(convId)
@@ -447,12 +467,23 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
                   <Link href="/" style={{ display: 'block', textAlign: 'center', background: `${NAVY}10`, color: NAVY, border: `1.5px solid ${NAVY}20`, padding: '13px 0', borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none' }}>
                     Ver más productos
                   </Link>
-                  <button onClick={contactarProveedor} disabled={contactando} style={{
-                    background: 'none', color: NAVY, border: `1.5px solid #e5e7eb`, padding: '12px 0', borderRadius: 12,
-                    fontWeight: 700, fontSize: 14, cursor: contactando ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  }}>
-                    💬 {contactando ? 'Buscando proveedor...' : 'Contactar al proveedor'}
-                  </button>
+                  {producto.origen === 'proveedor' || producto.proveedor_email ? (
+                    <button onClick={contactarProveedor} disabled={contactando} style={{
+                      background: 'none', color: NAVY, border: `1.5px solid #e5e7eb`, padding: '12px 0', borderRadius: 12,
+                      fontWeight: 700, fontSize: 14, cursor: contactando ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    }}>
+                      💬 {contactando ? 'Buscando proveedor...' : 'Contactar al proveedor'}
+                    </button>
+                  ) : (
+                    // Producto subido directo por el admin — no hay proveedor
+                    // real al que dirigir el mensaje, se ofrece soporte en su lugar.
+                    <button onClick={contactarSoporte} disabled={contactando} style={{
+                      background: 'none', color: NAVY, border: `1.5px solid #e5e7eb`, padding: '12px 0', borderRadius: 12,
+                      fontWeight: 700, fontSize: 14, cursor: contactando ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    }}>
+                      💬 {contactando ? 'Conectando...' : 'Contactar a soporte'}
+                    </button>
+                  )}
                   {errorContacto && (
                     <p style={{ fontSize: 12, color: '#dc2626', textAlign: 'center', margin: 0 }}>{errorContacto}</p>
                   )}
@@ -528,7 +559,9 @@ export default function TiendaProductoPage({ params }: { params: Promise<{ slug:
           onClick={e => { if (e.target === e.currentTarget) setChatAbierto(false) }}>
           <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 460, boxShadow: '0 24px 64px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #f3f4f6' }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: NAVY }}>Chat con el proveedor</p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: NAVY }}>
+                {producto && (producto.origen === 'proveedor' || producto.proveedor_email) ? 'Chat con el proveedor' : 'Chat con soporte'}
+              </p>
               <button onClick={() => setChatAbierto(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af' }}>×</button>
             </div>
             <ChatPanel supabase={supabase} conversacionId={conversacionId} remitenteTipo="cliente" remitenteEmail={user.email} remitenteNombre={user.nombre} accent={PINK} />
