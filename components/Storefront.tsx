@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import './storefront.css'
 import {
-  Home, ShoppingBag, Sparkles, Heart, BadgePercent, ShoppingCart, Headphones, LifeBuoy,
+  Home, ShoppingBag, Sparkles, Heart, BadgePercent, ShoppingCart, Headphones, Headset, LifeBuoy,
   Search, ArrowRight, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, Plus, SlidersHorizontal,
   Keyboard, Gamepad2, Speaker, Watch, Check, PackageCheck, ShieldCheck, Truck, Send,
   Grid2x2, SearchX, MessageCircle, LogIn, Trash2, UserCircle2, type LucideIcon,
@@ -19,7 +19,7 @@ type CheckoutState = 'form' | 'loading' | 'success' | 'error'
 
 const ICONS: Record<string, LucideIcon> = {
   home: Home, 'shopping-bag': ShoppingBag, sparkles: Sparkles, heart: Heart,
-  'badge-percent': BadgePercent, 'shopping-cart': ShoppingCart, headphones: Headphones, 'life-buoy': LifeBuoy,
+  'badge-percent': BadgePercent, 'shopping-cart': ShoppingCart, headphones: Headphones, headset: Headset, 'life-buoy': LifeBuoy,
   search: Search, 'arrow-right': ArrowRight, 'arrow-left': ArrowLeft,
   'chevron-left': ChevronLeft, 'chevron-right': ChevronRight, 'chevron-down': ChevronDown, plus: Plus,
   'sliders-horizontal': SlidersHorizontal, keyboard: Keyboard, 'gamepad-2': Gamepad2,
@@ -130,7 +130,7 @@ const navItems = [
   { view: 'favoritos', icon: 'heart', label: 'Favoritos' },
   { view: 'ofertas', icon: 'badge-percent', label: 'Ofertas' },
   { view: 'carrito', icon: 'shopping-cart', label: 'Carrito' },
-  { view: 'soporte', icon: 'support-agent', label: 'Soporte' },
+  { view: 'soporte', icon: 'headset', label: 'Soporte' },
 ]
 
 const slides = [
@@ -201,6 +201,16 @@ export default function Storefront() {
     sidebarHideTimer.current = setTimeout(() => setSidebarRetracted(true), 2000)
   }
   useEffect(() => () => { if (sidebarHideTimer.current) clearTimeout(sidebarHideTimer.current) }, [])
+  // Al cargar la página el timer de retracción solo se armaba desde
+  // onSidebarMouseLeave, así que si el usuario nunca pasaba el mouse por
+  // el sidebar, este se quedaba expandido para siempre. Se arma el mismo
+  // timer una vez al montar, para que se retraiga solo a los 2s aunque
+  // nadie lo haya tocado.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px) and (pointer: coarse)').matches) return
+    const t = setTimeout(() => setSidebarRetracted(true), 2000)
+    return () => clearTimeout(t)
+  }, [])
   // Si la pantalla pasa a tamaño móvil (redimensionar/girar) mientras estaba
   // retraído, se restablece — esta función es solo de escritorio.
   useEffect(() => {
