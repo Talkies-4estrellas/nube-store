@@ -279,12 +279,12 @@ export default function DashboardPage() {
     { label: `Ventas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString('es-MX')}`, icon: 'dollar', href: '/ventas', color: '#059669' },
     { label: 'Pedidos activos', value: pedidosActivos, icon: 'clipboard', href: '/ventas', color: '#d97706' },
     { label: 'Total de productos', value: totalProductos, icon: 'box', href: '/productos', color: '#374151' },
-    { label: 'Pendientes de aprobación', value: solicitudes.length, icon: 'clock', href: '/configuracion', color: '#d97706' },
+    { label: 'Pendientes de aprobación', value: solicitudes.length, icon: 'clock', href: '/productos?solicitudes=1', color: '#d97706' },
     { label: 'Productos aprobados', value: productosAprobados, icon: 'check', href: '/productos', color: '#059669' },
-    { label: 'Productos rechazados', value: productosRechazados, icon: 'warning', href: '/configuracion', color: '#dc2626' },
+    { label: 'Productos rechazados', value: productosRechazados, icon: 'warning', href: null, color: '#dc2626' },
     { label: 'Clientes registrados', value: totalClientes, icon: 'users', href: '/clientes', color: BLUE },
-    { label: 'Proveedores registrados', value: totalProveedores, icon: 'users', href: '/configuracion', color: '#7c3aed' },
-    { label: 'Productos sin stock', value: totalSinStock, icon: 'warning', href: '/productos', color: '#dc2626' },
+    { label: 'Proveedores registrados', value: totalProveedores, icon: 'users', href: '/clientes?seccion=proveedores', color: '#7c3aed' },
+    { label: 'Productos sin stock', value: totalSinStock, icon: 'warning', href: null, color: '#dc2626' },
   ]
 
   const alertas = [
@@ -317,9 +317,9 @@ export default function DashboardPage() {
 
       {/* Métricas */}
       <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: isMobile ? 10 : 16, marginBottom: 20 }}>
-        {metrics.map(m => (
-          <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: '#fff', borderRadius: 12, padding: isMobile ? '14px 16px' : 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.15s', display: isMobile ? 'flex' : 'block', alignItems: 'center', gap: isMobile ? 12 : 0 }}>
+        {metrics.map(m => {
+          const card = (
+            <div style={{ background: '#fff', borderRadius: 12, padding: isMobile ? '14px 16px' : 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', cursor: m.href ? 'pointer' : 'default', transition: 'box-shadow 0.15s', display: isMobile ? 'flex' : 'block', alignItems: 'center', gap: isMobile ? 12 : 0 }}>
               <div style={{ width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, borderRadius: 10, background: m.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: isMobile ? 0 : 14, flexShrink: 0 }}>
                 <Icon name={m.icon} size={isMobile ? 18 : 22} color={m.color} />
               </div>
@@ -328,8 +328,14 @@ export default function DashboardPage() {
                 <p style={{ fontSize: isMobile ? 11 : 13, color: '#6b7280', margin: 0 }}>{m.label}</p>
               </div>
             </div>
-          </Link>
-        ))}
+          )
+          // "Productos rechazados" y "Productos sin stock" se quedan como
+          // panel informativo básico: no hay ninguna pantalla en el proyecto
+          // que liste esos datos, así que no se convierten en botón.
+          return m.href
+            ? <Link key={m.label} href={m.href} style={{ textDecoration: 'none' }}>{card}</Link>
+            : <div key={m.label}>{card}</div>
+        })}
       </div>
 
       {/* Alertas importantes — panel persistente (no depende de estar mirando la pantalla en el momento del Realtime) */}

@@ -189,6 +189,14 @@ export default function ClientesPage() {
 
   useEffect(() => { if (seccion === 'proveedores' && proveedores.length === 0) fetchProveedores() }, [seccion]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Llegar desde la tarjeta "Proveedores registrados" del Dashboard
+  // (?seccion=proveedores) abre la pestaña Proveedores automáticamente.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('seccion') === 'proveedores') {
+      setSeccion('proveedores')
+    }
+  }, [])
+
   async function fetchFormularioActivo() {
     const { data } = await supabase.from('config_storefront').select('registro_proveedor_activo').eq('id', 1).single()
     setFormularioActivo(!!data?.registro_proveedor_activo)

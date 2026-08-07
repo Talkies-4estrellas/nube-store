@@ -3136,6 +3136,14 @@ export default function ProveedoresPage() {
             </div>
           )}
 
+          {/* Sin solicitudes todavía */}
+          {historialItems && historialItems.length === 0 && !loadingHistorial && (
+            <div style={{ padding: '48px', textAlign: 'center' }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: NAVY, margin: '0 0 6px' }}>No hay productos</p>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Todavía no has enviado ninguna solicitud de producto.</p>
+            </div>
+          )}
+
           {/* Lista con resultados */}
           {historialItems && historialItems.length > 0 && (() => {
             const aprobados  = historialItems.filter(i => i.estado === 'aprobado')

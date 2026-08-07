@@ -323,6 +323,11 @@ export default function ProductosPage() {
     fetchCategorias()
     fetchProducts()
     fetchSolicitudes()
+    // Llegar desde la tarjeta "Pendientes de aprobación" del Dashboard
+    // (?solicitudes=1) abre el panel de solicitudes automáticamente.
+    if (new URLSearchParams(window.location.search).get('solicitudes') === '1') {
+      setShowSolicitudes(true)
+    }
   }, [])
 
   // Realtime: cuando un proveedor manda o edita una solicitud → refrescar
