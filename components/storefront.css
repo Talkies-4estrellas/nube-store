@@ -96,12 +96,20 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 .oe-store .sidebar-scroll::-webkit-scrollbar {
+  width: 0;
+}
+/* Se asoma solo mientras se usa (hover) — el scroll sigue funcionando
+   siempre, solo que la barra no se ve pegada ahí todo el tiempo. */
+.oe-store .sidebar-scroll:hover {
+  scrollbar-width: thin;
+}
+.oe-store .sidebar-scroll:hover::-webkit-scrollbar {
   width: 5px;
 }
-.oe-store .sidebar-scroll::-webkit-scrollbar-thumb {
+.oe-store .sidebar-scroll:hover::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 3px;
 }
