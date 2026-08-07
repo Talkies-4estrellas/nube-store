@@ -352,6 +352,8 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Falta `git push`** — varios commits del 06/08 y 07/08 quedaron adelante de `origin/master` sin subir; un intento de push automático falló pidiendo credenciales de GitHub que este entorno no puede mostrar interactivamente. Correr `git push origin master` desde una terminal con acceso a GitHub para que Vercel despliegue.
+- [ ] **Confirmar en Supabase** si ya se corrieron `migration_separar_mensajes_producto.sql` y `migration_trim_sku_productos.sql` (06/08) — sin ellas, Mensajes no separa hilo general/por producto y el trigger anti-duplicado de SKU no existe todavía en la base real.
 - [x] **`Doc/database/migration_seguridad_claves_pago.sql`** (06/08) — corrida y verificada en vivo: acceso a `config_pagos_secretos` (claves de BBVA/PayPal/Mercado Pago) cerrado a solo admin. Se confirmó que `anon` sigue bloqueado y que la fila no perdió datos.
 - **Nota (06/08):** se había agregado en `lib/pagos-config.ts` una restricción para ignorar llaves de producción guardadas en la BD (solo permitir sandbox ahí) — **se revirtió** a pedido explícito del usuario: el panel está diseñado para que el admin meta cualquier llave (de prueba o de producción) y funcione de inmediato, sin distinción. La única protección que queda para estas claves es la RLS de arriba (solo admin puede leer/escribir la tabla).
 - [x] **Correr en Supabase `Doc/database/migration_registro_proveedores.sql`** (05/08) — creada la tabla `solicitudes_registro_proveedor` y la columna `config_storefront.registro_proveedor_activo`. Confirmado en vivo con la REST API.
@@ -389,6 +391,16 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
+
+## Completado (07/08/2026)
+- [x] **Detección real de móvil vs. PC**: toda la lógica de "¿es móvil?" (Storefront, panel admin) usaba solo el ancho de ventana — se cambió a exigir también `pointer: coarse`, para que resoluciones angostas de PC (o ventanas achicadas/zoom) nunca cambien al diseño móvil por error
+- [x] Menú lateral del Home: se retrae automáticamente 2s después de cargar la página aunque nunca se le pase el mouse por encima (antes solo pasaba al entrar-y-salir con el cursor); ícono de Soporte cambiado a headset (diadema + micrófono)
+- [x] Degradado detrás del encabezado del Home para asegurar contraste del título/botones sin importar qué foto suba el admin al carrusel ni cómo la recorte cada resolución
+- [x] **Nav del Home se escala completo** (ancho, texto, íconos, separaciones) según la resolución/escalado real de la pantalla, usando 1600px como referencia — nunca oculta botones, solo se agranda o encoge en conjunto; `--nav-width` se recalcula igual para que el contenido de al lado quede siempre alineado sin huecos ni superposiciones. Solo aplica en PC; celular/tablet real no se toca
+- [x] Barra de scroll interna del nav del Home ya no se ve por defecto, solo al pasar el mouse (el scroll sigue funcionando siempre)
+- [x] Tarjetas de métricas del Dashboard convertidas en botones que llevan a la pantalla correspondiente ("Pendientes de aprobación" abre además el panel de solicitudes automático en `/productos?solicitudes=1`, "Proveedores registrados" abre la pestaña Proveedores en `/clientes?seccion=proveedores`); "Productos rechazados" y "Productos sin stock" se dejaron sin botón a propósito, no hay pantalla que liste esos datos
+- [x] Aviso "No hay productos" agregado a "Mis solicitudes" del portal de proveedores cuando la lista está vacía (era la única lista del proyecto sin ese aviso)
+- **Nota:** se intentó primero escalar la página COMPLETA con `zoom` (no solo el nav) — se revirtió a medio camino porque `.photo-carousel` usa `width:100vw;height:100vh`, unidades que no se llevan bien con `zoom` (se desbordaba muchísimo en pantallas grandes). Ver `Doc/sesiones/seccion-07-08-2026.md` para el detalle completo.
 
 ## Completado (31/07/2026)
 - [x] Selector de categorías con autocompletado (cuadro de texto + sugerencias en vivo); nueva categoría se normaliza a "Primera mayúscula, resto minúsculas" y ya no duplica si existe con otra combinación de mayúsculas
