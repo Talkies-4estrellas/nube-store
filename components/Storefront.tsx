@@ -191,12 +191,12 @@ export default function Storefront() {
   const [sidebarRetracted, setSidebarRetracted] = useState(false)
   const sidebarHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   function onSidebarMouseEnter() {
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px)').matches) return
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px) and (pointer: coarse)').matches) return
     if (sidebarHideTimer.current) { clearTimeout(sidebarHideTimer.current); sidebarHideTimer.current = null }
     setSidebarRetracted(false)
   }
   function onSidebarMouseLeave() {
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px)').matches) return
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px) and (pointer: coarse)').matches) return
     if (sidebarHideTimer.current) clearTimeout(sidebarHideTimer.current)
     sidebarHideTimer.current = setTimeout(() => setSidebarRetracted(true), 2000)
   }
@@ -205,7 +205,7 @@ export default function Storefront() {
   // retraído, se restablece — esta función es solo de escritorio.
   useEffect(() => {
     function onResize() {
-      if (window.matchMedia('(max-width: 1180px)').matches) {
+      if (window.matchMedia('(max-width: 1180px) and (pointer: coarse)').matches) {
         if (sidebarHideTimer.current) { clearTimeout(sidebarHideTimer.current); sidebarHideTimer.current = null }
         setSidebarRetracted(false)
       }
@@ -718,7 +718,7 @@ export default function Storefront() {
   // el logo solo navega a Inicio — el toggle en mobile rompía el layout.
   const toggleBrand = (e: React.MouseEvent) => {
     e.preventDefault()
-    const esMovil = typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px)').matches
+    const esMovil = typeof window !== 'undefined' && window.matchMedia('(max-width: 1180px) and (pointer: coarse)').matches
     if (esMovil) { goView('inicio'); return }
     setNavCollapsed((c) => !c)
   }

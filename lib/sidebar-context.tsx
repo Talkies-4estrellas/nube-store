@@ -21,7 +21,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function check() {
-      const mobile = window.innerWidth < 768
+      // pointer:coarse detecta pantallas táctiles reales (celular/tablet).
+      // Sin esto, achicar la ventana de una PC (o hacer zoom) por debajo de
+      // 768px activaba el diseño móvil aunque fuera una computadora — la PC
+      // debe conservar siempre su propio diseño, solo adaptado.
+      const mobile = window.innerWidth < 768 && window.matchMedia('(pointer: coarse)').matches
       setIsMobile(mobile)
       if (!mobile) setOpen(false)
     }

@@ -248,7 +248,7 @@
   from { transform: scale(0); }
   to { transform: scale(1); }
 }
-@media (max-width: 640px) {
+@media (max-width: 640px) and (pointer: coarse) {
   .oe-cart-toast { bottom: 84px; font-size: 12px; padding: 10px 16px; }
 }
 
@@ -2217,7 +2217,7 @@
   margin-bottom: 14px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1180px) and (pointer: coarse) {
   /* La lista larga de botones de categoría (uno por cada categoría, con
      conteo) ocupa demasiado espacio en móvil y ya existe el <select>
      desplegable justo arriba que hace lo mismo. Se oculta solo la lista;
@@ -2461,7 +2461,7 @@
   }
 }
 
-@media (max-width: 840px) {
+@media (max-width: 840px) and (pointer: coarse) {
   .oe-store .page-shell {
     padding: 24px 14px 34px;
   }
@@ -2601,7 +2601,7 @@
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 520px) and (pointer: coarse) {
   .oe-store .brand {
     font-size: 26px;
   }
@@ -2653,7 +2653,7 @@
    una franja gris a la derecha, y el h3 de 2 líneas reservaba espacio de
    sobra cuando el título cabía en una). Solo aplica en móvil — a partir de
    641px sigue el layout de escritorio/tablet de siempre. */
-@media (max-width: 640px) {
+@media (max-width: 640px) and (pointer: coarse) {
   .oe-store .store-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
@@ -2890,7 +2890,7 @@
    después de las reglas base a propósito: al tener igual especificidad
    (.oe-store .oe-footer...), si quedaran antes en el archivo el bloque base
    las pisaría sin importar el media query. */
-@media (max-width: 1180px) {
+@media (max-width: 1180px) and (pointer: coarse) {
   /* El sidebar en esta franja ya es la barra superior sticky (no fixed),
      así que no hay riesgo de que tape el footer — solo se acomoda a 2
      columnas porque 3 ya no caben cómodas. */
@@ -2899,7 +2899,7 @@
   }
 }
 
-@media (max-width: 840px) {
+@media (max-width: 840px) and (pointer: coarse) {
   /* El sangrado lateral/inferior debe cancelar el padding de .page-shell
      de esta franja (14px/34px), no el de escritorio (32px/42px). */
   .oe-store .oe-footer {
@@ -2938,7 +2938,7 @@
   display: none;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1180px) and (pointer: coarse) {
   .oe-store .oe-bottom-nav {
     display: flex;
     position: fixed;
