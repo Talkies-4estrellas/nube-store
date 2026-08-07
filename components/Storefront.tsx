@@ -569,7 +569,10 @@ export default function Storefront() {
       if (!footer) { document.documentElement.style.removeProperty('--sidebar-bottom'); return }
       const top = footer.getBoundingClientRect().top
       const espacioNecesario = window.innerHeight - top + MARGEN
-      document.documentElement.style.setProperty('--sidebar-bottom', `${Math.max(MARGEN, espacioNecesario)}px`)
+      // El sidebar ahora tiene `zoom` (ver navZoom): "bottom" se interpreta
+      // en su espacio de coordenadas ya escalado, así que hay que dividir
+      // entre el zoom para que el resultado en pantalla real sea el correcto.
+      document.documentElement.style.setProperty('--sidebar-bottom', `${Math.max(MARGEN, espacioNecesario) / navZoom}px`)
     }
     actualizar()
     window.addEventListener('scroll', actualizar, { passive: true })
@@ -579,7 +582,7 @@ export default function Storefront() {
       window.removeEventListener('resize', actualizar)
       document.documentElement.style.removeProperty('--sidebar-bottom')
     }
-  }, [view])
+  }, [view, navZoom])
 
   const [cartToast, setCartToast] = useState<{ text: string; key: number } | null>(null)
   const cartToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
