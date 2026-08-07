@@ -700,6 +700,23 @@
   z-index: 3;
 }
 
+/* La foto del carrusel es contenido subido por el admin y puede traer texto
+   decorativo propio (marca de la foto, no de nuestro HTML); según el recorte
+   que le toque a cada resolución, ese texto puede terminar cerca del
+   buscador/carrito. El buscador y el carrito ya son opacos (no se ve nada A
+   TRAVÉS de ellos), pero este degradado detrás del encabezado asegura que
+   el título y los botones siempre tengan buen contraste sin importar qué
+   foto se suba ni cómo la recorte el navegador. */
+.oe-store[data-view="inicio"] .topbar::before {
+  content: '';
+  position: absolute;
+  inset: -34px -32px auto -32px;
+  height: 160px;
+  background: linear-gradient(180deg, rgba(6, 17, 38, 0.6), rgba(6, 17, 38, 0));
+  z-index: -1;
+  pointer-events: none;
+}
+
 .oe-store[data-view="inicio"] .topbar h1 {
   color: #fff;
   text-shadow: 0 14px 36px rgba(6, 17, 38, 0.46);
