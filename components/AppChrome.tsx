@@ -52,7 +52,11 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
         <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99, backdropFilter: 'blur(1px)' }} />
       )}
       <main style={mainStyle}>
-        <div style={{ maxWidth: 1600, margin: '0 auto' }}>
+        {/* overflowX:auto — sin esto, una tabla ancha (ej. la de proveedores/
+            clientes con muchas columnas) en una ventana de PC angosta
+            desbordaba toda la página en horizontal en vez de scrollear
+            solo esa sección, lo que corría el sidebar fijo de su lugar. */}
+        <div style={{ maxWidth: 1600, margin: '0 auto', overflowX: 'auto' }}>
           {hasAccess ? children : <AccessDenied role={user!.role} />}
         </div>
       </main>

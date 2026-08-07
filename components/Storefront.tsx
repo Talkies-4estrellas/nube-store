@@ -1623,40 +1623,42 @@ export default function Storefront() {
           )}
         </div>
 
-        <nav className="nav-list">
-          {activeNavItems.map((item) => (
-            <a
-              key={item.view}
-              className={`nav-item${view === item.view ? ' active' : ''}`}
-              href="#"
-              onClick={(e) => { e.preventDefault(); goView(item.view) }}
-            >
-              <Ic n={item.icon} /><span>{item.label}</span>
-            </a>
-          ))}
-          {storeConfig.menu_extra.filter(btn => btn.label?.trim()).map((btn) => (
-            <a
-              key={btn.id}
-              className="nav-item"
-              href={btn.url || '#'}
-              target={btn.nueva_pestana ? '_blank' : undefined}
-              rel={btn.nueva_pestana ? 'noopener noreferrer' : undefined}
-            >
-              <span style={{ fontSize: 16, width: 20, textAlign: 'center', flexShrink: 0 }}>{btn.icono || '🔗'}</span>
-              <span>{btn.label}</span>
-            </a>
-          ))}
-        </nav>
+        <div className="sidebar-scroll">
+          <nav className="nav-list">
+            {activeNavItems.map((item) => (
+              <a
+                key={item.view}
+                className={`nav-item${view === item.view ? ' active' : ''}`}
+                href="#"
+                onClick={(e) => { e.preventDefault(); goView(item.view) }}
+              >
+                <Ic n={item.icon} /><span>{item.label}</span>
+              </a>
+            ))}
+            {storeConfig.menu_extra.filter(btn => btn.label?.trim()).map((btn) => (
+              <a
+                key={btn.id}
+                className="nav-item"
+                href={btn.url || '#'}
+                target={btn.nueva_pestana ? '_blank' : undefined}
+                rel={btn.nueva_pestana ? 'noopener noreferrer' : undefined}
+              >
+                <span style={{ fontSize: 16, width: 20, textAlign: 'center', flexShrink: 0 }}>{btn.icono || '🔗'}</span>
+                <span>{btn.label}</span>
+              </a>
+            ))}
+          </nav>
 
-        <a href={panelUser ? ROLE_HOME[panelUser.role] : '/login'} title={panelUser?.nombre || 'Iniciar sesión'} className="profile-card" style={{ textDecoration: 'none' }}>
-          <span className="profile-avatar" style={{ background: storeConfig.color_acento || '#e7226d' }}>
-            {(panelUser?.nombre?.charAt(0) || 'C').toUpperCase()}
-          </span>
-          <div>
-            <span>{panelUser?.nombre || 'Iniciar sesión'}</span>
-            <strong>{panelUser ? (panelUser.role === 'admin' ? 'Administrador' : panelUser.role === 'proveedor' ? 'Proveedor' : 'Cliente') : '→ Entrar'}</strong>
-          </div>
-        </a>
+          <a href={panelUser ? ROLE_HOME[panelUser.role] : '/login'} title={panelUser?.nombre || 'Iniciar sesión'} className="profile-card" style={{ textDecoration: 'none' }}>
+            <span className="profile-avatar" style={{ background: storeConfig.color_acento || '#e7226d' }}>
+              {(panelUser?.nombre?.charAt(0) || 'C').toUpperCase()}
+            </span>
+            <div>
+              <span>{panelUser?.nombre || 'Iniciar sesión'}</span>
+              <strong>{panelUser ? (panelUser.role === 'admin' ? 'Administrador' : panelUser.role === 'proveedor' ? 'Proveedor' : 'Cliente') : '→ Entrar'}</strong>
+            </div>
+          </a>
+        </div>
       </aside>
 
       <main className="page-shell">

@@ -63,6 +63,8 @@
   box-shadow: 14px 0 36px rgba(20, 24, 62, 0.18);
   overflow: hidden;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
   transition: width var(--nav-dur) var(--nav-ease), padding var(--nav-dur) var(--nav-ease), border-radius var(--nav-dur) var(--nav-ease);
 }
 
@@ -71,10 +73,31 @@
   align-items: center;
   justify-content: center;
   min-height: 96px;
+  flex: 0 0 auto;
   margin: 0 -16px;
   padding: 0 18px;
   background: #fff;
   border-radius: 34px 34px 0 0;
+}
+
+/* Cuando la ventana es baja (navegador sin pantalla completa, laptops
+   chicas, etc.), el logo + los items de navegación pueden no caber en el
+   alto disponible del sidebar. Antes esto se recortaba sin aviso
+   (overflow:hidden) y no había forma de ver los últimos ítems del menú;
+   ahora esta franja hace scroll internamente y el logo se queda fijo arriba. */
+.oe-store .sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.oe-store .sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.oe-store .sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
 }
 
 .oe-store .brand {
@@ -438,8 +461,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 24px;
   margin-bottom: 26px;
+}
+
+/* El bloque título (eyebrow + h1) no tenía protección de ancho mínimo: en
+   PC con la ventana en un tamaño intermedio, el título largo de la tienda
+   podía apretar o encimarse con los botones/buscador de la derecha. Con
+   min-width:0 puede encogerse sin desbordar, y flex-wrap arriba deja que
+   los botones bajen a otra línea en vez de superponerse. */
+.oe-store .topbar > div:first-child {
+  min-width: 0;
+  flex: 1 1 280px;
 }
 
 .oe-store .eyebrow {
