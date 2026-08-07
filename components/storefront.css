@@ -13,7 +13,8 @@
   --muted: #6f7485;
   --radius: 8px;
   --shadow: 0 22px 60px rgba(31, 36, 75, 0.16);
-  --nav-width: 280px;
+  --nav-width-base: 280px;
+  --nav-width: calc(var(--nav-width-base) * var(--nav-zoom, 1));
   --nav-dur: 340ms;
   --nav-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -54,7 +55,12 @@
   top: 24px;
   bottom: var(--sidebar-bottom, 24px);
   left: 20px;
-  width: var(--nav-width);
+  width: var(--nav-width-base);
+  /* Escala el nav completo (ancho, texto, íconos, separaciones) en conjunto
+     según la resolución/escalado real de la pantalla — así nunca desaparece
+     un botón, solo se ve más grande o más chico. Solo aplica en PC (mouse);
+     en celular/tablet real --nav-zoom siempre vale 1 (ver Storefront.tsx). */
+  zoom: var(--nav-zoom, 1);
   padding: 0 16px 16px;
   color: #fff;
   background: linear-gradient(180deg, #28295f, #1c214b);
@@ -394,7 +400,7 @@
 }
 
 .oe-store.nav-collapsed {
-  --nav-width: 86px;
+  --nav-width-base: 86px;
 }
 
 .oe-store.nav-collapsed .sidebar {

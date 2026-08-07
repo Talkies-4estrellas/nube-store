@@ -185,6 +185,22 @@ export default function Storefront() {
   const { user: panelUser } = useAuth()
   const [view, setView] = useState('inicio')
   const [navCollapsed, setNavCollapsed] = useState(false)
+  // El nav de PC se escala completo (ancho, texto, íconos) para verse
+  // siempre del mismo tamaño relativo sin importar la resolución ni el
+  // escalado del sistema — nunca oculta botones, solo se agranda o
+  // encoge en conjunto. 280px es el ancho de referencia del diseño.
+  // Solo aplica a PC (mouse); en celular/tablet real no se toca.
+  const NAV_REF_WIDTH = 1600
+  const [navZoom, setNavZoom] = useState(1)
+  useEffect(() => {
+    function actualizarZoomNav() {
+      const esTactil = window.matchMedia('(pointer: coarse)').matches
+      setNavZoom(esTactil ? 1 : window.innerWidth / NAV_REF_WIDTH)
+    }
+    actualizarZoomNav()
+    window.addEventListener('resize', actualizarZoomNav)
+    return () => window.removeEventListener('resize', actualizarZoomNav)
+  }, [])
   // Home en escritorio: encoge el menú lateral a su versión angosta (solo
   // íconos, igual que el toggle manual) 2s después de que el cursor lo
   // abandona; si vuelve a entrar antes, se cancela y sigue expandido.
@@ -1554,7 +1570,8 @@ export default function Storefront() {
   }
 
   return (
-    <div className={`oe-store${navCollapsed || (sidebarRetracted && view === 'inicio') ? ' nav-collapsed' : ''}`} data-view={view}>
+    <div className={`oe-store${navCollapsed || (sidebarRetracted && view === 'inicio') ? ' nav-collapsed' : ''}`} data-view={view}
+      style={{ '--nav-zoom': navZoom } as React.CSSProperties}>
       <aside className={`sidebar${mobileNavOpen ? ' mobile-open' : ''}${headerHidden ? ' nav-hidden' : ''}${mobileSearchOpen ? ' searching' : ''}`} aria-label="Navegacion principal"
         onMouseEnter={onSidebarMouseEnter} onMouseLeave={onSidebarMouseLeave}>
         <div className="sidebar-head" style={{ background: storeConfig.fondo_logo === 'azul' ? '#252855' : '#fff' }}>
