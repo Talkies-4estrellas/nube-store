@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, DragEvent, ChangeEvent } from 'react'
-import { convertToWebp } from '@/lib/uploadWebp'
+import { convertToWebp, fileToBase64, base64ToWebpFile } from '@/lib/uploadWebp'
 import CategoriaSelector, { type CategoriaConHijos } from '@/components/CategoriaSelector'
 import type { CamposExtraConfig } from '@/lib/categorias'
 
@@ -306,6 +306,45 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
     list.unshift(item)
     setGaleria(list)
   }
+  /* ---- Mejorar foto con IA (Gemini, prueba solo en admin) ---- */
+  const [mejorandoIA, setMejorandoIA] = useState<Set<number>>(new Set())
+  const [originalesIA, setOriginalesIA] = useState<Record<number, ImgItem>>({})
+  const [errorIA, setErrorIA] = useState('')
+  async function mejorarConIA(i: number) {
+    const item = getGaleria()[i]
+    if (!item?.file) return
+    setErrorIA('')
+    setMejorandoIA(prev => new Set(prev).add(i))
+    try {
+      const base64 = await fileToBase64(item.file)
+      const res = await fetch('/api/ia/mejorar-imagen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, mimeType: item.file.type }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.image) { setErrorIA(data.error || 'No se pudo mejorar la imagen'); return }
+      const mejorada = await base64ToWebpFile(data.image, data.mimeType)
+      if (!originalesIA[i]) setOriginalesIA(prev => ({ ...prev, [i]: item }))
+      const list = getGaleria()
+      list[i] = { file: mejorada, preview: URL.createObjectURL(mejorada) }
+      setGaleria(list)
+      if (data.avisoLimite) setErrorIA(`Aviso: van ${data.usoHoy} imágenes mejoradas hoy, cerca del límite gratuito diario.`)
+    } catch {
+      setErrorIA('No se pudo conectar con el servicio de IA')
+    } finally {
+      setMejorandoIA(prev => { const n = new Set(prev); n.delete(i); return n })
+    }
+  }
+  function revertirIA(i: number) {
+    const original = originalesIA[i]
+    if (!original) return
+    const list = getGaleria()
+    list[i] = original
+    setGaleria(list)
+    setOriginalesIA(prev => { const n = { ...prev }; delete n[i]; return n })
+  }
+
   function onImgDragStart(i: number) { dragImgIndex.current = i }
   function onImgDrop(i: number) {
     const from = dragImgIndex.current
@@ -484,6 +523,7 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
               <Card icon="📷" title="Imágenes">
                 {imagenError && <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px' }}>{imagenError}</p>}
                 {errors.imagen && <p style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, margin: '0 0 8px' }}>{errors.imagen}</p>}
+                {errorIA && <p style={{ fontSize: 12, color: '#d97706', fontWeight: 600, margin: '0 0 8px' }}>{errorIA}</p>}
                 <div
                   onDragOver={e => { e.preventDefault(); setExtraDragging(true) }}
                   onDragLeave={() => setExtraDragging(false)}
@@ -505,11 +545,25 @@ export default function ProductoModal({ onClose, onSave, inicial, arbolCategoria
                           )}
                           <button type="button" onClick={() => removeImagenAt(i)}
                             style={{ position: 'absolute', top: 5, right: 5, background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, lineHeight: 1 }}>×</button>
-                          {i !== 0 && (
-                            <button type="button" onClick={() => usarComoPrincipal(i)}
-                              title="Usar como imagen principal"
-                              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', height: 22, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Hacer principal</button>
+                          {mejorandoIA.has(i) && (
+                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff' }}>✨ Mejorando...</div>
                           )}
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex' }}>
+                            {i !== 0 && (
+                              <button type="button" onClick={() => usarComoPrincipal(i)}
+                                title="Usar como imagen principal"
+                                style={{ flex: 1, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', height: 22, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>★ Hacer principal</button>
+                            )}
+                            {originalesIA[i] ? (
+                              <button type="button" onClick={() => revertirIA(i)} disabled={mejorandoIA.has(i)}
+                                title="Volver a la foto original"
+                                style={{ flex: 1, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', height: 22, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>↺ Original</button>
+                            ) : (
+                              <button type="button" onClick={() => mejorarConIA(i)} disabled={mejorandoIA.has(i)}
+                                title="Mejorar esta foto con IA"
+                                style={{ flex: 1, background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', height: 22, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>✨ Mejorar</button>
+                            )}
+                          </div>
                         </div>
                       ))}
 

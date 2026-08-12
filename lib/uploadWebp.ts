@@ -70,6 +70,35 @@ export function captureFrameAsWebp(
 }
 
 /**
+ * Convierte un File/Blob a base64 puro (sin el prefijo `data:...;base64,`),
+ * para mandarlo tal cual al endpoint de mejora de imágenes con IA.
+ */
+export function fileToBase64(file: File | Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1] ?? result)
+    }
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'))
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Convierte un base64 (como el que devuelve Gemini) de vuelta a un File WebP,
+ * reutilizando el mismo pipeline de convertToWebp para que el resultado quede
+ * en el mismo formato que cualquier otra imagen subida normalmente.
+ */
+export async function base64ToWebpFile(base64: string, mimeType: string, nombre = 'mejorada'): Promise<File> {
+  const bytes = atob(base64)
+  const arr = new Uint8Array(bytes.length)
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+  const blob = new Blob([arr], { type: mimeType })
+  return convertToWebp(new File([blob], nombre, { type: mimeType }))
+}
+
+/**
  * Sube un File WebP directamente a Supabase Storage.
  * Devuelve la URL pública del archivo.
  */
