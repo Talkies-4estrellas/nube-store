@@ -141,6 +141,37 @@ todavía): `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MODE` (`sandbox`/
 elige esa opción en el checkout, la ruta responde con error y el pedido cae al flujo
 normal de `estado='Pendiente'` — no rompe nada, solo no genera el cobro real.
 
+**Diagnóstico en vivo (07/08/2026):** ninguna de las 3 pasarelas tiene credenciales
+configuradas todavía (ni en `.env.local` ni en `config_pagos_secretos`), pero en
+`config_metodos_pago` **Mercado Pago, PayPal y BBVA están activados** — el cliente los
+ve como opción real en el checkout. Al elegir cualquiera, el pedido cae silenciosamente
+a `estado='Pendiente'` sin cobrar de verdad. Falta decidir si se apagan esos 3 switches
+mientras no haya llaves reales, o si se consiguen las llaves de sandbox para probar el
+flujo completo.
+
+---
+
+## Stripe (Payment Intents) — agregado 07/08/2026
+
+Cuarta pasarela, con un patrón distinto a las otras tres: en vez de redirigir al
+cliente fuera del sitio, usa **Stripe Elements** para mostrar el formulario de tarjeta
+dentro del propio modal de checkout (`components/StripeCardForm.tsx`, montado desde
+`Storefront.tsx` cuando `checkoutState === 'stripe'`).
+
+| Ruta/archivo | Función |
+|---|---|
+| `app/api/pagos/stripe/crear-payment-intent/route.ts` | Crea el Payment Intent. **Recalcula el importe leyendo `venta_items`** (igual que las demás pasarelas) y devuelve `clientSecret` + `publishableKey` |
+| `app/api/pagos/stripe/webhook/route.ts` | Recibe la notificación de Stripe, **valida la firma** (`stripe-signature` + `stripeWebhookSecret`) y marca la venta como `Pagado`/`Cancelado` según `payment_intent.succeeded`/`payment_intent.payment_failed` |
+| `components/StripeCardForm.tsx` | `<Elements>` + `<PaymentElement>` de `@stripe/react-stripe-js`; llama a `stripe.confirmPayment()` con `redirect:'if_required'` para no salir del sitio |
+
+Mismas credenciales configurables desde el panel (`config_pagos_secretos`: `stripe_secret_key`,
+`stripe_publishable_key`, `stripe_webhook_secret`, `stripe_mode`) o por variables de entorno
+(`STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MODE`).
+**Falta correr `Doc/database/migration_stripe.sql`** (agrega la columna `stripe` a
+`config_metodos_pago` y las 4 columnas nuevas a `config_pagos_secretos`) y conseguir las
+llaves reales de Stripe — sin la migración, el switch de Stripe ni siquiera aparece en
+Configuración → Métodos de pago.
+
 ---
 
 ## Sistema de Autenticación

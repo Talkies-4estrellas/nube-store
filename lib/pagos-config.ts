@@ -26,5 +26,10 @@ export async function getPagosConfig() {
     openpayMerchantId: data?.openpay_merchant_id || process.env.OPENPAY_MERCHANT_ID || null,
     openpayPrivateKey: data?.openpay_private_key || process.env.OPENPAY_PRIVATE_KEY || null,
     openpayMode: data?.openpay_mode || process.env.OPENPAY_MODE || 'sandbox',
+
+    stripeSecretKey: data?.stripe_secret_key || process.env.STRIPE_SECRET_KEY || null,
+    stripePublishableKey: data?.stripe_publishable_key || process.env.STRIPE_PUBLISHABLE_KEY || null,
+    stripeWebhookSecret: data?.stripe_webhook_secret || process.env.STRIPE_WEBHOOK_SECRET || null,
+    stripeMode: data?.stripe_mode || process.env.STRIPE_MODE || 'sandbox',
   }
 }

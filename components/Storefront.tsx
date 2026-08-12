@@ -14,8 +14,9 @@ import { isValidEmail } from '@/lib/validation'
 import { useAuth, ROLE_HOME } from '@/lib/auth-context'
 import { construirArbolCategorias, type CategoriaPlana, type CategoriaConHijos } from '@/lib/categorias'
 import StorefrontFooter from '@/components/StorefrontFooter'
+import StripeCardForm from '@/components/StripeCardForm'
 
-type CheckoutState = 'form' | 'loading' | 'success' | 'error'
+type CheckoutState = 'form' | 'loading' | 'stripe' | 'success' | 'error'
 
 const ICONS: Record<string, LucideIcon> = {
   home: Home, 'shopping-bag': ShoppingBag, sparkles: Sparkles, heart: Heart,
@@ -289,9 +290,10 @@ export default function Storefront() {
   const [checkoutForm, setCheckoutForm] = useState({ nombre: '', email: '' })
   const [checkoutError, setCheckoutError] = useState('')
   const [ventaNumero, setVentaNumero] = useState<number | null>(null)
-  const [metodosPago, setMetodosPago] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false, paypal: false, bbva: false })
+  const [metodosPago, setMetodosPago] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false, paypal: false, bbva: false, stripe: false })
   const [metodoPago, setMetodoPago] = useState('')
   const [referenciaBBVA, setReferenciaBBVA] = useState<{ clabe: string; referencia: string; banco: string } | null>(null)
+  const [stripeIntent, setStripeIntent] = useState<{ clientSecret: string; publishableKey: string; ventaNumero: number } | null>(null)
 
   /* ---- Cargar métodos de pago habilitados ---- */
   useEffect(() => {
@@ -306,6 +308,7 @@ export default function Storefront() {
     { key: 'mercadopago', label: 'Mercado Pago' },
     { key: 'paypal', label: 'PayPal' },
     { key: 'bbva', label: 'BBVA' },
+    { key: 'stripe', label: 'Tarjeta (Stripe)' },
   ].filter(m => metodosPago[m.key as keyof typeof metodosPago])
 
   useEffect(() => {
@@ -735,11 +738,44 @@ export default function Storefront() {
       }
     }
 
+    // Stripe: formulario de tarjeta propio dentro del mismo modal (sin redirigir)
+    if (metodoPago === 'stripe') {
+      try {
+        const res = await fetch('/api/pagos/stripe/crear-payment-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ventaId: venta.id }),
+        })
+        const data = await res.json()
+        if (res.ok && data.clientSecret) {
+          setStripeIntent({ clientSecret: data.clientSecret, publishableKey: data.publishableKey, ventaNumero: venta.numero })
+          setCheckoutState('stripe')
+          return
+        }
+        console.warn('Stripe no disponible:', data.error)
+      } catch (e) {
+        console.warn('No se pudo iniciar el pago con Stripe:', e)
+      }
+    }
+
     // Sin pasarela configurada (o no disponible aún): el pedido queda registrado como Pendiente
     setVentaNumero(venta.numero)
     setCart([])
     try { localStorage.removeItem(CART_KEY) } catch {}
     setCheckoutState('success')
+  }
+
+  function onStripeSuccess() {
+    setCart([])
+    try { localStorage.removeItem(CART_KEY) } catch {}
+    setVentaNumero(stripeIntent?.ventaNumero ?? null)
+    setStripeIntent(null)
+    setCheckoutState('success')
+  }
+
+  function onStripeError(msg: string) {
+    setCheckoutError(msg)
+    setCheckoutState('form')
   }
 
   // En PC el logo colapsa/expande el sidebar (icon rail). En móvil el
@@ -1852,6 +1888,17 @@ export default function Storefront() {
                   style={{ background: '#0049ff', color: '#fff', border: 'none', padding: '11px 28px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                   Seguir comprando
                 </button>
+              </div>
+            ) : checkoutState === 'stripe' && stripeIntent ? (
+              <div style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 4 }}>Pago con tarjeta</h3>
+                <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 18 }}>Pedido #{stripeIntent.ventaNumero}</p>
+                <StripeCardForm
+                  clientSecret={stripeIntent.clientSecret}
+                  publishableKey={stripeIntent.publishableKey}
+                  onSuccess={onStripeSuccess}
+                  onError={onStripeError}
+                />
               </div>
             ) : (
               <>

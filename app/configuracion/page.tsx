@@ -17,11 +17,13 @@ type PagosSecretos = {
   openpay_merchant_id: string; openpay_private_key: string; openpay_mode: 'sandbox' | 'live'
   paypal_client_id: string; paypal_client_secret: string; paypal_mode: 'sandbox' | 'live'
   mp_access_token: string
+  stripe_publishable_key: string; stripe_secret_key: string; stripe_webhook_secret: string; stripe_mode: 'sandbox' | 'live'
 }
 const PAGOS_SECRETOS_DEFAULTS: PagosSecretos = {
   openpay_merchant_id: '', openpay_private_key: '', openpay_mode: 'sandbox',
   paypal_client_id: '', paypal_client_secret: '', paypal_mode: 'sandbox',
   mp_access_token: '',
+  stripe_publishable_key: '', stripe_secret_key: '', stripe_webhook_secret: '', stripe_mode: 'sandbox',
 }
 
 /** Fusiona con los valores por defecto sin dejar pasar `null` — las columnas
@@ -182,7 +184,7 @@ export default function ConfiguracionPage() {
 
   const [negocio, setNegocio] = useState({ nombre: 'Order Express', moneda: 'MXN — Peso mexicano', zona: 'America/Mexico_City', idioma: 'Español (México)' })
   const [contacto, setContacto] = useState({ email: '', telefono: '', whatsapp: '', instagram: '', facebook: '', direccion: '', ciudad: '', pais: 'México' })
-  const [pagos, setPagos] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false, paypal: false, bbva: false })
+  const [pagos, setPagos] = useState({ efectivo: true, transferencia: true, tarjeta: false, mercadopago: false, paypal: false, bbva: false, stripe: false })
   const [notif, setNotif] = useState({ stock_bajo: true, nueva_venta: true, email_resumen: false })
   const [heroTitulo, setHeroTitulo] = useState('')
   const [heroSubtitulo, setHeroSubtitulo] = useState('')
@@ -199,9 +201,10 @@ export default function ConfiguracionPage() {
   // con su valor real en el navegador — solo se sabe que "ya hay una guardada"
   // y el campo permite escribir una nueva para reemplazarla. Así, aunque
   // alguien vea la pantalla o intercepte una respuesta, no se lleva la clave.
-  const CAMPOS_SECRETOS = ['openpay_private_key', 'paypal_client_secret', 'mp_access_token'] as const
+  const CAMPOS_SECRETOS = ['openpay_private_key', 'paypal_client_secret', 'mp_access_token', 'stripe_secret_key', 'stripe_webhook_secret'] as const
   const [clavesGuardadas, setClavesGuardadas] = useState<Record<typeof CAMPOS_SECRETOS[number], boolean>>({
     openpay_private_key: false, paypal_client_secret: false, mp_access_token: false,
+    stripe_secret_key: false, stripe_webhook_secret: false,
   })
 
   useEffect(() => {
@@ -219,7 +222,7 @@ export default function ConfiguracionPage() {
     supabase.from('config_metodos_pago').select('*').eq('id', 1).single()
       .then(({ data }) => {
         if (!data) return
-        setPagos({ efectivo: data.efectivo, transferencia: data.transferencia, tarjeta: data.tarjeta, mercadopago: data.mercadopago, paypal: data.paypal ?? false, bbva: data.bbva ?? false })
+        setPagos({ efectivo: data.efectivo, transferencia: data.transferencia, tarjeta: data.tarjeta, mercadopago: data.mercadopago, paypal: data.paypal ?? false, bbva: data.bbva ?? false, stripe: data.stripe ?? false })
       })
     // Cargar preferencias de notificación del usuario actual
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -241,8 +244,10 @@ export default function ConfiguracionPage() {
           openpay_private_key: !!data.openpay_private_key,
           paypal_client_secret: !!data.paypal_client_secret,
           mp_access_token: !!data.mp_access_token,
+          stripe_secret_key: !!data.stripe_secret_key,
+          stripe_webhook_secret: !!data.stripe_webhook_secret,
         })
-        setPagosSecretos({ ...conValores, openpay_private_key: '', paypal_client_secret: '', mp_access_token: '' })
+        setPagosSecretos({ ...conValores, openpay_private_key: '', paypal_client_secret: '', mp_access_token: '', stripe_secret_key: '', stripe_webhook_secret: '' })
       })
   }, [])
 
@@ -258,6 +263,8 @@ export default function ConfiguracionPage() {
       openpay_mode: pagosSecretos.openpay_mode,
       paypal_client_id: pagosSecretos.paypal_client_id,
       paypal_mode: pagosSecretos.paypal_mode,
+      stripe_publishable_key: pagosSecretos.stripe_publishable_key,
+      stripe_mode: pagosSecretos.stripe_mode,
       updated_at: new Date().toISOString(),
     }
     const camposModificados: string[] = []
@@ -277,7 +284,7 @@ export default function ConfiguracionPage() {
       })
       // Se re-vacían de inmediato — no dejamos la clave recién escrita
       // sentada en el campo una vez que ya se guardó.
-      setPagosSecretos(prev => ({ ...prev, openpay_private_key: '', paypal_client_secret: '', mp_access_token: '' }))
+      setPagosSecretos(prev => ({ ...prev, openpay_private_key: '', paypal_client_secret: '', mp_access_token: '', stripe_secret_key: '', stripe_webhook_secret: '' }))
       registrarAuditoria(supabase, {
         usuarioId: user?.id, accion: 'editar_claves_pago', tabla: 'config_pagos_secretos', registroId: '1',
         valorNuevo: camposModificados.join(', '),
@@ -449,6 +456,7 @@ export default function ConfiguracionPage() {
             <Toggle label="Mercado Pago" desc="Link de pago o QR — requiere cuenta activa" value={pagos.mercadopago} onChange={v => setPagos(p => ({ ...p, mercadopago: v }))} />
             <Toggle label="PayPal" desc="Checkout con cuenta PayPal o tarjeta — requiere cuenta de negocio" value={pagos.paypal} onChange={v => setPagos(p => ({ ...p, paypal: v }))} />
             <Toggle label="BBVA (OpenPay)" desc="Transferencia SPEI con referencia — requiere cuenta OpenPay/BBVA" value={pagos.bbva} onChange={v => setPagos(p => ({ ...p, bbva: v }))} />
+            <Toggle label="Tarjeta (Stripe)" desc="Formulario de tarjeta propio, sin salir del sitio — requiere cuenta de Stripe" value={pagos.stripe} onChange={v => setPagos(p => ({ ...p, stripe: v }))} />
           </Card>
         )}
 
@@ -511,6 +519,33 @@ export default function ConfiguracionPage() {
               <input type="password" style={inputStyle} value={pagosSecretos.mp_access_token} onChange={e => setPagoSecreto('mp_access_token', e.target.value)}
                 placeholder={clavesGuardadas.mp_access_token ? '•••••••• (ya configurada — escribe para reemplazar)' : 'APP_USR-xxxx o TEST-xxxx'} />
               <p style={{ fontSize: 11, color: '#9ca3af', margin: '4px 0 0' }}>Usa el token que empieza con TEST- para pruebas, o APP_USR- para producción.</p>
+            </div>
+
+            {/* Stripe */}
+            <p style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 10px' }}>Stripe</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Publishable key</label>
+                <input style={inputStyle} value={pagosSecretos.stripe_publishable_key} onChange={e => setPagoSecreto('stripe_publishable_key', e.target.value)} placeholder="pk_test_xxxx o pk_live_xxxx" />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Secret key</label>
+                <input type="password" style={inputStyle} value={pagosSecretos.stripe_secret_key} onChange={e => setPagoSecreto('stripe_secret_key', e.target.value)}
+                  placeholder={clavesGuardadas.stripe_secret_key ? '•••••••• (ya configurada — escribe para reemplazar)' : 'sk_test_xxxx o sk_live_xxxx'} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Webhook secret</label>
+                <input type="password" style={inputStyle} value={pagosSecretos.stripe_webhook_secret} onChange={e => setPagoSecreto('stripe_webhook_secret', e.target.value)}
+                  placeholder={clavesGuardadas.stripe_webhook_secret ? '•••••••• (ya configurada — escribe para reemplazar)' : 'whsec_xxxx'} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Modo</label>
+                <select style={{ ...inputStyle, cursor: 'pointer' }} value={pagosSecretos.stripe_mode} onChange={e => setPagoSecreto('stripe_mode', e.target.value as 'sandbox' | 'live')}>
+                  <option value="sandbox">Pruebas (sandbox)</option>
+                  <option value="live">Producción (live)</option>
+                </select>
+              </div>
+              <p style={{ fontSize: 11, color: '#9ca3af', margin: 0, gridColumn: '1 / -1' }}>El webhook secret se obtiene al crear el endpoint {'{tu dominio}'}/api/pagos/stripe/webhook en el Dashboard de Stripe → Developers → Webhooks.</p>
             </div>
 
             {errorPagosSecretos && (
