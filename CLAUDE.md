@@ -383,6 +383,9 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [x] Tienda en línea: editor de configuración inline (nombre, hero, colores, contacto) → `config_storefront` table
 
 ## Pendiente
+- [ ] **Habilitar el modelo de imágenes de Gemini en Google AI Studio** (12/08) — la cuenta del usuario devuelve `limit: 0` para `gemini-2.5-flash-image` en el nivel gratuito; necesita vincular facturación (sin que eso implique cobro dentro de la cuota gratis) o revisar que la API esté habilitada en el proyecto de Google Cloud. El código y la integración del botón "✨ Mejorar" ya están listos y probados de punta a punta salvo por esto.
+- [ ] **Conseguir credenciales reales de Stripe** (12/08) — Publishable key, Secret key, Webhook secret; el switch quedó apagado por defecto en Configuración → Métodos de pago hasta que se configuren.
+- [ ] **Decidir sobre Mercado Pago, PayPal y BBVA** (12/08) — están visibles en el checkout público sin ninguna credencial configurada; un cliente que los elija cae silenciosamente a "Pendiente" sin cobro real. Pendiente decidir si se apagan mientras no haya llaves, o se consiguen llaves de sandbox para probar el flujo.
 - [ ] **Falta `git push`** — varios commits del 06/08 y 07/08 quedaron adelante de `origin/master` sin subir; un intento de push automático falló pidiendo credenciales de GitHub que este entorno no puede mostrar interactivamente. Correr `git push origin master` desde una terminal con acceso a GitHub para que Vercel despliegue.
 - [ ] **Confirmar en Supabase** si ya se corrieron `migration_separar_mensajes_producto.sql` y `migration_trim_sku_productos.sql` (06/08) — sin ellas, Mensajes no separa hilo general/por producto y el trigger anti-duplicado de SKU no existe todavía en la base real.
 - [x] **`Doc/database/migration_seguridad_claves_pago.sql`** (06/08) — corrida y verificada en vivo: acceso a `config_pagos_secretos` (claves de BBVA/PayPal/Mercado Pago) cerrado a solo admin. Se confirmó que `anon` sigue bloqueado y que la fila no perdió datos.
@@ -422,6 +425,12 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Confirmación de pedido por email al hacer checkout en Storefront
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
+
+## Completado (12/08/2026)
+- [x] **Stripe integrado como cuarta pasarela de pago** — Payment Intents con formulario propio (Stripe Elements), el cliente nunca sale del sitio. Ver sección "Stripe (Payment Intents)" más abajo.
+- [x] **Botón "✨ Mejorar con IA" en las fotos de producto** (panel admin, `ProductoModal.tsx`) — usa Gemini 2.5 Flash Image ("nano banana") con un prompt fijo que preserva el producto, revertible a la original. Llave por `GEMINI_API_KEY` (variable de entorno, no editable desde el panel). Contador de uso diario en `ia_uso_imagenes`. **Pendiente que el usuario habilite el modelo en su cuenta de Google** (ver Pendiente arriba) — la integración ya está lista pero devuelve cuota 0 hasta entonces.
+- [x] Dashboard: botón "Exportar CSV" de las 10 métricas; tarjeta "Ventas (esta semana)" (dinero) separada en "Ingresos" + "Ventas realizadas" (conteo); tarjetas de métricas con altura pareja siempre (antes variaba fila por fila según el largo de la etiqueta)
+- [x] Tarjetas del Dashboard convertidas en botones con destino correcto por métrica (ver sesión del 07/08) — trabajo relacionado, contexto en `Doc/sesiones/seccion-07-08-2026.md`
 
 ## Completado (07/08/2026)
 - [x] **Detección real de móvil vs. PC**: toda la lógica de "¿es móvil?" (Storefront, panel admin) usaba solo el ancho de ventana — se cambió a exigir también `pointer: coarse`, para que resoluciones angostas de PC (o ventanas achicadas/zoom) nunca cambien al diseño móvil por error
