@@ -8,6 +8,7 @@ import { useSidebar } from '@/lib/sidebar-context'
 import { useAuth } from '@/lib/auth-context'
 import { aprobarSolicitud, rechazarSolicitud } from '@/lib/solicitudes'
 import MotivoRechazoDialog from '@/components/MotivoRechazoDialog'
+import { toCSV, downloadCSV } from '@/lib/csv'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
 type VentaGrafica = { total: number; estado: string; created_at: string }
@@ -271,12 +272,14 @@ export default function DashboardPage() {
     setRechazandoId(null)
   }
 
-  const totalPeriodo = ventasPeriodo.filter(v => v.estado === 'Pagado').reduce((s, v) => s + Number(v.total), 0)
+  const ventasPagadasPeriodo = ventasPeriodo.filter(v => v.estado === 'Pagado')
+  const totalPeriodo = ventasPagadasPeriodo.reduce((s, v) => s + Number(v.total), 0)
   const chartData    = buildChartData(ventasPeriodo, periodo)
   const hayDatosGrafica = chartData.some(d => d.total > 0)
 
   const metrics = [
-    { label: `Ventas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString('es-MX')}`, icon: 'dollar', href: '/ventas', color: '#059669' },
+    { label: `Ingresos (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : `$${totalPeriodo.toLocaleString('es-MX')}`, icon: 'dollar', href: '/ventas', color: '#059669' },
+    { label: `Ventas realizadas (${periodoLabel[periodo].toLowerCase()})`, value: loadingPeriodo ? '...' : ventasPagadasPeriodo.length, icon: 'check', href: '/ventas', color: '#059669' },
     { label: 'Pedidos activos', value: pedidosActivos, icon: 'clipboard', href: '/ventas', color: '#d97706' },
     { label: 'Total de productos', value: totalProductos, icon: 'box', href: '/productos', color: '#374151' },
     { label: 'Pendientes de aprobación', value: solicitudes.length, icon: 'clock', href: '/productos?solicitudes=1', color: '#d97706' },
@@ -292,6 +295,13 @@ export default function DashboardPage() {
     solicitudes.length > 0 && { msg: `${solicitudes.length} producto${solicitudes.length > 1 ? 's' : ''} esperando aprobación`, href: '/configuracion', color: '#d97706' },
     pedidosActivos > 0 && { msg: `${pedidosActivos} pedido${pedidosActivos > 1 ? 's' : ''} en proceso`, href: '/ventas', color: BLUE },
   ].filter((a): a is { msg: string; href: string; color: string } => !!a)
+
+  function exportarMetricasCSV() {
+    const rows = metrics.map(m => ({ metrica: m.label, valor: m.value }))
+    const csv = toCSV(rows, ['metrica', 'valor'])
+    const fecha = new Date().toISOString().slice(0, 10)
+    downloadCSV(`dashboard-${periodo}-${fecha}.csv`, csv)
+  }
 
   return (
     <div>
@@ -312,6 +322,10 @@ export default function DashboardPage() {
             ))}
 
           </div>
+          <button onClick={exportarMetricasCSV} disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: isMobile ? '8px 10px' : '8px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: isMobile ? 12 : 13, fontWeight: 600, color: '#374151', cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+            ⬇ Exportar CSV
+          </button>
         </div>
       </div>
 
@@ -325,7 +339,11 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p style={{ fontSize: isMobile ? 20 : 28, fontWeight: 700, color: '#111', marginBottom: 2 }}>{loading ? '—' : m.value}</p>
-                <p style={{ fontSize: isMobile ? 11 : 13, color: '#6b7280', margin: 0 }}>{m.label}</p>
+                {/* minHeight de 2 líneas siempre reservado — sin esto, las tarjetas
+                    con etiqueta corta (1 línea) quedaban más bajas que las de
+                    etiqueta larga (2 líneas), y como el grid solo iguala alturas
+                    fila por fila, unas filas sobresalían más que otras. */}
+                <p style={{ fontSize: isMobile ? 11 : 13, color: '#6b7280', margin: 0, lineHeight: 1.35, minHeight: 'calc(1.35em * 2)' }}>{m.label}</p>
               </div>
             </div>
           )
