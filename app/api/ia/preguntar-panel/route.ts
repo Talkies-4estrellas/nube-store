@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server'
-import { PREGUNTAS } from '@/lib/preguntasFrecuentes'
 
 export const runtime = 'nodejs'
 
 const MODELO = 'gemini-flash-latest'
 
+type PreguntaContexto = { categoria: string; pregunta: string; explicacion: string; confusion: string; tutorial: string[] }
+
 /**
- * Responde una pregunta libre sobre el uso del panel administrativo,
- * usando como contexto las preguntas frecuentes ya redactadas a mano
- * (components/AyudaPanel.tsx / lib/preguntasFrecuentes.ts) — así la IA
- * responde con información real de CÓMO FUNCIONA ESTE panel específico,
- * no con generalidades inventadas.
+ * Responde una pregunta libre sobre el uso de un panel (admin o portal de
+ * proveedor), usando como contexto las preguntas frecuentes que ya se
+ * redactaron a mano para ESE panel específico (lib/preguntasFrecuentes.ts
+ * o lib/preguntasFrecuentesProveedor.ts, mandadas por el cliente en
+ * `contexto`) — así la IA responde con información real de cómo funciona
+ * ese panel, no con generalidades inventadas.
  *
  * Solo se llama cuando el usuario lo pide explícitamente (botón aparte en
  * el panel de ayuda), nunca automáticamente mientras escribe, para no
@@ -23,20 +25,22 @@ export async function POST(req: Request) {
   }
 
   let pregunta: string
+  let preguntasContexto: PreguntaContexto[]
   try {
     const body = await req.json()
     pregunta = String(body.pregunta || '').trim()
+    preguntasContexto = Array.isArray(body.contexto) ? body.contexto : []
     if (!pregunta) throw new Error('sin pregunta')
   } catch {
     return NextResponse.json({ error: 'Petición inválida: falta la pregunta' }, { status: 400 })
   }
 
-  const contexto = PREGUNTAS.map(p =>
+  const contexto = preguntasContexto.map(p =>
     `Categoría: ${p.categoria}\nPregunta: ${p.pregunta}\nExplicación: ${p.explicacion}\nConfusión común: ${p.confusion}\nTutorial: ${p.tutorial.join(' → ')}`
   ).join('\n\n')
 
   const prompt =
-    'Eres el asistente de ayuda del panel administrativo de "Order Express", una tienda en línea. ' +
+    'Eres el asistente de ayuda de un panel de "Order Express", una tienda en línea. ' +
     'Responde la pregunta del administrador usando SOLO la información de las preguntas frecuentes de abajo como referencia de cómo funciona el panel. ' +
     'Si la pregunta no se puede responder con esa información, dilo claramente en vez de inventar — no supongas funciones que no aparecen ahí. ' +
     'Responde en español, corto y directo (máximo 4-5 líneas), en tono práctico como las respuestas de ejemplo.\n\n' +

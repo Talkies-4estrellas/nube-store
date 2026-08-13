@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PREGUNTAS, type Pregunta } from '@/lib/preguntasFrecuentes'
+import type { Pregunta } from '@/lib/preguntasFrecuentes'
 
 const PANEL_WIDTH = 340
 
 const NAVY = '#252855'
 const BLUE = '#0049ff'
 
-const CATEGORIAS = Array.from(new Set(PREGUNTAS.map(p => p.categoria)))
-
-export default function AyudaPanel() {
+export default function AyudaPanel({ preguntas: PREGUNTAS }: { preguntas: Pregunta[] }) {
+  const CATEGORIAS = Array.from(new Set(PREGUNTAS.map(p => p.categoria)))
   const [abierto, setAbierto] = useState(false)
   const [activa, setActiva] = useState<Pregunta | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -33,7 +32,7 @@ export default function AyudaPanel() {
       const res = await fetch('/api/ia/preguntar-panel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pregunta: busqueda }),
+        body: JSON.stringify({ pregunta: busqueda, contexto: PREGUNTAS }),
       })
       const data = await res.json()
       if (!res.ok || !data.respuesta) { setIaError(data.error || 'No se pudo obtener respuesta'); return }

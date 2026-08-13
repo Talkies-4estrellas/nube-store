@@ -15,6 +15,9 @@ import { fetchTransferenciasPendientes, aceptarTransferencia, rechazarTransferen
 import { fetchPaquetesPorVentaItems, guardarPaquete } from '@/lib/paquetes'
 import SolicitudProductoModal, { type SolicitudProductoForm } from '@/components/SolicitudProductoModal'
 import SolicitudCategoriaModal from '@/components/SolicitudCategoriaModal'
+import AyudaPanel from '@/components/AyudaPanel'
+import { PREGUNTAS_PROVEEDOR } from '@/lib/preguntasFrecuentesProveedor'
+import Icon from '@/components/Icon'
 
 const NAVY = '#252855'
 const PINK = '#e7226d'
@@ -1450,7 +1453,8 @@ export default function ProveedoresPage() {
               justify-content:space-between (desktop) ni con el flex-start que
               impone el CSS de mobile. */}
           {tab !== 'ajustes' && (
-            <div ref={notifRef} style={{ position: 'relative', marginLeft: 'auto', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
+              <div ref={notifRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 type="button"
                 onClick={() => setNotifOpen(o => !o)}
@@ -1459,10 +1463,10 @@ export default function ProveedoresPage() {
                 style={{
                   position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
                   width: 36, height: 36, borderRadius: 10, border: 'none', flexShrink: 0,
-                  background: notifOpen ? '#f1f2f6' : 'transparent', cursor: 'pointer', fontSize: 17,
+                  background: notifOpen ? '#f1f2f6' : 'transparent', cursor: 'pointer',
                 }}
               >
-                🔔
+                <Icon name="bell" size={20} color={totalNotificaciones > 0 ? '#d97706' : '#9ca3af'} />
                 {totalNotificaciones > 0 && (
                   <span style={{
                     position: 'absolute', top: 1, right: 1, minWidth: 15, height: 15, padding: '0 4px',
@@ -1508,6 +1512,8 @@ export default function ProveedoresPage() {
                   </div>
                 </div>
               )}
+              </div>
+              <AyudaPanel preguntas={PREGUNTAS_PROVEEDOR} />
             </div>
           )}
         </header>
