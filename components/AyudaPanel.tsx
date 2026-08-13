@@ -267,6 +267,15 @@ export default function AyudaPanel() {
           <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>Preguntas frecuentes del panel</p>
           <button onClick={() => setAbierto(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
         </div>
+
+        {/* Sin lógica todavía — solo la caja. Pensada para que el usuario
+            escriba su propia pregunta cuando ninguna de las de abajo
+            resuelva su duda. */}
+        <div style={{ padding: '0 10px 10px' }}>
+          <input type="text" placeholder="Escribe tu pregunta..."
+            style={{ width: '100%', padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+
         {CATEGORIAS.map(cat => (
           <div key={cat}>
             <p style={{ fontSize: 11, fontWeight: 700, color: BLUE, padding: '8px 10px 2px', margin: 0 }}>{cat}</p>
