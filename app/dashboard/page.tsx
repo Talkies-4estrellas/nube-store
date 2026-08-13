@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth-context'
 import { aprobarSolicitud, rechazarSolicitud } from '@/lib/solicitudes'
 import MotivoRechazoDialog from '@/components/MotivoRechazoDialog'
 import { toCSV, downloadCSV } from '@/lib/csv'
+import AyudaPanel from '@/components/AyudaPanel'
 
 type Venta = { id: string; numero: number; total: number; estado: string; created_at: string; clientes: { nombre: string } | null }
 type VentaGrafica = { total: number; estado: string; created_at: string }
@@ -326,6 +327,7 @@ export default function DashboardPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: isMobile ? '8px 10px' : '8px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: isMobile ? 12 : 13, fontWeight: 600, color: '#374151', cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}>
             ⬇ Exportar CSV
           </button>
+          <AyudaPanel />
         </div>
       </div>
 
