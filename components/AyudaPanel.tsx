@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+const PANEL_WIDTH = 340
 
 const NAVY = '#252855'
 const BLUE = '#0049ff'
@@ -225,6 +227,25 @@ export default function AyudaPanel() {
   const [abierto, setAbierto] = useState(false)
   const [activa, setActiva] = useState<Pregunta | null>(null)
 
+  // En vez de flotar encima del contenido (tapando las tarjetas de abajo),
+  // el panel empuja el contenido de la página hacia la izquierda mientras
+  // está abierto, reservándose su propio espacio fijo a la derecha. En
+  // ventanas angostas no hay espacio real que "liberar" empujando —forzarlo
+  // ahí rompía el layout del Dashboard (todo se apachurraba)—, así que por
+  // debajo de cierto ancho el panel vuelve a flotar como overlay normal.
+  const [empujar, setEmpujar] = useState(true)
+  useEffect(() => {
+    function actualizar() { setEmpujar(window.innerWidth >= 1100) }
+    actualizar()
+    window.addEventListener('resize', actualizar)
+    return () => window.removeEventListener('resize', actualizar)
+  }, [])
+  useEffect(() => {
+    document.body.style.transition = 'padding-right 0.22s ease'
+    document.body.style.paddingRight = abierto && empujar ? `${PANEL_WIDTH}px` : ''
+    return () => { document.body.style.paddingRight = '' }
+  }, [abierto, empujar])
+
   return (
     <div style={{ position: 'relative' }}>
       <button onClick={() => setAbierto(v => !v)} title="Ayuda del panel"
@@ -232,27 +253,34 @@ export default function AyudaPanel() {
         ?
       </button>
 
-      {abierto && (
-        <>
-          <div onClick={() => setAbierto(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-          <div style={{ position: 'absolute', top: 42, right: 0, width: 340, maxHeight: 440, overflowY: 'auto', background: '#fff', borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,0.18)', border: '1px solid #e5e7eb', zIndex: 50, padding: 8 }}>
-            <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '8px 10px 4px' }}>Preguntas frecuentes del panel</p>
-            {CATEGORIAS.map(cat => (
-              <div key={cat}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: BLUE, padding: '8px 10px 2px', margin: 0 }}>{cat}</p>
-                {PREGUNTAS.filter(p => p.categoria === cat).map(p => (
-                  <button key={p.pregunta} onClick={() => { setActiva(p); setAbierto(false) }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'none', borderRadius: 8, fontSize: 13, color: '#374151', cursor: 'pointer', lineHeight: 1.35 }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}>
-                    {p.pregunta}
-                  </button>
-                ))}
-              </div>
+      {abierto && !empujar && (
+        <div onClick={() => setAbierto(false)} style={{ position: 'fixed', inset: 0, zIndex: 199 }} />
+      )}
+
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: PANEL_WIDTH, overflowY: 'auto',
+        background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-8px 0 24px rgba(0,0,0,0.08)',
+        zIndex: 200, padding: 8, transform: abierto ? 'translateX(0)' : `translateX(${PANEL_WIDTH}px)`,
+        transition: 'transform 0.22s ease',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px 4px' }}>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>Preguntas frecuentes del panel</p>
+          <button onClick={() => setAbierto(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+        </div>
+        {CATEGORIAS.map(cat => (
+          <div key={cat}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: BLUE, padding: '8px 10px 2px', margin: 0 }}>{cat}</p>
+            {PREGUNTAS.filter(p => p.categoria === cat).map(p => (
+              <button key={p.pregunta} onClick={() => { setActiva(p); setAbierto(false) }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'none', borderRadius: 8, fontSize: 13, color: '#374151', cursor: 'pointer', lineHeight: 1.35 }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}>
+                {p.pregunta}
+              </button>
             ))}
           </div>
-        </>
-      )}
+        ))}
+      </div>
 
       {activa && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: 20 }}
