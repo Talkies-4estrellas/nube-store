@@ -263,4 +263,17 @@ export const PREGUNTAS: Pregunta[] = [
       'Si necesitas que se quede fija sin importar sus compras, es algo que habría que resolver a nivel de código (avísale a Claude si lo necesitas).',
     ],
   },
+  {
+    categoria: 'Configuración',
+    pregunta: '¿Para qué sirven los switches de Configuración → Notificaciones?',
+    explicacion: 'Hoy por hoy, apagar o prender estos 3 switches ("Alerta de stock bajo", "Nueva venta", "Resumen diario por email") no cambia nada en la práctica: la campana de notificaciones arriba a la derecha siempre avisa de stock bajo y ventas nuevas sin importar cómo estén estos switches, y el "Resumen diario por email" no tiene ningún envío de correo conectado todavía — ninguno de los tres está realmente wireado a su switch.',
+    confusion: 'Se apaga alguno pensando que va a dejar de recibir esa alerta (por ejemplo, "Nueva venta"), y la notificación sigue apareciendo igual en la campana — parece que el panel tiene un bug, cuando en realidad el switch simplemente no está conectado a nada todavía.',
+    porQuePasa: 'Esta pantalla se construyó pensando en preferencias de notificación reales, pero la campana de notificaciones (arriba a la derecha) se implementó por separado y nunca se conectó a leer esta configuración — y el resumen diario por correo nunca se llegó a construir del lado del servidor (necesitaría una tarea programada que mande el email).',
+    solucion: 'Por ahora, asumir que la campana siempre va a avisar de stock bajo y ventas nuevas, sin importar estos switches — no confiar en ellos para "silenciar" una alerta. Si de verdad se necesita esa función, hay que pedir que se conecte de verdad (la campana debería filtrar por estos valores, y el resumen diario necesitaría una tarea programada nueva).',
+    tutorial: [
+      'No hay ningún paso que "hacerlos funcionar" todavía — es una función pendiente de conectar, no un error de uso.',
+      'Si quieres dejar de ver cierto tipo de alerta en la campana, por ahora la única opción es ignorarla ahí mismo.',
+      'Si esta función es importante para tu operación, pídele a Claude que la conecte de verdad.',
+    ],
+  },
 ]
