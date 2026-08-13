@@ -271,7 +271,7 @@ export default function AyudaPanel() {
           <div key={cat}>
             <p style={{ fontSize: 11, fontWeight: 700, color: BLUE, padding: '8px 10px 2px', margin: 0 }}>{cat}</p>
             {PREGUNTAS.filter(p => p.categoria === cat).map(p => (
-              <button key={p.pregunta} onClick={() => { setActiva(p); setAbierto(false) }}
+              <button key={p.pregunta} onClick={() => setActiva(p)}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'none', borderRadius: 8, fontSize: 13, color: '#374151', cursor: 'pointer', lineHeight: 1.35 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f3f4f6' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}>
