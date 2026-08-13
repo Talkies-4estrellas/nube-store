@@ -210,4 +210,18 @@ export const PREGUNTAS: Pregunta[] = [
       'Esto alimenta el cálculo automático de costos de envío para sus productos.',
     ],
   },
+  {
+    categoria: 'Ayuda del panel',
+    pregunta: '¿Cómo funciona el buscador de este panel de ayuda?',
+    explicacion: 'Funciona en dos pasos. Primero, mientras escribes, busca al instante entre estas mismas preguntas guardadas (por palabras en la pregunta, la explicación o la confusión común) — es gratis e inmediato, no llama a nada externo. Si ninguna coincide o ninguna resuelve tu duda, aparece un botón aparte "✨ Pregúntale a la IA" que manda tu pregunta a Gemini (la misma IA que mejora fotos de producto) junto con el contenido completo de estas preguntas, para que responda con información real de cómo funciona este panel — no información genérica de internet.',
+    confusion: 'Se puede pensar que escribir ya activa la IA automáticamente, o que la IA "sabe todo" del panel por su cuenta — en realidad solo conoce lo que está escrito en estas preguntas, nada más, y nunca se activa sola.',
+    porQuePasa: 'Activar la IA en cada tecleo gastaría cuota gratuita de Gemini muy rápido con preguntas a medio escribir, así que se diseñó a propósito para que la IA sea un paso extra, bajo demanda, después de que la búsqueda local ya no encontró nada útil — y como la IA no tiene acceso al código del panel, solo puede responder con lo que ya está redactado aquí.',
+    solucion: 'Si la respuesta de la IA no ayuda o parece incompleta, lo más probable es que ese tema todavía no esté cubierto en ninguna de las preguntas guardadas — vale la pena pedir que se agregue una pregunta nueva sobre eso en vez de insistir con la IA.',
+    tutorial: [
+      'Escribe tu duda en el textbox — si alguna pregunta guardada coincide, aparece al instante en la lista.',
+      'Si no aparece nada útil, dale clic a "✨ Pregúntale a la IA" debajo de los resultados.',
+      'La respuesta aparece en un recuadro azul justo debajo del botón, basada solo en las preguntas ya guardadas.',
+      'Si el tema es nuevo y ni la IA lo resuelve bien, es señal de que conviene agregar una pregunta nueva a esta lista.',
+    ],
+  },
 ]
