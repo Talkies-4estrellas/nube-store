@@ -188,8 +188,8 @@ export const PREGUNTAS: Pregunta[] = [
     pregunta: '¿Dónde está el Punto de Venta?',
     explicacion: 'Existe una pantalla de Punto de Venta (para vender directo en mostrador, sin que el cliente pase por la tienda en línea), pero no aparece en el menú lateral — hay que entrar escribiendo la dirección directamente.',
     confusion: 'No hay ningún botón ni enlace visible en todo el panel que lleve ahí — es la única pantalla completa del sistema que solo se puede alcanzar sabiendo de memoria que existe.',
-    porQuePasa: 'Es un descuido real: la pantalla se construyó y los permisos por rol ya la incluyen, pero se quedó sin agregar al menú lateral — no fue una decisión de diseño, simplemente se quedó pendiente.',
-    solucion: 'Esta es una de las pocas cosas de esta lista que no depende de "aprender dónde está" sino que realmente falta agregarse al menú — vale la pena resolverlo agregando el enlace, no solo explicándolo.',
+    porQuePasa: 'Fue una decisión intencional, no un descuido: el enlace se quitó del menú lateral (sección Canales) en una sesión anterior, aunque la pantalla y los permisos por rol se dejaron intactos — probablemente para simplificar el menú mientras esa función no era prioritaria.',
+    solucion: 'Si se usa poco, no hace falta hacer nada — entrar por URL directa es suficiente. Si en cambio se usa seguido, vale la pena pedir que se regrese el enlace al menú lateral (es un cambio pequeño y reversible).',
     tutorial: [
       'Por ahora, entra escribiendo la dirección directamente después del dominio de tu panel: /punto-de-venta',
       'Ahí puedes armar una venta directa (mostrador) igual que un pedido normal, pero sin pasar por el checkout de la tienda pública.',

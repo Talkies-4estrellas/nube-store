@@ -426,6 +426,12 @@ Al inicio de cada sesión nueva, leer `Doc/memoria.md` para recordar el flujo. E
 - [ ] Exportar ventas/clientes a CSV
 - [ ] Modo oscuro
 
+## Completado (13/08/2026)
+- [x] **Panel de ayuda "?" con preguntas frecuentes**, primero en el Dashboard del admin y después llevado también al portal de proveedor. `components/AyudaPanel.tsx` es genérico (recibe `preguntas` por prop); contenido en `lib/preguntasFrecuentes.ts` (21 preguntas admin) y `lib/preguntasFrecuentesProveedor.ts` (5 preguntas proveedor), armado a partir de varias rondas de auditoría real del código (no especulación) — puntos como proveedores escondidos dentro de Clientes, dos campos de contacto que se muestran a la vez en el footer público, la etiqueta VIP/Regular/Nuevo que se recalcula sola, los switches de Notificaciones sin conectar, y Punto de Venta sin enlace en el menú (ver Pendiente).
+- [x] **Búsqueda local + IA de respaldo** dentro del panel de ayuda: mientras se escribe, filtra al instante entre las preguntas guardadas (gratis); si nada coincide, un botón aparte manda la pregunta a Gemini (`gemini-flash-latest` — `gemini-2.5-flash` ya no está disponible para llaves nuevas) junto con las preguntas de ESE panel como contexto, vía `app/api/ia/preguntar-panel/route.ts`. El modelo de **texto** de Gemini sí funciona con la cuenta del usuario (a diferencia del de imágenes, que sigue en cuota 0).
+- [x] El panel de ayuda del Dashboard empuja el contenido a un costado en vez de taparlo (≥1100px de ancho; abajo de eso vuelve a flotar como overlay para no romper el layout), y se queda abierto al elegir una pregunta.
+- **Nota:** falta confirmar visualmente con una cuenta de proveedor real que el panel de ayuda se ve bien en `/proveedores` — no se pudo probar en el navegador esta sesión, solo se validó que compila.
+
 ## Completado (12/08/2026)
 - [x] **Stripe integrado como cuarta pasarela de pago** — Payment Intents con formulario propio (Stripe Elements), el cliente nunca sale del sitio. Ver sección "Stripe (Payment Intents)" más abajo.
 - [x] **Botón "✨ Mejorar con IA" en las fotos de producto** (panel admin, `ProductoModal.tsx`) — usa Gemini 2.5 Flash Image ("nano banana") con un prompt fijo que preserva el producto, revertible a la original. Llave por `GEMINI_API_KEY` (variable de entorno, no editable desde el panel). Contador de uso diario en `ia_uso_imagenes`. **Pendiente que el usuario habilite el modelo en su cuenta de Google** (ver Pendiente arriba) — la integración ya está lista pero devuelve cuota 0 hasta entonces.
