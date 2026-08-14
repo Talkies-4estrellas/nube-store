@@ -91,7 +91,7 @@ export default function AyudaPanel({ preguntas: PREGUNTAS }: { preguntas: Pregun
             abajo (bajo demanda, nunca automático, para no gastar cuota). */}
         <div style={{ padding: '0 10px 10px' }}>
           <input type="text" value={busqueda} onChange={e => { setBusqueda(e.target.value); setIaRespuesta(''); setIaError('') }}
-            placeholder="Escribe tu pregunta..."
+            placeholder="Escribe tu pregunta..." maxLength={300}
             style={{ width: '100%', padding: '9px 12px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
         </div>
 
