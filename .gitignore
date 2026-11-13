@@ -44,3 +44,18 @@ next-env.d.ts
 /respaldo/
 *.dump
 *.log
+
+# Documentación interna, notas de IA y archivos de trabajo — se quedan solo
+# en local, no se suben al repo. De Doc/ únicamente se sube la estructura de
+# la base de datos (schema_completo.sql), necesaria para montar el proyecto.
+/Doc/*
+!/Doc/database/
+/Doc/database/*
+!/Doc/database/schema_completo.sql
+/CLAUDE.md
+/AGENTS.md
+/.claude/
+/pruebas/
+/scripts/
+/.devlog*.txt
+/propuesta-tareas-*.csv
